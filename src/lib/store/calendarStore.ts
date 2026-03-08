@@ -9,6 +9,8 @@ interface CalendarState {
   isFormOpen: boolean;
   formInitialDate: Date | null;
   formMemberId: string | null;
+  startHour: number;
+  endHour: number;
 
   setView: (view: CalendarView) => void;
   setFocusedDate: (date: Date) => void;
@@ -17,6 +19,7 @@ interface CalendarState {
   goToToday: () => void;
   openForm: (opts?: { date?: Date; memberId?: string; appointmentId?: string }) => void;
   closeForm: () => void;
+  setTimeRange: (startHour: number, endHour: number) => void;
 }
 
 export const useCalendarStore = create<CalendarState>((set, get) => ({
@@ -26,6 +29,8 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
   isFormOpen: false,
   formInitialDate: null,
   formMemberId: null,
+  startHour: 0,
+  endHour: 24,
 
   setView: (view) => set({ view }),
   setFocusedDate: (date) => set({ focusedDate: date }),
@@ -47,6 +52,12 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
   },
 
   goToToday: () => set({ focusedDate: new Date() }),
+
+  setTimeRange: (startHour, endHour) => {
+    if (startHour < endHour && startHour >= 0 && endHour <= 24) {
+      set({ startHour, endHour });
+    }
+  },
 
   openForm: (opts) =>
     set({
