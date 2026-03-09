@@ -17,7 +17,7 @@ export function DroppableSlotCell({ id, data, children, className, style, onClic
   return (
     <div
       ref={setNodeRef}
-      className={`${className ?? ""} ${isOver ? "bg-[var(--primary)]/20 ring-1 ring-inset ring-[var(--primary)]/40" : ""}`}
+      className={`${className ?? ""} hover:bg-[var(--primary)]/10 ${isOver ? "bg-[var(--primary)]/20 ring-1 ring-inset ring-[var(--primary)]/40" : ""}`}
       style={style}
       onClick={onClick}
     >
