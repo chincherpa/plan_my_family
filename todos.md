@@ -1,0 +1,8 @@
+- belegte Fahrzeuge werden in der Auswahl bei einem kollidierenden termin als "belegt" gekennzeichnet
+- hellere Farben
+- Spalte Alle klarer abgetrennt
+- zusätzliche spalte "Ereignisse" für z.B Geburtstage oder ähnliches
+- Reihenfolge der mitglieder editierbar
+- Uhrzeiten in 15-minuten-Schritte, nicht jede Minute
+- Mouseover Anfahrten und Rückfahrten zeigt die Uhrzeit des starts bzw. der ankunft an
+- stundeneinteilung der tage in halbe stunden timeslots
