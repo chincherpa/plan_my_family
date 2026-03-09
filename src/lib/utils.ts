@@ -46,13 +46,13 @@ export function minutesSinceMidnight(date: Date): number {
   return date.getHours() * 60 + date.getMinutes();
 }
 
-/** Slot index from minutes (15-min slots) */
+/** Slot index from minutes (30-min slots) */
 export function slotIndex(minutes: number): number {
-  return Math.floor(minutes / 15);
+  return Math.floor(minutes / 30);
 }
 
-/** Total 15-min slots in a day */
-export const SLOTS_PER_DAY = 96;
+/** Total 30-min slots in a day */
+export const SLOTS_PER_DAY = 48;
 
-/** Height of one 15-min slot in px */
-export const SLOT_HEIGHT = 20;
+/** Height of one 30-min slot in px */
+export const SLOT_HEIGHT = 40;

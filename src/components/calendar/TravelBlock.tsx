@@ -21,15 +21,23 @@ export default function TravelBlock({ occurrence, type, columnId, slotStart }: T
   const blockEnd = type === "before" ? occurrenceStart : travelEnd;
 
   const durationMin = (blockEnd.getTime() - blockStart.getTime()) / 60000;
-  const heightPx = Math.max((durationMin / 15) * SLOT_HEIGHT, SLOT_HEIGHT / 2);
+  const heightPx = Math.max((durationMin / 30) * SLOT_HEIGHT, SLOT_HEIGHT / 2);
 
   const minutesIntoSlot = (blockStart.getTime() - slotStart.getTime()) / 60000;
-  const topOffset = (minutesIntoSlot / 15) * SLOT_HEIGHT;
+  const topOffset = (minutesIntoSlot / 30) * SLOT_HEIGHT;
+
+  const fmt = (d: Date) =>
+    d.toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" });
 
   const durationLabel =
     type === "before"
       ? `${appointment.travel_before_min} min Anfahrt`
       : `${appointment.travel_after_min} min Rückfahrt`;
+
+  const tooltip =
+    type === "before"
+      ? `${durationLabel} — Abfahrt: ${fmt(travelStart)}`
+      : `${durationLabel} — Ankunft: ${fmt(travelEnd)}`;
 
   return (
     <div
@@ -39,8 +47,8 @@ export default function TravelBlock({ occurrence, type, columnId, slotStart }: T
         left: "2px",
         right: "2px",
         height: `${heightPx - 1}px`,
-        backgroundColor: hexToRgba(color, 0.4),
-        borderLeft: `2px solid ${hexToRgba(color, 0.7)}`,
+        backgroundColor: hexToRgba(color, 0.05),
+        borderLeft: `2px solid ${hexToRgba(color, 0.25)}`,
         borderRadius: "2px",
         zIndex: 8,
         overflow: "hidden",
@@ -49,7 +57,7 @@ export default function TravelBlock({ occurrence, type, columnId, slotStart }: T
         padding: "1px 3px",
       }}
       className="travel-block-pattern"
-      title={durationLabel}
+      title={tooltip}
     >
       <span className="opacity-90">{type === "before" ? "↑" : "↓"} {durationLabel}</span>
     </div>

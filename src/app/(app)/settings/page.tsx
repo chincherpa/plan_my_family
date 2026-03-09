@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Users, Car, ArrowRight } from "lucide-react";
+import CalendarDisplaySettings from "@/components/settings/CalendarDisplaySettings";
 
 export default function SettingsPage() {
   return (
@@ -21,6 +22,8 @@ export default function SettingsPage() {
         </div>
         <ArrowRight className="w-4 h-4 text-[var(--muted-foreground)]" />
       </Link>
+
+      <CalendarDisplaySettings />
 
       <Link
         href="/settings/vehicles"

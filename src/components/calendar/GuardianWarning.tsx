@@ -11,11 +11,11 @@ interface GuardianWarningProps {
 export default function GuardianWarning({ warning, slotStart }: GuardianWarningProps) {
   const durationMin =
     (warning.endTime.getTime() - warning.startTime.getTime()) / 60000;
-  const heightPx = Math.max((durationMin / 15) * SLOT_HEIGHT, SLOT_HEIGHT);
+  const heightPx = Math.max((durationMin / 30) * SLOT_HEIGHT, SLOT_HEIGHT);
 
   const minutesIntoSlot =
     (warning.startTime.getTime() - slotStart.getTime()) / 60000;
-  const topOffset = (minutesIntoSlot / 15) * SLOT_HEIGHT;
+  const topOffset = (minutesIntoSlot / 30) * SLOT_HEIGHT;
 
   return (
     <div

@@ -1,7 +1,22 @@
 "use client";
 import { useState } from "react";
-import { Plus, Pencil, Trash2, ChevronLeft } from "lucide-react";
+import { Plus, Pencil, Trash2, ChevronLeft, GripVertical } from "lucide-react";
 import Link from "next/link";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+  arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
 import { Button } from "@/components/ui/button";
@@ -21,9 +36,68 @@ const PRESET_COLORS = [
   "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6",
 ];
 
+function SortableMemberRow({
+  member,
+  onEdit,
+  onDelete,
+}: {
+  member: FamilyMember;
+  onEdit: (m: FamilyMember) => void;
+  onDelete: (id: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: member.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        opacity: isDragging ? 0.5 : 1,
+      }}
+      className="flex items-center gap-3 p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]"
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing text-[var(--muted-foreground)] touch-none"
+        type="button"
+        tabIndex={-1}
+      >
+        <GripVertical className="w-4 h-4" />
+      </button>
+      <div
+        className="w-8 h-8 rounded-full flex-shrink-0"
+        style={{ backgroundColor: member.color }}
+      />
+      <div className="flex-1 min-w-0">
+        <p className="font-medium">{member.name}</p>
+        <p className="text-xs text-[var(--muted-foreground)]">
+          {member.is_guardian && "Erziehungsberechtigt"}
+          {member.is_guardian && member.cannot_be_alone && " · "}
+          {member.cannot_be_alone && "Kann nicht alleine sein"}
+        </p>
+      </div>
+      <Button variant="ghost" size="icon" onClick={() => onEdit(member)}>
+        <Pencil className="w-4 h-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => onDelete(member.id)}
+        className="text-[var(--destructive)] hover:text-[var(--destructive)]"
+      >
+        <Trash2 className="w-4 h-4" />
+      </Button>
+    </div>
+  );
+}
+
 export default function MembersSettings() {
-  const { members, family, setMembers } = useDataStore();
+  const { members, family, setMembers, reorderMembers } = useDataStore();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const [editing, setEditing] = useState<FamilyMember | null>(null);
 
   const [name, setName] = useState("");
@@ -90,6 +164,24 @@ export default function MembersSettings() {
     setMembers(members.filter((m) => m.id !== id));
   }
 
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = members.findIndex((m) => m.id === active.id);
+    const newIndex = members.findIndex((m) => m.id === over.id);
+    const reordered = arrayMove(members, oldIndex, newIndex);
+    const orderedIds = reordered.map((m) => m.id);
+    reorderMembers(orderedIds);
+
+    const supabase = createClient();
+    await Promise.all(
+      orderedIds.map((id, i) =>
+        supabase.from("family_members").update({ sort_order: i }).eq("id", id)
+      )
+    );
+  }
+
   return (
     <div className="max-w-2xl mx-auto p-6 space-y-4">
       <div className="flex items-center gap-2">
@@ -101,38 +193,20 @@ export default function MembersSettings() {
         <h1 className="text-2xl font-bold">Familienmitglieder</h1>
       </div>
 
-      <div className="space-y-2">
-        {members.map((member) => (
-          <div
-            key={member.id}
-            className="flex items-center gap-3 p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]"
-          >
-            <div
-              className="w-8 h-8 rounded-full flex-shrink-0"
-              style={{ backgroundColor: member.color }}
-            />
-            <div className="flex-1 min-w-0">
-              <p className="font-medium">{member.name}</p>
-              <p className="text-xs text-[var(--muted-foreground)]">
-                {member.is_guardian && "Erziehungsberechtigt"}
-                {member.is_guardian && member.cannot_be_alone && " · "}
-                {member.cannot_be_alone && "Kann nicht alleine sein"}
-              </p>
-            </div>
-            <Button variant="ghost" size="icon" onClick={() => openEdit(member)}>
-              <Pencil className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => handleDelete(member.id)}
-              className="text-[var(--destructive)] hover:text-[var(--destructive)]"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={members.map((m) => m.id)} strategy={verticalListSortingStrategy}>
+          <div className="space-y-2">
+            {members.map((member) => (
+              <SortableMemberRow
+                key={member.id}
+                member={member}
+                onEdit={openEdit}
+                onDelete={handleDelete}
+              />
+            ))}
           </div>
-        ))}
-      </div>
+        </SortableContext>
+      </DndContext>
 
       <Button onClick={openCreate} className="gap-2">
         <Plus className="w-4 h-4" />

@@ -25,8 +25,8 @@ export function checkGuardianWarnings(
 
   if (dependents.length === 0 || guardians.length === 0) return warnings;
 
-  // Check in 15-min slots
-  const SLOT_MS = 15 * 60 * 1000;
+  // Check in 30-min slots
+  const SLOT_MS = 30 * 60 * 1000;
   const activeAppointments = appointments.filter((a) => !a.is_deleted);
 
   for (const dependent of dependents) {
@@ -94,8 +94,8 @@ function isSlotSupervised(
   // Check each guardian
   for (const guardian of guardians) {
     const guardianAppts = appointments.filter((a) => {
-      const start = new Date(a.start_time);
-      const end = new Date(a.end_time);
+      const start = new Date(new Date(a.start_time).getTime() - (a.travel_before_min ?? 0) * 60000);
+      const end = new Date(new Date(a.end_time).getTime() + (a.travel_after_min ?? 0) * 60000);
       if (!(start < slotEnd && end > slotStart)) return false;
       return a.owner_id === guardian.id || a.participants.some((p) => p.member_id === guardian.id);
     });

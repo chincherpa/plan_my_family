@@ -15,6 +15,7 @@ interface DataState {
 
   setFamily: (family: Family | null) => void;
   setMembers: (members: FamilyMember[]) => void;
+  reorderMembers: (orderedIds: string[]) => void;
   setVehicles: (vehicles: Vehicle[]) => void;
   setAppointments: (appointments: AppointmentWithParticipants[]) => void;
   addAppointment: (appointment: AppointmentWithParticipants) => void;
@@ -32,6 +33,13 @@ export const useDataStore = create<DataState>((set) => ({
 
   setFamily: (family) => set({ family }),
   setMembers: (members) => set({ members }),
+  reorderMembers: (orderedIds) =>
+    set((state) => ({
+      members: orderedIds
+        .map((id) => state.members.find((m) => m.id === id)!)
+        .filter(Boolean)
+        .map((m, i) => ({ ...m, sort_order: i })),
+    })),
   setVehicles: (vehicles) => set({ vehicles }),
   setAppointments: (appointments) => set({ appointments }),
   addAppointment: (appointment) =>

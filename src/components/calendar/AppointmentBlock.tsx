@@ -1,5 +1,4 @@
 "use client";
-import { useMemo } from "react";
 import { useDraggable } from "@dnd-kit/core";
 import { useCalendarStore } from "@/lib/store/calendarStore";
 import { useDataStore } from "@/lib/store/dataStore";
@@ -12,6 +11,7 @@ interface AppointmentBlockProps {
   columnId: string;
   memberColor: string;
   slotStart: Date;
+  ownerIsDragging?: boolean;
 }
 
 export default function AppointmentBlock({
@@ -19,6 +19,7 @@ export default function AppointmentBlock({
   columnId,
   memberColor,
   slotStart,
+  ownerIsDragging = false,
 }: AppointmentBlockProps) {
   const { openForm } = useCalendarStore();
   const { members, vehicles } = useDataStore();
@@ -27,38 +28,35 @@ export default function AppointmentBlock({
   const isOwner = appointment.owner_id === columnId || appointment.is_all_family;
   const isParticipant = !isOwner && appointment.participants.some((p) => p.member_id === columnId);
 
-  // Get owner's color if participant view
   const ownerMember = members.find((m) => m.id === appointment.owner_id);
-  const displayColor = isParticipant
-    ? ownerMember?.color ?? memberColor
-    : memberColor;
+  const displayColor = isParticipant ? ownerMember?.color ?? memberColor : memberColor;
 
   const vehicle = vehicles.find((v) => v.id === appointment.vehicle_id);
 
   const durationMin = (occurrenceEnd.getTime() - occurrenceStart.getTime()) / 60000;
-  const heightPx = Math.max((durationMin / 15) * SLOT_HEIGHT, SLOT_HEIGHT);
+  const heightPx = Math.max((durationMin / 30) * SLOT_HEIGHT, SLOT_HEIGHT);
+  const minutesIntoSlot = (occurrenceStart.getTime() - slotStart.getTime()) / 60000;
+  const topOffset = (minutesIntoSlot / 30) * SLOT_HEIGHT;
 
-  // Offset within the slot (occurrenceStart might not align to slot)
-  const minutesIntoSlot =
-    (occurrenceStart.getTime() - slotStart.getTime()) / 60000;
-  const topOffset = (minutesIntoSlot / 15) * SLOT_HEIGHT;
-
+  // Only the owner's block is draggable; participant view is read-only
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `appt-${occurrence.key}`,
-    data: occurrence,
+    id: `appt-${occurrence.key}-${columnId}`,
+    data: { ...occurrence, fromColumnId: columnId },
+    disabled: isParticipant,
   });
 
+  // Hide participant mirror while the owner's block is being dragged
+  if (isParticipant && ownerIsDragging) return null;
+
   const bgColor = isParticipant
-    ? hexToRgba(displayColor, 0.3)
-    : hexToRgba(displayColor, 0.85);
-  const textColor = isParticipant ? displayColor : "#fff";
-  const borderColor = displayColor;
+    ? hexToRgba(displayColor, 0.06)
+    : hexToRgba(displayColor, 0.1);
 
   return (
     <div
       ref={setNodeRef}
-      {...listeners}
-      {...attributes}
+      {...(isParticipant ? {} : listeners)}
+      {...(isParticipant ? {} : attributes)}
       style={{
         position: "absolute",
         top: `${topOffset}px`,
@@ -66,12 +64,12 @@ export default function AppointmentBlock({
         right: "2px",
         height: `${heightPx - 2}px`,
         backgroundColor: bgColor,
-        borderLeft: `3px solid ${borderColor}`,
+        borderLeft: `3px solid ${displayColor}`,
         borderRadius: "3px",
-        color: textColor,
+        color: displayColor,
         zIndex: isDragging ? 50 : 10,
-        opacity: isDragging ? 0.5 : 1,
-        cursor: "grab",
+        opacity: isDragging ? 0.3 : 1,
+        cursor: isParticipant ? "pointer" : "grab",
         overflow: "hidden",
         fontSize: "11px",
         lineHeight: "1.2",
@@ -84,7 +82,10 @@ export default function AppointmentBlock({
       }}
     >
       <div className="flex items-start justify-between gap-0.5 overflow-hidden">
-        <span className="truncate font-medium">{appointment.title}</span>
+        <span className="truncate font-medium">
+          {appointment.is_event && <span className="mr-0.5">🎉</span>}
+          {appointment.title}
+        </span>
         <div className="flex items-center gap-0.5 shrink-0">
           {occurrence.isRecurringInstance && (
             <RepeatIcon className="w-2.5 h-2.5 opacity-70" />

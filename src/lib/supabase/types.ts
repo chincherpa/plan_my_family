@@ -7,16 +7,22 @@ export interface Database {
         Row: {
           id: string;
           name: string;
+          calendar_start_hour: number;
+          calendar_end_hour: number;
           created_at: string;
         };
         Insert: {
           id?: string;
           name: string;
+          calendar_start_hour?: number;
+          calendar_end_hour?: number;
           created_at?: string;
         };
         Update: {
           id?: string;
           name?: string;
+          calendar_start_hour?: number;
+          calendar_end_hour?: number;
           created_at?: string;
         };
         Relationships: [];
@@ -94,10 +100,12 @@ export interface Database {
           vehicle_id: string | null;
           owner_id: string | null;
           is_all_family: boolean;
+          is_event: boolean;
           recurrence_rule: string | null;
           recurrence_parent_id: string | null;
           exception_date: string | null;
           is_deleted: boolean;
+          is_all_day: boolean;
           color: string | null;
           created_at: string;
         };
@@ -113,6 +121,8 @@ export interface Database {
           vehicle_id?: string | null;
           owner_id?: string | null;
           is_all_family?: boolean;
+          is_event?: boolean;
+          is_all_day?: boolean;
           recurrence_rule?: string | null;
           recurrence_parent_id?: string | null;
           exception_date?: string | null;
@@ -132,6 +142,8 @@ export interface Database {
           vehicle_id?: string | null;
           owner_id?: string | null;
           is_all_family?: boolean;
+          is_event?: boolean;
+          is_all_day?: boolean;
           recurrence_rule?: string | null;
           recurrence_parent_id?: string | null;
           exception_date?: string | null;

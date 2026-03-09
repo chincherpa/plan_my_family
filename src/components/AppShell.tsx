@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Calendar, Settings, LogOut } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
+import { useCalendarStore } from "@/lib/store/calendarStore";
 import { Button } from "@/components/ui/button";
 import type { AppointmentWithParticipants, FamilyMember, Family, Vehicle } from "@/lib/supabase/types";
 
@@ -12,6 +13,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { setFamily, setMembers, setVehicles, setAppointments, setLoading } = useDataStore();
+  const { setTimeRange } = useCalendarStore();
 
   useEffect(() => {
     const supabase = createClient();
@@ -50,7 +52,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             .eq("family_id", familyId),
         ]);
 
-        if (familyRes.data) setFamily(familyRes.data as Family);
+        if (familyRes.data) {
+          const family = familyRes.data as Family;
+          setFamily(family);
+          setTimeRange(family.calendar_start_hour, family.calendar_end_hour);
+        }
         if (membersRes.data) setMembers(membersRes.data as FamilyMember[]);
         if (vehiclesRes.data) setVehicles(vehiclesRes.data as Vehicle[]);
         if (apptRes.data) {
@@ -88,7 +94,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       {/* Top Nav */}
-      <header className="flex h-12 items-center justify-between border-b border-[var(--border)] bg-[var(--card)] px-4 shrink-0">
+      <header className="flex h-12 items-center justify-between border-b border-[var(--border)] bg-[var(--muted)] px-4 shrink-0">
         <div className="flex items-center gap-2">
           <Calendar className="w-5 h-5 text-[var(--primary)]" />
           <span className="font-semibold text-sm">Familienplaner</span>
