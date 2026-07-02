@@ -30,11 +30,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { FamilyMember } from "@/lib/supabase/types";
-
-const PRESET_COLORS = [
-  "#ef4444", "#f97316", "#eab308", "#22c55e",
-  "#3b82f6", "#8b5cf6", "#ec4899", "#14b8a6",
-];
+import { PRESET_COLORS } from "@/lib/constants";
 
 function SortableMemberRow({
   member,
