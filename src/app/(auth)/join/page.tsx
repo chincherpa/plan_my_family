@@ -126,7 +126,7 @@ export default function JoinPage() {
     }
   }
 
-  if (checkState === "checking" || userState === "checking") {
+  if (checkState === "checking") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
         <p className="text-[var(--muted-foreground)]">Lädt...</p>
@@ -146,6 +146,14 @@ export default function JoinPage() {
             Zur Anmeldung
           </a>
         </div>
+      </div>
+    );
+  }
+
+  if (userState === "checking") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
+        <p className="text-[var(--muted-foreground)]">Lädt...</p>
       </div>
     );
   }
