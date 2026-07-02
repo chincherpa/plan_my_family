@@ -153,33 +153,6 @@ export interface Database {
         };
         Relationships: [];
       };
-      meals: {
-        Row: {
-          id: string;
-          family_id: string;
-          date: string;
-          lunch: string | null;
-          dinner: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          family_id: string;
-          date: string;
-          lunch?: string | null;
-          dinner?: string | null;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          family_id?: string;
-          date?: string;
-          lunch?: string | null;
-          dinner?: string | null;
-          created_at?: string;
-        };
-        Relationships: [];
-      };
       appointment_participants: {
         Row: {
           appointment_id: string;
@@ -253,7 +226,6 @@ export type Family = Database["public"]["Tables"]["families"]["Row"];
 export type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"];
 export type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 export type Appointment = Database["public"]["Tables"]["appointments"]["Row"];
-export type Meal = Database["public"]["Tables"]["meals"]["Row"];
 export type AppointmentParticipant = Database["public"]["Tables"]["appointment_participants"]["Row"];
 export type FamilyInvite = Database["public"]["Tables"]["family_invites"]["Row"];
 
