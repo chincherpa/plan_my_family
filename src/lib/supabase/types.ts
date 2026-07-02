@@ -153,6 +153,33 @@ export interface Database {
         };
         Relationships: [];
       };
+      meals: {
+        Row: {
+          id: string;
+          family_id: string;
+          date: string;
+          lunch: string | null;
+          dinner: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          family_id: string;
+          date: string;
+          lunch?: string | null;
+          dinner?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          family_id?: string;
+          date?: string;
+          lunch?: string | null;
+          dinner?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       appointment_participants: {
         Row: {
           appointment_id: string;
@@ -171,9 +198,51 @@ export interface Database {
         };
         Relationships: [];
       };
+      family_invites: {
+        Row: {
+          id: string;
+          family_id: string;
+          code: string;
+          created_by: string | null;
+          expires_at: string;
+          used_at: string | null;
+          used_by: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          family_id: string;
+          code: string;
+          created_by?: string | null;
+          expires_at?: string;
+          used_at?: string | null;
+          used_by?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          family_id?: string;
+          code?: string;
+          created_by?: string | null;
+          expires_at?: string;
+          used_at?: string | null;
+          used_by?: string | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      check_invite_valid: {
+        Args: { invite_code: string };
+        Returns: boolean;
+      };
+      accept_invite: {
+        Args: { invite_code: string; member_name: string; member_color: string };
+        Returns: Database["public"]["Tables"]["family_members"]["Row"];
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
@@ -184,7 +253,9 @@ export type Family = Database["public"]["Tables"]["families"]["Row"];
 export type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"];
 export type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 export type Appointment = Database["public"]["Tables"]["appointments"]["Row"];
+export type Meal = Database["public"]["Tables"]["meals"]["Row"];
 export type AppointmentParticipant = Database["public"]["Tables"]["appointment_participants"]["Row"];
+export type FamilyInvite = Database["public"]["Tables"]["family_invites"]["Row"];
 
 /** Appointment enriched with participants */
 export interface AppointmentWithParticipants extends Appointment {
