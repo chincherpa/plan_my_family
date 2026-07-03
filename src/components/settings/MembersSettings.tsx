@@ -285,7 +285,7 @@ export default function MembersSettings() {
               <Button variant="outline" className="flex-1" onClick={() => setDialogOpen(false)}>
                 Abbrechen
               </Button>
-              <Button className="flex-1" onClick={handleSave} disabled={saving || !name.trim()}>
+              <Button className="flex-1" onClick={handleSave} disabled={saving || !name.trim() || !family}>
                 {saving ? "Speichern..." : "Speichern"}
               </Button>
             </div>

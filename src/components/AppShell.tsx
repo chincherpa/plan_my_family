@@ -7,19 +7,21 @@ import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useCalendarStore } from "@/lib/store/calendarStore";
 import { Button } from "@/components/ui/button";
-import type { AppointmentWithParticipants, FamilyMember, Family, Vehicle } from "@/lib/supabase/types";
+import type { AppointmentWithParticipants, FamilyMember, Family, Vehicle, Meal } from "@/lib/supabase/types";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { setFamily, setMembers, setVehicles, setAppointments, setLoading } = useDataStore();
+  const { setFamily, setMembers, setVehicles, setAppointments, setMeals, setLoading } = useDataStore();
   const { setTimeRange } = useCalendarStore();
 
   useEffect(() => {
     const supabase = createClient();
 
-    async function loadData() {
-      setLoading(true);
+    // showSpinner only on initial load — realtime refetches must not unmount
+    // the calendar (spinner remount resets scroll position to today)
+    async function loadData(showSpinner = false) {
+      if (showSpinner) setLoading(true);
       try {
         const {
           data: { user },
@@ -38,7 +40,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         const familyId = memberData.family_id;
 
-        const [familyRes, membersRes, vehiclesRes, apptRes] = await Promise.all([
+        const [familyRes, membersRes, vehiclesRes, apptRes, mealsRes] = await Promise.all([
           supabase.from("families").select("*").eq("id", familyId).single(),
           supabase
             .from("family_members")
@@ -50,6 +52,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             .from("appointments")
             .select("*, participants:appointment_participants(*)")
             .eq("family_id", familyId),
+          supabase.from("meals").select("*").eq("family_id", familyId),
         ]);
 
         if (familyRes.data) {
@@ -62,12 +65,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         if (apptRes.data) {
           setAppointments(apptRes.data as AppointmentWithParticipants[]);
         }
+        if (mealsRes.data) setMeals(mealsRes.data as Meal[]);
       } finally {
-        setLoading(false);
+        if (showSpinner) setLoading(false);
       }
     }
 
-    loadData();
+    loadData(true);
 
     // Realtime subscriptions
     const channel = supabase
@@ -76,6 +80,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         loadData()
       )
       .on("postgres_changes", { event: "*", schema: "public", table: "family_members" }, () =>
+        loadData()
+      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "meals" }, () =>
         loadData()
       )
       .subscribe();

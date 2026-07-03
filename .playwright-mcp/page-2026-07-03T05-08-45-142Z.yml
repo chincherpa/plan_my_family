@@ -1,0 +1,83 @@
+- generic:
+  - generic:
+    - banner:
+      - generic:
+        - img
+        - generic: Familienplaner
+      - navigation:
+        - link:
+          - /url: /calendar
+          - button:
+            - img
+            - text: Kalender
+        - link:
+          - /url: /settings
+          - button:
+            - img
+            - text: Einstellungen
+        - button:
+          - img
+    - main:
+      - generic:
+        - generic:
+          - link:
+            - /url: /settings
+            - button:
+              - img
+          - heading [level=1]: Familienmitglieder
+        - generic:
+          - generic:
+            - button:
+              - img
+            - generic:
+              - paragraph: Debug Mama
+              - paragraph: Erziehungsberechtigt
+            - button:
+              - img
+            - button:
+              - img
+        - status
+        - generic:
+          - button:
+            - img
+            - text: Mitglied hinzufügen
+          - button:
+            - img
+            - text: Einladen
+  - button "Open Next.js Dev Tools" [ref=f2e38] [cursor=pointer]:
+    - img [ref=f2e39]
+  - alert
+  - dialog "Neues Mitglied" [ref=f2e71]:
+    - heading "Neues Mitglied" [level=2] [ref=f2e73]
+    - generic [ref=f2e74]:
+      - generic [ref=f2e75]:
+        - text: Name
+        - textbox "z.B. Mama, Papa, Tim" [active] [ref=f2e76]
+      - generic [ref=f2e77]:
+        - text: Farbe
+        - generic [ref=f2e78]:
+          - button [ref=f2e79]
+          - button [ref=f2e80]
+          - button [ref=f2e81]
+          - button [ref=f2e82]
+          - button [ref=f2e83]
+          - button [ref=f2e84]
+          - button [ref=f2e85]
+          - button [ref=f2e86]
+          - textbox "Eigene Farbe" [ref=f2e87] [cursor=pointer]: "#f97316"
+      - generic [ref=f2e88]:
+        - generic [ref=f2e89]:
+          - text: Erziehungsberechtigt
+          - paragraph [ref=f2e90]: Kann Kinder beaufsichtigen
+        - switch [ref=f2e91] [cursor=pointer]
+      - generic [ref=f2e92]:
+        - generic [ref=f2e93]:
+          - text: Kann nicht alleine sein
+          - paragraph [ref=f2e94]: Benötigt immer Aufsicht
+        - switch [ref=f2e95] [cursor=pointer]
+      - generic [ref=f2e96]:
+        - button "Abbrechen" [ref=f2e97]
+        - button "Speichern" [disabled]
+    - button "Schließen" [ref=f2e98]:
+      - img [ref=f2e99]
+      - generic [ref=f2e102]: Schließen

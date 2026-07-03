@@ -34,6 +34,12 @@ export function formatDate(date: Date): string {
   });
 }
 
+/** Local date as "YYYY-MM-DD" */
+export function localDateStr(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 /** Get start of day */
 export function startOfDay(date: Date): Date {
   const d = new Date(date);

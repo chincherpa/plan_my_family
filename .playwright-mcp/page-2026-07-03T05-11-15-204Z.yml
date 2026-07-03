@@ -1,0 +1,36 @@
+- generic [active] [ref=f4e1]:
+  - generic [ref=f4e2]:
+    - banner [ref=f4e3]:
+      - generic [ref=f4e4]:
+        - img [ref=f4e5]
+        - generic [ref=f4e7]: Familienplaner
+      - navigation [ref=f4e8]:
+        - link "Kalender" [ref=f4e9] [cursor=pointer]:
+          - /url: /calendar
+          - button "Kalender" [ref=f4e10]:
+            - img [ref=f4e11]
+            - text: Kalender
+        - link "Einstellungen" [ref=f4e13] [cursor=pointer]:
+          - /url: /settings
+          - button "Einstellungen" [ref=f4e14]:
+            - img [ref=f4e15]
+            - text: Einstellungen
+        - button "Abmelden" [ref=f4e18]:
+          - img [ref=f4e19]
+    - main [ref=f4e22]:
+      - generic [ref=f4e23]:
+        - generic [ref=f4e24]:
+          - link [ref=f4e25] [cursor=pointer]:
+            - /url: /settings
+            - button [ref=f4e26]:
+              - img [ref=f4e27]
+          - heading "Familienmitglieder" [level=1] [ref=f4e29]
+        - generic [ref=f4e30]:
+          - button "Mitglied hinzufügen" [ref=f4e31]:
+            - img [ref=f4e32]
+            - text: Mitglied hinzufügen
+          - button "Einladen" [disabled]:
+            - img
+            - text: Einladen
+  - button "Open Next.js Dev Tools" [ref=f4e38] [cursor=pointer]:
+    - img [ref=f4e39]

@@ -1,0 +1,13 @@
+[     183ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/be8db_next_dist_7d593ddf._.js:2297
+[     368ms] [LOG] [Fast Refresh] done in 287ms @ http://localhost:3000/_next/static/chunks/be8db_next_dist_7d593ddf._.js:2297
+[     509ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/be8db_next_dist_7d593ddf._.js:2297
+[     526ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/be8db_next_dist_7d593ddf._.js:2297
+[   11505ms] [LOG] [Register] 1. signUp → debugtest_20260703@example.com @ http://localhost:3000/_next/static/chunks/be8db_next_dist_7d593ddf._.js:2297
+[   12699ms] [LOG] [Register] signUp result — user: f16cf68f-7685-485a-aafb-f952986c337d session: true error: null @ http://localhost:3000/_next/static/chunks/be8db_next_dist_7d593ddf._.js:2297
+[   12703ms] [LOG] [Register] 2. aktive Session vor DB-Insert: true uid: f16cf68f-7685-485a-aafb-f952986c337d @ http://localhost:3000/_next/static/chunks/be8db_next_dist_7d593ddf._.js:2297
+[   12704ms] [LOG] [Register] 3. families.insert → Testfamilie id: f713fb8a-1d46-498f-9328-39d09cc36b0a @ http://localhost:3000/_next/static/chunks/be8db_next_dist_7d593ddf._.js:2297
+[   13400ms] [LOG] [Register] families.insert error: null @ http://localhost:3000/_next/static/chunks/be8db_next_dist_7d593ddf._.js:2297
+[   13400ms] [LOG] [Register] 4. family_members.insert → family: f713fb8a-1d46-498f-9328-39d09cc36b0a user: f16cf68f-7685-485a-aafb-f952986c337d @ http://localhost:3000/_next/static/chunks/be8db_next_dist_7d593ddf._.js:2297
+[   13618ms] [LOG] [Register] family_members.insert error: null @ http://localhost:3000/_next/static/chunks/be8db_next_dist_7d593ddf._.js:2297
+[   14131ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/be8db_next_dist_7d593ddf._.js:2297
+[   14750ms] [LOG] [Fast Refresh] done in 727ms @ http://localhost:3000/_next/static/chunks/be8db_next_dist_7d593ddf._.js:2297

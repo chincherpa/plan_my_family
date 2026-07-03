@@ -3,6 +3,7 @@ import type {
   Family,
   FamilyMember,
   Vehicle,
+  Meal,
   AppointmentWithParticipants,
 } from "@/lib/supabase/types";
 
@@ -11,6 +12,7 @@ interface DataState {
   members: FamilyMember[];
   vehicles: Vehicle[];
   appointments: AppointmentWithParticipants[];
+  meals: Meal[];
   isLoading: boolean;
 
   setFamily: (family: Family | null) => void;
@@ -21,6 +23,8 @@ interface DataState {
   addAppointment: (appointment: AppointmentWithParticipants) => void;
   updateAppointment: (id: string, updates: Partial<AppointmentWithParticipants>) => void;
   removeAppointment: (id: string) => void;
+  setMeals: (meals: Meal[]) => void;
+  upsertMeal: (meal: Meal) => void;
   setLoading: (loading: boolean) => void;
 }
 
@@ -29,6 +33,7 @@ export const useDataStore = create<DataState>((set) => ({
   members: [],
   vehicles: [],
   appointments: [],
+  meals: [],
   isLoading: false,
 
   setFamily: (family) => set({ family }),
@@ -53,6 +58,14 @@ export const useDataStore = create<DataState>((set) => ({
   removeAppointment: (id) =>
     set((state) => ({
       appointments: state.appointments.filter((a) => a.id !== id),
+    })),
+  setMeals: (meals) => set({ meals }),
+  upsertMeal: (meal) =>
+    set((state) => ({
+      meals: [
+        ...state.meals.filter((m) => !(m.family_id === meal.family_id && m.date === meal.date)),
+        meal,
+      ],
     })),
   setLoading: (isLoading) => set({ isLoading }),
 }));

@@ -11,7 +11,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,8 +19,10 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { AppointmentWithParticipants } from "@/lib/supabase/types";
 import { hexToRgba } from "@/lib/utils";
+import { occurrenceDateKey } from "@/lib/utils/recurrence";
 
 type RecurrenceFreq = "none" | "daily" | "weekly" | "monthly" | "yearly";
+type EditScope = "single" | "series";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -89,11 +90,15 @@ interface AppointmentFormProps {
 export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   const { members, vehicles, appointments, family, addAppointment, updateAppointment, removeAppointment } =
     useDataStore();
-  const { formInitialDate, formMemberId, selectedAppointmentId } = useCalendarStore();
+  const { formInitialDate, formMemberId, formOccurrenceStart, selectedAppointmentId } =
+    useCalendarStore();
 
   const existingAppt = selectedAppointmentId
     ? appointments.find((a) => a.id === selectedAppointmentId)
     : null;
+
+  // Editing an occurrence of a recurring series (id points at the parent)
+  const isSeriesInstance = !!existingAppt?.recurrence_rule;
 
   // Form state
   const [title, setTitle] = useState("");
@@ -112,7 +117,9 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   const [supervisorIds, setSupervisorIds] = useState<string[]>([]);
   const [isEvent, setIsEvent] = useState(false);
   const [recurrence, setRecurrence] = useState<RecurrenceFreq>("none");
+  const [editScope, setEditScope] = useState<EditScope>("single");
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [vehicleConflict, setVehicleConflict] = useState<AppointmentWithParticipants | null>(null);
   const [vehicleConflicts, setVehicleConflicts] = useState<Record<string, AppointmentWithParticipants>>({});
 
@@ -126,8 +133,15 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
       setIsEvent(existingAppt.is_event ?? false);
       const allDay = existingAppt.is_all_day ?? false;
       setIsAllDay(allDay);
-      const s = new Date(existingAppt.start_time);
-      const e = new Date(existingAppt.end_time);
+      // For a series occurrence show the clicked occurrence's times,
+      // not the series' base times
+      const base = new Date(existingAppt.start_time);
+      const durationMs = new Date(existingAppt.end_time).getTime() - base.getTime();
+      const s =
+        existingAppt.recurrence_rule && formOccurrenceStart
+          ? new Date(formOccurrenceStart)
+          : base;
+      const e = new Date(s.getTime() + durationMs);
       if (allDay) {
         setAllDayStartDate(toDatePart(s));
         setAllDayEndDate(toDatePart(e));
@@ -170,7 +184,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
       setAllDayStartDate(dateStr);
       setAllDayEndDate(dateStr);
     }
-  }, [existingAppt, formInitialDate, formMemberId, members]);
+    setEditScope("single");
+  }, [existingAppt, formInitialDate, formMemberId, formOccurrenceStart, members]);
 
   // Check conflicts for all vehicles when times change
   useEffect(() => {
@@ -215,9 +230,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     if (!family || !title.trim()) return;
     if (isAllDay && !allDayStartDate) return;
     if (!isAllDay && (!startTime || !endTime)) return;
-    setSaving(true);
+    setFormError(null);
 
-    const supabase = createClient();
     let startDate: Date;
     let endDate: Date;
     if (isAllDay) {
@@ -227,6 +241,18 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
       startDate = new Date(startTime);
       endDate = new Date(endTime);
     }
+
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      setFormError("Ungültiges Datum oder Uhrzeit.");
+      return;
+    }
+    if (endDate <= startDate) {
+      setFormError("Das Ende muss nach dem Beginn liegen.");
+      return;
+    }
+
+    setSaving(true);
+    const supabase = createClient();
 
     const apptData = {
       family_id: family.id,
@@ -244,15 +270,74 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
       recurrence_rule: buildRRule(recurrence, startDate),
     };
 
-    if (existingAppt) {
-      const { data } = await supabase
-        .from("appointments")
-        .update(apptData)
-        .eq("id", existingAppt.id)
-        .select()
-        .single();
+    try {
+      if (existingAppt && isSeriesInstance && editScope === "single" && formOccurrenceStart) {
+        // "Only this occurrence": insert an exception row; the parent's
+        // expansion skips the original date via exception_date
+        const { data: insertedData, error } = await supabase
+          .from("appointments")
+          .insert({
+            ...apptData,
+            recurrence_rule: null,
+            recurrence_parent_id: existingAppt.id,
+            exception_date: occurrenceDateKey(formOccurrenceStart),
+          })
+          .select()
+          .single();
 
-      if (data) {
+        const data = insertedData as { id: string } | null;
+        if (error || !data) {
+          setFormError(error?.message ?? "Termin konnte nicht gespeichert werden.");
+          return;
+        }
+
+        if (participants.length > 0) {
+          const { error: partError } = await supabase.from("appointment_participants").insert(
+            participants.map((memberId) => ({
+              appointment_id: data.id,
+              member_id: memberId,
+              is_supervisor: supervisorIds.includes(memberId),
+            }))
+          );
+          if (partError) {
+            setFormError("Teilnehmer konnten nicht gespeichert werden.");
+            return;
+          }
+        }
+
+        const { data: fullData } = await supabase
+          .from("appointments")
+          .select("*, participants:appointment_participants(*)")
+          .eq("id", data.id)
+          .single();
+
+        if (fullData) addAppointment(fullData as AppointmentWithParticipants);
+      } else if (existingAppt) {
+        if (isSeriesInstance && editScope === "series") {
+          // Whole series: keep the series anchored at its original start
+          // date, apply only time-of-day + duration from the form
+          const seriesStart = new Date(existingAppt.start_time);
+          seriesStart.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
+          const seriesEnd = new Date(
+            seriesStart.getTime() + (endDate.getTime() - startDate.getTime())
+          );
+          apptData.start_time = seriesStart.toISOString();
+          apptData.end_time = seriesEnd.toISOString();
+          apptData.recurrence_rule = buildRRule(recurrence, seriesStart);
+        }
+
+        const { data, error } = await supabase
+          .from("appointments")
+          .update(apptData)
+          .eq("id", existingAppt.id)
+          .select()
+          .single();
+
+        if (error || !data) {
+          setFormError(error?.message ?? "Termin konnte nicht gespeichert werden.");
+          return;
+        }
+
         // Update participants
         await supabase
           .from("appointment_participants")
@@ -260,13 +345,17 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
           .eq("appointment_id", existingAppt.id);
 
         if (participants.length > 0) {
-          await supabase.from("appointment_participants").insert(
+          const { error: partError } = await supabase.from("appointment_participants").insert(
             participants.map((memberId) => ({
               appointment_id: existingAppt.id,
               member_id: memberId,
               is_supervisor: supervisorIds.includes(memberId),
             }))
           );
+          if (partError) {
+            setFormError("Teilnehmer konnten nicht gespeichert werden.");
+            return;
+          }
         }
 
         const { data: fullData } = await supabase
@@ -276,27 +365,33 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
           .single();
 
         if (fullData) updateAppointment(existingAppt.id, fullData as AppointmentWithParticipants);
-      }
-    } else {
-      const { data: insertedData } = await supabase
-        .from("appointments")
-        .insert(apptData)
-        .select()
-        .single();
+      } else {
+        const { data: insertedData, error } = await supabase
+          .from("appointments")
+          .insert(apptData)
+          .select()
+          .single();
 
-      const data = insertedData as { id: string } | null;
+        const data = insertedData as { id: string } | null;
+        if (error || !data) {
+          setFormError(error?.message ?? "Termin konnte nicht erstellt werden.");
+          return;
+        }
 
-      if (data && participants.length > 0) {
-        await supabase.from("appointment_participants").insert(
-          participants.map((memberId) => ({
-            appointment_id: data.id,
-            member_id: memberId,
-            is_supervisor: supervisorIds.includes(memberId),
-          }))
-        );
-      }
+        if (participants.length > 0) {
+          const { error: partError } = await supabase.from("appointment_participants").insert(
+            participants.map((memberId) => ({
+              appointment_id: data.id,
+              member_id: memberId,
+              is_supervisor: supervisorIds.includes(memberId),
+            }))
+          );
+          if (partError) {
+            setFormError("Teilnehmer konnten nicht gespeichert werden.");
+            return;
+          }
+        }
 
-      if (data) {
         const { data: fullData } = await supabase
           .from("appointments")
           .select("*, participants:appointment_participants(*)")
@@ -305,16 +400,77 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
 
         if (fullData) addAppointment(fullData as AppointmentWithParticipants);
       }
+    } finally {
+      setSaving(false);
     }
 
-    setSaving(false);
     onClose();
   }
 
   async function handleDelete() {
-    if (!existingAppt || !confirm("Termin wirklich löschen?")) return;
+    if (!existingAppt) return;
     const supabase = createClient();
-    await supabase.from("appointments").delete().eq("id", existingAppt.id);
+
+    // Occurrence of a series → insert a deletion marker for this date only
+    if (isSeriesInstance && editScope === "single" && formOccurrenceStart) {
+      if (!confirm("Nur diesen Termin der Serie löschen?")) return;
+      const durationMs =
+        new Date(existingAppt.end_time).getTime() - new Date(existingAppt.start_time).getTime();
+      const { data, error } = await supabase
+        .from("appointments")
+        .insert({
+          family_id: existingAppt.family_id,
+          title: existingAppt.title,
+          start_time: formOccurrenceStart.toISOString(),
+          end_time: new Date(formOccurrenceStart.getTime() + durationMs).toISOString(),
+          recurrence_parent_id: existingAppt.id,
+          exception_date: occurrenceDateKey(formOccurrenceStart),
+          is_deleted: true,
+        })
+        .select()
+        .single();
+      if (error || !data) {
+        setFormError("Termin konnte nicht gelöscht werden.");
+        return;
+      }
+      addAppointment({ ...(data as AppointmentWithParticipants), participants: [] });
+      onClose();
+      return;
+    }
+
+    // Modified series instance → keep the row as deletion marker,
+    // otherwise the original occurrence would reappear
+    if (existingAppt.recurrence_parent_id) {
+      if (!confirm("Termin wirklich löschen?")) return;
+      const { error } = await supabase
+        .from("appointments")
+        .update({ is_deleted: true })
+        .eq("id", existingAppt.id);
+      if (error) {
+        setFormError("Termin konnte nicht gelöscht werden.");
+        return;
+      }
+      updateAppointment(existingAppt.id, { is_deleted: true });
+      onClose();
+      return;
+    }
+
+    // Single appointment or whole series
+    const msg = isSeriesInstance
+      ? "Ganze Serie inklusive aller Ausnahmen löschen?"
+      : "Termin wirklich löschen?";
+    if (!confirm(msg)) return;
+    if (isSeriesInstance) {
+      await supabase.from("appointments").delete().eq("recurrence_parent_id", existingAppt.id);
+    }
+    const { error } = await supabase.from("appointments").delete().eq("id", existingAppt.id);
+    if (error) {
+      setFormError("Termin konnte nicht gelöscht werden.");
+      return;
+    }
+    appointments
+      .filter((a) => a.recurrence_parent_id === existingAppt.id)
+      .forEach((a) => removeAppointment(a.id));
     removeAppointment(existingAppt.id);
     onClose();
   }
@@ -343,6 +499,41 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
         </DialogHeader>
 
         <div className="space-y-4">
+          {/* Scope for recurring series */}
+          {isSeriesInstance && (
+            <div className="space-y-1">
+              <div className="flex rounded-md border border-[var(--border)] overflow-hidden text-sm">
+                <button
+                  type="button"
+                  onClick={() => setEditScope("single")}
+                  className={`flex-1 px-3 py-1.5 font-medium transition-colors ${
+                    editScope === "single"
+                      ? "bg-[var(--primary)] text-white"
+                      : "bg-transparent text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+                  }`}
+                >
+                  Nur dieser Termin
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditScope("series")}
+                  className={`flex-1 px-3 py-1.5 font-medium transition-colors border-l border-[var(--border)] ${
+                    editScope === "series"
+                      ? "bg-[var(--primary)] text-white"
+                      : "bg-transparent text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+                  }`}
+                >
+                  Ganze Serie
+                </button>
+              </div>
+              <p className="text-xs text-[var(--muted-foreground)]">
+                {editScope === "single"
+                  ? "Änderungen und Löschen betreffen nur dieses Vorkommen."
+                  : "Änderungen gelten für alle Termine der Serie (Uhrzeit, Dauer, Details)."}
+              </p>
+            </div>
+          )}
+
           {/* Title */}
           <div className="space-y-1.5">
             <Label>Titel *</Label>
@@ -501,7 +692,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
               {vehicleConflict && (
                 <p className="text-xs text-orange-600 flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3" />
-                  Fahrzeug ist von „{vehicleConflict.title}" belegt!
+                  Fahrzeug ist von „{vehicleConflict.title}“ belegt!
                 </p>
               )}
             </div>
@@ -574,7 +765,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
             </div>
           )}
 
-          {/* Recurrence */}
+          {/* Recurrence — hidden when editing a single occurrence of a series */}
+          {!(isSeriesInstance && editScope === "single") && (
           <div className="space-y-1.5">
             <Label className="flex items-center gap-1">
               <Repeat className="w-3.5 h-3.5" />
@@ -585,7 +777,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Kein Wiederholung</SelectItem>
+                <SelectItem value="none">Keine Wiederholung</SelectItem>
                 <SelectItem value="daily">Täglich</SelectItem>
                 <SelectItem value="weekly">Wöchentlich</SelectItem>
                 <SelectItem value="monthly">Monatlich</SelectItem>
@@ -593,6 +785,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
               </SelectContent>
             </Select>
           </div>
+          )}
 
           {/* Notes */}
           <div className="space-y-1.5">
@@ -605,6 +798,12 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
               className="w-full rounded-md border border-[var(--input)] bg-transparent px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
             />
           </div>
+
+          {formError && (
+            <p className="text-sm text-[var(--destructive)] bg-[var(--destructive)]/10 rounded-md px-3 py-2">
+              {formError}
+            </p>
+          )}
 
           {/* Actions */}
           <div className="flex gap-2 pt-2">

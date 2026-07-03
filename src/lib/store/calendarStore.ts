@@ -9,6 +9,8 @@ interface CalendarState {
   isFormOpen: boolean;
   formInitialDate: Date | null;
   formMemberId: string | null;
+  /** Start of the clicked occurrence — needed for "edit only this occurrence" */
+  formOccurrenceStart: Date | null;
   startHour: number;
   endHour: number;
 
@@ -17,7 +19,12 @@ interface CalendarState {
   goToPrev: () => void;
   goToNext: () => void;
   goToToday: () => void;
-  openForm: (opts?: { date?: Date; memberId?: string; appointmentId?: string }) => void;
+  openForm: (opts?: {
+    date?: Date;
+    memberId?: string;
+    appointmentId?: string;
+    occurrenceStart?: Date;
+  }) => void;
   closeForm: () => void;
   setTimeRange: (startHour: number, endHour: number) => void;
 }
@@ -29,6 +36,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
   isFormOpen: false,
   formInitialDate: null,
   formMemberId: null,
+  formOccurrenceStart: null,
   startHour: 0,
   endHour: 24,
 
@@ -64,6 +72,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       isFormOpen: true,
       formInitialDate: opts?.date ?? null,
       formMemberId: opts?.memberId ?? null,
+      formOccurrenceStart: opts?.occurrenceStart ?? null,
       selectedAppointmentId: opts?.appointmentId ?? null,
     }),
 
@@ -72,6 +81,7 @@ export const useCalendarStore = create<CalendarState>((set, get) => ({
       isFormOpen: false,
       formInitialDate: null,
       formMemberId: null,
+      formOccurrenceStart: null,
       selectedAppointmentId: null,
     }),
 }));

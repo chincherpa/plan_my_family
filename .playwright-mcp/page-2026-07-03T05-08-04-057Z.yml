@@ -1,0 +1,18 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - img [ref=e6]
+    - heading "Familienplaner" [level=1] [ref=e8]
+    - paragraph [ref=e9]: Melde dich an, um fortzufahren
+  - generic [ref=e10]:
+    - generic [ref=e11]:
+      - text: E-Mail
+      - textbox "E-Mail" [ref=e12]:
+        - /placeholder: familie@beispiel.de
+    - generic [ref=e13]:
+      - text: Passwort
+      - textbox "Passwort" [ref=e14]
+    - button "Anmelden" [ref=e15]
+  - paragraph [ref=e16]:
+    - text: Noch kein Konto?
+    - link "Registrieren" [ref=e17] [cursor=pointer]:
+      - /url: /register
