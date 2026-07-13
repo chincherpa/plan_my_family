@@ -7,18 +7,20 @@ import { useCalendarStore } from "@/lib/store/calendarStore";
 import { useDataStore } from "@/lib/store/dataStore";
 import { expandAppointments, type AppointmentOccurrence } from "@/lib/utils/recurrence";
 import { checkGuardianWarnings } from "@/lib/utils/guardianCheck";
-import { startOfDay, SLOT_HEIGHT, addMinutes, hexToRgba } from "@/lib/utils";
+import { startOfDay, SLOT_HEIGHT, addMinutes, hexToRgba, getISOWeek } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import AppointmentBlock from "./AppointmentBlock";
 import TravelBlock from "./TravelBlock";
 import { DroppableSlotCell } from "./DroppableSlotCell";
 import AppointmentForm from "@/components/appointments/AppointmentForm";
+import MealRow from "./MealRow";
 import { createClient } from "@/lib/supabase/client";
 
-const DAYS_BEFORE = 365;
-const DAYS_AFTER = 365;
+const DAYS_BEFORE = 100;
+const DAYS_AFTER = 100;
 const DAY_HEADER_HEIGHT = 36;
 const ALL_DAY_ROW_HEIGHT = 22;
+const MEAL_ROW_HEIGHT = 24;
 
 type VItem =
   | { type: "day-header"; dayIdx: number; allDayCount: number }
@@ -36,7 +38,7 @@ export default function CalendarView() {
   const [activeOccurrence, setActiveOccurrence] = useState<AppointmentOccurrence | null>(null);
 
   const slotsPerDay = (endHour - startHour) * 2;
-  const heightPerDay = DAY_HEADER_HEIGHT + slotsPerDay * SLOT_HEIGHT;
+  const heightPerDay = DAY_HEADER_HEIGHT + MEAL_ROW_HEIGHT + slotsPerDay * SLOT_HEIGHT;
 
   // All days: DAYS_BEFORE before today + DAYS_AFTER after
   const allDays = useMemo(() => {
@@ -104,16 +106,13 @@ export default function CalendarView() {
     estimateSize: (i) => {
       const item = items[i];
       if (item.type === "day-header") {
-        return DAY_HEADER_HEIGHT + item.allDayCount * ALL_DAY_ROW_HEIGHT;
+        return DAY_HEADER_HEIGHT + MEAL_ROW_HEIGHT + item.allDayCount * ALL_DAY_ROW_HEIGHT;
       }
       return SLOT_HEIGHT;
     },
     overscan: 20,
+    initialOffset: DAYS_BEFORE * heightPerDay,
   });
-
-  // Scroll to today's current time on mount
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { scrollToToday(); }, []);
 
   // Update header date as user scrolls
   useEffect(() => {
@@ -291,7 +290,8 @@ export default function CalendarView() {
               {headerDate.getDate()}
             </div>
             <span className="text-sm font-medium text-[var(--foreground)]">
-              {headerDate.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" })}
+              {headerDate.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+              <span className="ml-2 text-xs text-[var(--muted-foreground)]">KW {getISOWeek(headerDate)}</span>
             </span>
           </div>
           <div style={{ height: `${rowVirtualizer.getTotalSize()}px`, position: "relative", marginTop: `-${DAY_HEADER_HEIGHT}px` }}>
@@ -303,7 +303,7 @@ export default function CalendarView() {
                 const day = allDays[item.dayIdx];
                 const isToday = startOfDay(new Date()).getTime() === day.getTime();
                 const dayAllDayOccs = allDayByDay.get(day.toDateString()) ?? [];
-                const headerHeight = DAY_HEADER_HEIGHT + dayAllDayOccs.length * ALL_DAY_ROW_HEIGHT;
+                const headerHeight = DAY_HEADER_HEIGHT + MEAL_ROW_HEIGHT + dayAllDayOccs.length * ALL_DAY_ROW_HEIGHT;
                 return (
                   <div
                     key={vItem.key}
@@ -325,9 +325,11 @@ export default function CalendarView() {
                         {day.getDate()}
                       </div>
                       <span className="text-sm font-medium text-[var(--foreground)]">
-                        {day.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" })}
+                        {day.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
+                        <span className="ml-2 text-xs text-[var(--muted-foreground)]">KW {getISOWeek(day)}</span>
                       </span>
                     </div>
+                    <MealRow day={day} />
                     {dayAllDayOccs.map((occ) => {
                       const ownerMember = members.find((m) => m.id === occ.appointment.owner_id);
                       const color = ownerMember?.color ?? "#6366f1";

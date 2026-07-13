@@ -2,17 +2,17 @@
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { Calendar, Settings, LogOut } from "lucide-react";
+import { Calendar, Settings, LogOut, UtensilsCrossed } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useCalendarStore } from "@/lib/store/calendarStore";
 import { Button } from "@/components/ui/button";
-import type { AppointmentWithParticipants, FamilyMember, Family, Vehicle } from "@/lib/supabase/types";
+import type { AppointmentWithParticipants, FamilyMember, Family, Vehicle, Recipe, MealPlanWithRecipe } from "@/lib/supabase/types";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { setFamily, setMembers, setVehicles, setAppointments, setLoading } = useDataStore();
+  const { setFamily, setMembers, setVehicles, setAppointments, setRecipes, setMealPlans, setLoading } = useDataStore();
   const { setTimeRange } = useCalendarStore();
 
   useEffect(() => {
@@ -38,7 +38,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         const familyId = memberData.family_id;
 
-        const [familyRes, membersRes, vehiclesRes, apptRes] = await Promise.all([
+        const [familyRes, membersRes, vehiclesRes, apptRes, recipesRes, mealPlansRes] = await Promise.all([
           supabase.from("families").select("*").eq("id", familyId).single(),
           supabase
             .from("family_members")
@@ -50,6 +50,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             .from("appointments")
             .select("*, participants:appointment_participants(*)")
             .eq("family_id", familyId),
+          supabase.from("recipes").select("*"),
+          supabase
+            .from("meal_plans")
+            .select("*, recipe:recipes(id, name, category)")
+            .eq("family_id", familyId),
         ]);
 
         if (familyRes.data) {
@@ -59,9 +64,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         }
         if (membersRes.data) setMembers(membersRes.data as FamilyMember[]);
         if (vehiclesRes.data) setVehicles(vehiclesRes.data as Vehicle[]);
-        if (apptRes.data) {
-          setAppointments(apptRes.data as AppointmentWithParticipants[]);
-        }
+        if (apptRes.data) setAppointments(apptRes.data as AppointmentWithParticipants[]);
+        if (recipesRes.data) setRecipes(recipesRes.data as Recipe[]);
+        if (mealPlansRes.data) setMealPlans(mealPlansRes.data as MealPlanWithRecipe[]);
       } finally {
         setLoading(false);
       }
@@ -78,12 +83,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "family_members" }, () =>
         loadData()
       )
+      .on("postgres_changes", { event: "*", schema: "public", table: "meal_plans" }, () =>
+        loadData()
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [setFamily, setMembers, setVehicles, setAppointments, setLoading]);
+  }, [setFamily, setMembers, setVehicles, setAppointments, setRecipes, setMealPlans, setLoading]);
 
   async function handleLogout() {
     const supabase = createClient();
@@ -109,6 +117,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             >
               <Calendar className="w-4 h-4" />
               Kalender
+            </Button>
+          </Link>
+          <Link href="/meals">
+            <Button
+              variant={pathname.startsWith("/meals") ? "secondary" : "ghost"}
+              size="sm"
+              className="gap-1.5"
+            >
+              <UtensilsCrossed className="w-4 h-4" />
+              Mahlzeiten
             </Button>
           </Link>
           <Link href="/settings">

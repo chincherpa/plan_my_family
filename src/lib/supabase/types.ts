@@ -171,6 +171,51 @@ export interface Database {
         };
         Relationships: [];
       };
+      recipes: {
+        Row: {
+          id: number;
+          name: string;
+          category: string | null;
+        };
+        Insert: {
+          id?: number;
+          name: string;
+          category?: string | null;
+        };
+        Update: {
+          id?: number;
+          name?: string;
+          category?: string | null;
+        };
+        Relationships: [];
+      };
+      meal_plans: {
+        Row: {
+          id: string;
+          family_id: string;
+          date: string;
+          meal_type: "lunch" | "dinner";
+          recipe_id: number | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          family_id: string;
+          date: string;
+          meal_type: "lunch" | "dinner";
+          recipe_id?: number | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          family_id?: string;
+          date?: string;
+          meal_type?: "lunch" | "dinner";
+          recipe_id?: number | null;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -185,8 +230,15 @@ export type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"]
 export type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 export type Appointment = Database["public"]["Tables"]["appointments"]["Row"];
 export type AppointmentParticipant = Database["public"]["Tables"]["appointment_participants"]["Row"];
+export type Recipe = Database["public"]["Tables"]["recipes"]["Row"];
+export type MealPlan = Database["public"]["Tables"]["meal_plans"]["Row"];
 
 /** Appointment enriched with participants */
 export interface AppointmentWithParticipants extends Appointment {
   participants: AppointmentParticipant[];
+}
+
+/** MealPlan enriched with the joined recipe */
+export interface MealPlanWithRecipe extends MealPlan {
+  recipe: Pick<Recipe, "id" | "name" | "category"> | null;
 }
