@@ -7,19 +7,29 @@ import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useCalendarStore } from "@/lib/store/calendarStore";
 import { Button } from "@/components/ui/button";
+<<<<<<< HEAD
 import type { AppointmentWithParticipants, FamilyMember, Family, Vehicle, Recipe, MealPlanWithRecipe } from "@/lib/supabase/types";
+=======
+import type { AppointmentWithParticipants, FamilyMember, Family, Vehicle, Meal } from "@/lib/supabase/types";
+>>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+<<<<<<< HEAD
   const { setFamily, setMembers, setVehicles, setAppointments, setRecipes, setMealPlans, setLoading } = useDataStore();
+=======
+  const { setFamily, setMembers, setVehicles, setAppointments, setMeals, setLoading } = useDataStore();
+>>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
   const { setTimeRange } = useCalendarStore();
 
   useEffect(() => {
     const supabase = createClient();
 
-    async function loadData() {
-      setLoading(true);
+    // showSpinner only on initial load — realtime refetches must not unmount
+    // the calendar (spinner remount resets scroll position to today)
+    async function loadData(showSpinner = false) {
+      if (showSpinner) setLoading(true);
       try {
         const {
           data: { user },
@@ -38,7 +48,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         const familyId = memberData.family_id;
 
+<<<<<<< HEAD
         const [familyRes, membersRes, vehiclesRes, apptRes, recipesRes, mealPlansRes] = await Promise.all([
+=======
+        const [familyRes, membersRes, vehiclesRes, apptRes, mealsRes] = await Promise.all([
+>>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
           supabase.from("families").select("*").eq("id", familyId).single(),
           supabase
             .from("family_members")
@@ -50,11 +64,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             .from("appointments")
             .select("*, participants:appointment_participants(*)")
             .eq("family_id", familyId),
+<<<<<<< HEAD
           supabase.from("recipes").select("*"),
           supabase
             .from("meal_plans")
             .select("*, recipe:recipes(id, name, category)")
             .eq("family_id", familyId),
+=======
+          supabase.from("meals").select("*").eq("family_id", familyId),
+>>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
         ]);
 
         if (familyRes.data) {
@@ -64,15 +82,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         }
         if (membersRes.data) setMembers(membersRes.data as FamilyMember[]);
         if (vehiclesRes.data) setVehicles(vehiclesRes.data as Vehicle[]);
+<<<<<<< HEAD
         if (apptRes.data) setAppointments(apptRes.data as AppointmentWithParticipants[]);
         if (recipesRes.data) setRecipes(recipesRes.data as Recipe[]);
         if (mealPlansRes.data) setMealPlans(mealPlansRes.data as MealPlanWithRecipe[]);
+=======
+        if (apptRes.data) {
+          setAppointments(apptRes.data as AppointmentWithParticipants[]);
+        }
+        if (mealsRes.data) setMeals(mealsRes.data as Meal[]);
+>>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
       } finally {
-        setLoading(false);
+        if (showSpinner) setLoading(false);
       }
     }
 
-    loadData();
+    loadData(true);
 
     // Realtime subscriptions
     const channel = supabase
@@ -83,7 +108,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "family_members" }, () =>
         loadData()
       )
+<<<<<<< HEAD
       .on("postgres_changes", { event: "*", schema: "public", table: "meal_plans" }, () =>
+=======
+      .on("postgres_changes", { event: "*", schema: "public", table: "meals" }, () =>
+>>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
         loadData()
       )
       .subscribe();

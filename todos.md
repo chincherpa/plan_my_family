@@ -9,7 +9,16 @@ DONE
 - Mouseover Anfahrten und Rückfahrten zeigt die Uhrzeit des starts bzw. der ankunft an
 - stundeneinteilung der tage in halbe stunden timeslots
 - drag&drop termin
+<<<<<<< HEAD
 - farbige zelle bei klick
 - Essensplanung, für jeden Tag können in einem Freifeld, aber im Kalender klar erkennbar, die Mahlzeiten (Mittag, Abend) gewählt werden
 
 OPEN
+=======
+- Essensplanung, für jeden Tag können in einem Freifeld, aber im Kalender klar erkennbar, die Mahlzeiten (Mittag, Abend) gewählt werden
+- Serientermine: "Nur dieser Termin" bearbeiten/löschen
+- Konflikt-Banner: Aufsichtslücken + Fahrzeugkonflikte der nächsten 14 Tage mit Sprung-Links
+
+OPEN
+- farbige zelle bei klick
+>>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398

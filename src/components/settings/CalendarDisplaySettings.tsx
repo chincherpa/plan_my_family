@@ -10,6 +10,7 @@ export default function CalendarDisplaySettings() {
 
   async function handleChange(newStart: number, newEnd: number) {
     if (!family) return;
+    if (newStart >= newEnd) return; // invalid range must not reach the DB
     setTimeRange(newStart, newEnd);
     const supabase = createClient();
     await supabase

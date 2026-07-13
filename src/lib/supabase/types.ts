@@ -171,6 +171,7 @@ export interface Database {
         };
         Relationships: [];
       };
+<<<<<<< HEAD
       recipes: {
         Row: {
           id: number;
@@ -196,29 +197,65 @@ export interface Database {
           date: string;
           meal_type: "lunch" | "dinner";
           recipe_id: number | null;
+=======
+      family_invites: {
+        Row: {
+          id: string;
+          family_id: string;
+          code: string;
+          created_by: string | null;
+          expires_at: string;
+          used_at: string | null;
+          used_by: string | null;
+>>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
           created_at: string;
         };
         Insert: {
           id?: string;
           family_id: string;
+<<<<<<< HEAD
           date: string;
           meal_type: "lunch" | "dinner";
           recipe_id?: number | null;
+=======
+          code: string;
+          created_by?: string | null;
+          expires_at?: string;
+          used_at?: string | null;
+          used_by?: string | null;
+>>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
           created_at?: string;
         };
         Update: {
           id?: string;
           family_id?: string;
+<<<<<<< HEAD
           date?: string;
           meal_type?: "lunch" | "dinner";
           recipe_id?: number | null;
+=======
+          code?: string;
+          created_by?: string | null;
+          expires_at?: string;
+          used_at?: string | null;
+          used_by?: string | null;
+>>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
           created_at?: string;
         };
         Relationships: [];
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      check_invite_valid: {
+        Args: { invite_code: string };
+        Returns: boolean;
+      };
+      accept_invite: {
+        Args: { invite_code: string; member_name: string; member_color: string };
+        Returns: Database["public"]["Tables"]["family_members"]["Row"];
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
@@ -230,8 +267,12 @@ export type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"]
 export type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 export type Appointment = Database["public"]["Tables"]["appointments"]["Row"];
 export type AppointmentParticipant = Database["public"]["Tables"]["appointment_participants"]["Row"];
+<<<<<<< HEAD
 export type Recipe = Database["public"]["Tables"]["recipes"]["Row"];
 export type MealPlan = Database["public"]["Tables"]["meal_plans"]["Row"];
+=======
+export type FamilyInvite = Database["public"]["Tables"]["family_invites"]["Row"];
+>>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
 
 /** Appointment enriched with participants */
 export interface AppointmentWithParticipants extends Appointment {

@@ -11,6 +11,8 @@ interface AppointmentBlockProps {
   columnId: string;
   memberColor: string;
   slotStart: Date;
+  /** End of the day's visible time window — the block is clipped here */
+  dayVisibleEnd?: Date;
   ownerIsDragging?: boolean;
 }
 
@@ -19,6 +21,7 @@ export default function AppointmentBlock({
   columnId,
   memberColor,
   slotStart,
+  dayVisibleEnd,
   ownerIsDragging = false,
 }: AppointmentBlockProps) {
   const { openForm } = useCalendarStore();
@@ -33,6 +36,7 @@ export default function AppointmentBlock({
 
   const vehicle = vehicles.find((v) => v.id === appointment.vehicle_id);
 
+<<<<<<< HEAD
   const durationMin = (occurrenceEnd.getTime() - occurrenceStart.getTime()) / 60000;
   let heightPx = Math.max((durationMin / 30) * SLOT_HEIGHT, SLOT_HEIGHT);
   const minutesIntoSlot = (occurrenceStart.getTime() - slotStart.getTime()) / 60000;
@@ -53,6 +57,27 @@ export default function AppointmentBlock({
     id: `appt-${occurrence.key}-${columnId}`,
     data: { ...occurrence, fromColumnId: columnId },
     disabled: isParticipant || occurrence.isRecurringInstance,
+=======
+  // Clip to the day's visible window (appointments starting before
+  // startHour or ending after endHour would otherwise overflow the grid)
+  const effectiveStart = occurrenceStart < slotStart ? slotStart : occurrenceStart;
+  const effectiveEnd =
+    dayVisibleEnd && occurrenceEnd > dayVisibleEnd ? dayVisibleEnd : occurrenceEnd;
+  const durationMin = Math.max((effectiveEnd.getTime() - effectiveStart.getTime()) / 60000, 0);
+  const heightPx = Math.max((durationMin / 30) * SLOT_HEIGHT, SLOT_HEIGHT);
+  const minutesIntoSlot = (effectiveStart.getTime() - slotStart.getTime()) / 60000;
+  const topOffset = (minutesIntoSlot / 30) * SLOT_HEIGHT;
+
+  // Rule-generated occurrences (recurrence_rule set, no own row) must not be
+  // dragged: the update would rewrite the series' base appointment.
+  const isRecurringRuleInstance = !!appointment.recurrence_rule;
+
+  // Only the owner's block is draggable; participant view is read-only
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: `appt-${occurrence.key}-${columnId}`,
+    data: { ...occurrence, fromColumnId: columnId },
+    disabled: isParticipant || isRecurringRuleInstance,
+>>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
   });
 
   // Hide participant mirror while the owner's block is being dragged
@@ -79,7 +104,11 @@ export default function AppointmentBlock({
         color: displayColor,
         zIndex: isDragging ? 50 : 10,
         opacity: isDragging ? 0.3 : 1,
+<<<<<<< HEAD
         cursor: isParticipant || occurrence.isRecurringInstance ? "pointer" : "grab",
+=======
+        cursor: isParticipant || isRecurringRuleInstance ? "pointer" : "grab",
+>>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
         overflow: "hidden",
         fontSize: "11px",
         lineHeight: "1.2",
@@ -89,7 +118,7 @@ export default function AppointmentBlock({
       title={`${appointment.title} · ${formatTime(occurrenceStart)}–${formatTime(occurrenceEnd)}`}
       onClick={(e) => {
         e.stopPropagation();
-        openForm({ appointmentId: appointment.id });
+        openForm({ appointmentId: appointment.id, occurrenceStart });
       }}
     >
       <div className="flex items-start justify-between gap-0.5 overflow-hidden">

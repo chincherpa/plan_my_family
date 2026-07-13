@@ -1,6 +1,15 @@
 import { RRule } from "rrule";
 import type { AppointmentWithParticipants } from "@/lib/supabase/types";
-import { addMinutes } from "@/lib/utils";
+import { addMinutes, localDateStr } from "@/lib/utils";
+
+/**
+ * Local "YYYY-MM-DD" key used for `exception_date` matching.
+ * Must be used both when expanding occurrences and when creating
+ * exception rows, otherwise UTC offsets shift the date.
+ */
+export function occurrenceDateKey(date: Date): string {
+  return localDateStr(date);
+}
 
 export interface AppointmentOccurrence {
   key: string; // unique key for rendering
@@ -49,13 +58,13 @@ export function expandAppointments(
         const exceptedDates = exceptions.get(appt.id) ?? new Set();
 
         for (const occDate of occurrenceDates) {
-          const dateStr = occDate.toISOString().split("T")[0];
-          if (exceptedDates.has(dateStr)) continue; // replaced by exception
-
           const occStart = new Date(occDate);
           // Preserve original time if rule doesn't include time
           occStart.setHours(start.getHours(), start.getMinutes(), 0, 0);
           const occEnd = new Date(occStart.getTime() + durationMs);
+
+          // Occurrence replaced or deleted via exception row?
+          if (exceptedDates.has(occurrenceDateKey(occStart))) continue;
 
           results.push(buildOccurrence(appt, occStart, occEnd, true));
         }

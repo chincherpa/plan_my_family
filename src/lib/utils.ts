@@ -34,8 +34,13 @@ export function formatDate(date: Date): string {
   });
 }
 
+<<<<<<< HEAD
 /** Local date key "YYYY-MM-DD" (not UTC — matches the calendar's local days) */
 export function toDateKey(date: Date): string {
+=======
+/** Local date as "YYYY-MM-DD" */
+export function localDateStr(date: Date): string {
+>>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }

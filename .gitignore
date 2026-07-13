@@ -36,6 +36,8 @@ yarn-error.log*
 # vercel
 .vercel
 
+.playwright-mcp/
+
 # supabase
 supabase/.temp
 
@@ -44,3 +46,4 @@ supabase/.temp
 next-env.d.ts
 
 *.gif
+*.log
