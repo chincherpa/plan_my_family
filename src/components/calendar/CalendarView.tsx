@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import AppointmentBlock from "./AppointmentBlock";
 import TravelBlock from "./TravelBlock";
 import { DroppableSlotCell } from "./DroppableSlotCell";
+import MealPlanRow from "./MealPlanRow";
 import AppointmentForm from "@/components/appointments/AppointmentForm";
 import { createClient } from "@/lib/supabase/client";
 
@@ -19,6 +20,7 @@ const DAYS_BEFORE = 365;
 const DAYS_AFTER = 365;
 const DAY_HEADER_HEIGHT = 36;
 const ALL_DAY_ROW_HEIGHT = 22;
+const MEAL_ROW_HEIGHT = 26;
 
 type VItem =
   | { type: "day-header"; dayIdx: number; allDayCount: number }
@@ -36,7 +38,7 @@ export default function CalendarView() {
   const [activeOccurrence, setActiveOccurrence] = useState<AppointmentOccurrence | null>(null);
 
   const slotsPerDay = (endHour - startHour) * 2;
-  const heightPerDay = DAY_HEADER_HEIGHT + slotsPerDay * SLOT_HEIGHT;
+  const heightPerDay = DAY_HEADER_HEIGHT + MEAL_ROW_HEIGHT + slotsPerDay * SLOT_HEIGHT;
 
   // All days: DAYS_BEFORE before today + DAYS_AFTER after
   const allDays = useMemo(() => {
@@ -104,7 +106,7 @@ export default function CalendarView() {
     estimateSize: (i) => {
       const item = items[i];
       if (item.type === "day-header") {
-        return DAY_HEADER_HEIGHT + item.allDayCount * ALL_DAY_ROW_HEIGHT;
+        return DAY_HEADER_HEIGHT + MEAL_ROW_HEIGHT + item.allDayCount * ALL_DAY_ROW_HEIGHT;
       }
       return SLOT_HEIGHT;
     },
@@ -162,7 +164,7 @@ export default function CalendarView() {
     setActiveOccurrence(null);
     const { active, over } = event;
     if (!over || !active.data.current) return;
-    const { fromColumnId, ...occ } = active.data.current as AppointmentOccurrence & { fromColumnId: string };
+    const occ = active.data.current as AppointmentOccurrence;
     const dropData = over.data.current as { slotStart: Date; memberId: string };
     if (!dropData?.slotStart) return;
     const originalDuration = occ.occurrenceEnd.getTime() - occ.occurrenceStart.getTime();
@@ -303,7 +305,7 @@ export default function CalendarView() {
                 const day = allDays[item.dayIdx];
                 const isToday = startOfDay(new Date()).getTime() === day.getTime();
                 const dayAllDayOccs = allDayByDay.get(day.toDateString()) ?? [];
-                const headerHeight = DAY_HEADER_HEIGHT + dayAllDayOccs.length * ALL_DAY_ROW_HEIGHT;
+                const headerHeight = DAY_HEADER_HEIGHT + MEAL_ROW_HEIGHT + dayAllDayOccs.length * ALL_DAY_ROW_HEIGHT;
                 return (
                   <div
                     key={vItem.key}
@@ -328,6 +330,7 @@ export default function CalendarView() {
                         {day.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long" })}
                       </span>
                     </div>
+                    <MealPlanRow day={day} height={MEAL_ROW_HEIGHT} />
                     {dayAllDayOccs.map((occ) => {
                       const ownerMember = members.find((m) => m.id === occ.appointment.owner_id);
                       const color = ownerMember?.color ?? "#6366f1";
@@ -452,11 +455,13 @@ export default function CalendarView() {
                           if (!isOwner && !isParticipant) return false;
                         }
                       }
-                      return (
-                        occ.occurrenceStart >= slotStart &&
-                        occ.occurrenceStart < slotEnd &&
-                        occ.occurrenceStart.toDateString() === day.toDateString()
-                      );
+                      if (occ.occurrenceStart.toDateString() !== day.toDateString()) return false;
+                      if (occ.occurrenceStart >= slotStart && occ.occurrenceStart < slotEnd) return true;
+                      // Appointments outside the visible hours are pinned to the edge
+                      // slots instead of disappearing entirely
+                      if (slotIdx === 0 && occ.occurrenceStart < slotStart) return true;
+                      if (slotIdx === slotsPerDay - 1 && occ.occurrenceStart >= slotEnd) return true;
+                      return false;
                     });
 
                     const travelStartOccurrences = isEventsCol ? [] : timedOccurrences.filter((occ) => {
@@ -527,7 +532,6 @@ export default function CalendarView() {
                             key={`travel-before-${occ.key}`}
                             occurrence={occ}
                             type="before"
-                            columnId={col.id}
                             slotStart={slotStart}
                           />
                         ))}
@@ -546,7 +550,6 @@ export default function CalendarView() {
                             key={`travel-after-${occ.key}`}
                             occurrence={occ}
                             type="after"
-                            columnId={col.id}
                             slotStart={slotStart}
                           />
                         ))}

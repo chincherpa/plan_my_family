@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { Trash2, Repeat, Car, Users, Clock, AlertTriangle } from "lucide-react";
 import { RRule } from "rrule";
 import { createClient } from "@/lib/supabase/client";
@@ -11,7 +11,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogClose,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -95,90 +94,78 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     ? appointments.find((a) => a.id === selectedAppointmentId)
     : null;
 
-  // Form state
-  const [title, setTitle] = useState("");
-  const [notes, setNotes] = useState("");
-  const [ownerId, setOwnerId] = useState<string>("");
-  const [isAllFamily, setIsAllFamily] = useState(false);
-  const [isAllDay, setIsAllDay] = useState(false);
-  const [allDayStartDate, setAllDayStartDate] = useState(() => toDatePart(new Date()));
-  const [allDayEndDate, setAllDayEndDate] = useState(() => toDatePart(new Date()));
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [travelBefore, setTravelBefore] = useState(0);
-  const [travelAfter, setTravelAfter] = useState(0);
-  const [vehicleId, setVehicleId] = useState<string>("none");
-  const [participants, setParticipants] = useState<string[]>([]);
-  const [supervisorIds, setSupervisorIds] = useState<string[]>([]);
-  const [isEvent, setIsEvent] = useState(false);
-  const [recurrence, setRecurrence] = useState<RecurrenceFreq>("none");
-  const [saving, setSaving] = useState(false);
-  const [vehicleConflict, setVehicleConflict] = useState<AppointmentWithParticipants | null>(null);
-  const [vehicleConflicts, setVehicleConflicts] = useState<Record<string, AppointmentWithParticipants>>({});
-
-  // Initialize from existing or new
-  useEffect(() => {
+  // Initial values from the existing appointment or the clicked slot.
+  // The form is remounted on every open, so plain initializers suffice
+  // (and user edits survive background data refreshes while it is open).
+  const [initial] = useState(() => {
     if (existingAppt) {
-      setTitle(existingAppt.title);
-      setNotes(existingAppt.notes ?? "");
-      setOwnerId(existingAppt.owner_id ?? "");
-      setIsAllFamily(existingAppt.is_all_family);
-      setIsEvent(existingAppt.is_event ?? false);
-      const allDay = existingAppt.is_all_day ?? false;
-      setIsAllDay(allDay);
       const s = new Date(existingAppt.start_time);
       const e = new Date(existingAppt.end_time);
-      if (allDay) {
-        setAllDayStartDate(toDatePart(s));
-        setAllDayEndDate(toDatePart(e));
-      } else {
-        setStartTime(combine(toDatePart(s), toTimePart(s)));
-        setEndTime(combine(toDatePart(e), toTimePart(e)));
-        setAllDayStartDate(toDatePart(s));
-        setAllDayEndDate(toDatePart(e));
-      }
-      setTravelBefore(existingAppt.travel_before_min);
-      setTravelAfter(existingAppt.travel_after_min);
-      setVehicleId(existingAppt.vehicle_id ?? "none");
-      setParticipants(existingAppt.participants.map((p) => p.member_id));
-      setSupervisorIds(
-        existingAppt.participants.filter((p) => p.is_supervisor).map((p) => p.member_id)
-      );
-
-      if (existingAppt.recurrence_rule) {
-        try {
-          const rule = RRule.fromString(existingAppt.recurrence_rule);
-          if (rule.options.freq === RRule.DAILY) setRecurrence("daily");
-          else if (rule.options.freq === RRule.WEEKLY) setRecurrence("weekly");
-          else if (rule.options.freq === RRule.MONTHLY) setRecurrence("monthly");
-          else if (rule.options.freq === RRule.YEARLY) setRecurrence("yearly");
-          else setRecurrence("none");
-        } catch {
-          setRecurrence("none");
-        }
-      }
-    } else {
-      const now = snapTo15Min(formInitialDate ?? new Date());
-      const end = new Date(now);
-      end.setHours(now.getHours() + 1);
-      setStartTime(combine(toDatePart(now), toTimePart(now)));
-      setEndTime(combine(toDatePart(end), toTimePart(end)));
-      setOwnerId(formMemberId && formMemberId !== "all" && formMemberId !== "events" ? formMemberId : members[0]?.id ?? "");
-      setIsAllFamily(formMemberId === "all");
-      setIsEvent(formMemberId === "events");
-      const dateStr = toDatePart(formInitialDate ?? new Date());
-      setAllDayStartDate(dateStr);
-      setAllDayEndDate(dateStr);
+      return {
+        startTime: combine(toDatePart(s), toTimePart(s)),
+        endTime: combine(toDatePart(e), toTimePart(e)),
+        allDayStartDate: toDatePart(s),
+        allDayEndDate: toDatePart(e),
+        ownerId: existingAppt.owner_id ?? "",
+      };
     }
-  }, [existingAppt, formInitialDate, formMemberId, members]);
+    const now = snapTo15Min(formInitialDate ?? new Date());
+    const end = new Date(now);
+    end.setHours(now.getHours() + 1);
+    return {
+      startTime: combine(toDatePart(now), toTimePart(now)),
+      endTime: combine(toDatePart(end), toTimePart(end)),
+      allDayStartDate: toDatePart(now),
+      allDayEndDate: toDatePart(now),
+      ownerId:
+        formMemberId && formMemberId !== "all" && formMemberId !== "events"
+          ? formMemberId
+          : members[0]?.id ?? "",
+    };
+  });
 
-  // Check conflicts for all vehicles when times change
-  useEffect(() => {
-    if (!startTime || !endTime) {
-      setVehicleConflicts({});
-      setVehicleConflict(null);
-      return;
+  // Form state
+  const [title, setTitle] = useState(existingAppt?.title ?? "");
+  const [notes, setNotes] = useState(existingAppt?.notes ?? "");
+  const [ownerId, setOwnerId] = useState<string>(initial.ownerId);
+  const [isAllFamily, setIsAllFamily] = useState(
+    existingAppt ? existingAppt.is_all_family : formMemberId === "all"
+  );
+  const [isAllDay, setIsAllDay] = useState(existingAppt?.is_all_day ?? false);
+  const [allDayStartDate, setAllDayStartDate] = useState(initial.allDayStartDate);
+  const [allDayEndDate, setAllDayEndDate] = useState(initial.allDayEndDate);
+  const [startTime, setStartTime] = useState(initial.startTime);
+  const [endTime, setEndTime] = useState(initial.endTime);
+  const [travelBefore, setTravelBefore] = useState(existingAppt?.travel_before_min ?? 0);
+  const [travelAfter, setTravelAfter] = useState(existingAppt?.travel_after_min ?? 0);
+  const [vehicleId, setVehicleId] = useState<string>(existingAppt?.vehicle_id ?? "none");
+  const [participants, setParticipants] = useState<string[]>(
+    () => existingAppt?.participants.map((p) => p.member_id) ?? []
+  );
+  const [supervisorIds, setSupervisorIds] = useState<string[]>(
+    () => existingAppt?.participants.filter((p) => p.is_supervisor).map((p) => p.member_id) ?? []
+  );
+  const [isEvent, setIsEvent] = useState(
+    existingAppt ? existingAppt.is_event ?? false : formMemberId === "events"
+  );
+  const [recurrence, setRecurrence] = useState<RecurrenceFreq>(() => {
+    if (!existingAppt?.recurrence_rule) return "none";
+    try {
+      const freq = RRule.fromString(existingAppt.recurrence_rule).options.freq;
+      if (freq === RRule.DAILY) return "daily";
+      if (freq === RRule.WEEKLY) return "weekly";
+      if (freq === RRule.MONTHLY) return "monthly";
+      if (freq === RRule.YEARLY) return "yearly";
+      return "none";
+    } catch {
+      return "none";
     }
+  });
+  const [saving, setSaving] = useState(false);
+
+  // Conflicts per vehicle for the currently selected times (derived, not state)
+  const vehicleConflicts = useMemo(() => {
+    if (!startTime || !endTime) return {};
     const conflicts: Record<string, AppointmentWithParticipants> = {};
     for (const v of vehicles) {
       const conflict = checkVehicleConflict(
@@ -192,9 +179,24 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
       );
       if (conflict) conflicts[v.id] = conflict;
     }
-    setVehicleConflicts(conflicts);
-    setVehicleConflict(vehicleId !== "none" ? (conflicts[vehicleId] ?? null) : null);
-  }, [vehicleId, startTime, endTime, travelBefore, travelAfter, appointments, existingAppt, vehicles]);
+    return conflicts;
+  }, [startTime, endTime, travelBefore, travelAfter, appointments, existingAppt, vehicles]);
+  const vehicleConflict = vehicleId !== "none" ? vehicleConflicts[vehicleId] ?? null : null;
+
+  // Keep end after start: shifting the start moves the end along, preserving duration
+  function handleStartChange(v: string) {
+    if (startTime && endTime) {
+      const prevStart = new Date(startTime);
+      const prevEnd = new Date(endTime);
+      const durationMs = Math.max(prevEnd.getTime() - prevStart.getTime(), 15 * 60000);
+      const newEnd = new Date(new Date(v).getTime() + durationMs);
+      setEndTime(combine(toDatePart(newEnd), toTimePart(newEnd)));
+    }
+    setStartTime(v);
+  }
+
+  const timesInvalid =
+    !isAllDay && !!startTime && !!endTime && new Date(endTime) <= new Date(startTime);
 
   function buildRRule(freq: RecurrenceFreq, from: Date): string | null {
     if (freq === "none") return null;
@@ -214,15 +216,17 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   async function handleSave() {
     if (!family || !title.trim()) return;
     if (isAllDay && !allDayStartDate) return;
-    if (!isAllDay && (!startTime || !endTime)) return;
+    if (!isAllDay && (!startTime || !endTime || timesInvalid)) return;
     setSaving(true);
 
     const supabase = createClient();
     let startDate: Date;
     let endDate: Date;
     if (isAllDay) {
+      const endDatePart =
+        allDayEndDate && allDayEndDate >= allDayStartDate ? allDayEndDate : allDayStartDate;
       startDate = new Date(`${allDayStartDate}T00:00:00`);
-      endDate = new Date(`${allDayEndDate || allDayStartDate}T23:59:59`);
+      endDate = new Date(`${endDatePart}T23:59:59`);
     } else {
       startDate = new Date(startTime);
       endDate = new Date(endTime);
@@ -429,12 +433,18 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Von</Label>
-                <DateTimePicker value={startTime} onChange={setStartTime} />
+                <DateTimePicker value={startTime} onChange={handleStartChange} />
               </div>
               <div className="space-y-1.5">
                 <Label>Bis</Label>
                 <DateTimePicker value={endTime} onChange={setEndTime} />
               </div>
+              {timesInvalid && (
+                <p className="col-span-2 text-xs text-[var(--destructive)] flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  Das Ende muss nach dem Beginn liegen.
+                </p>
+              )}
             </div>
           )}
 
@@ -501,7 +511,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
               {vehicleConflict && (
                 <p className="text-xs text-orange-600 flex items-center gap-1">
                   <AlertTriangle className="w-3 h-3" />
-                  Fahrzeug ist von „{vehicleConflict.title}" belegt!
+                  Fahrzeug ist von „{vehicleConflict.title}“ belegt!
                 </p>
               )}
             </div>
@@ -619,7 +629,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
             <Button
               className="flex-1"
               onClick={handleSave}
-              disabled={saving || !title.trim() || (isAllDay ? !allDayStartDate : (!startTime || !endTime))}
+              disabled={saving || !title.trim() || (isAllDay ? !allDayStartDate : (!startTime || !endTime || timesInvalid))}
             >
               {saving ? "Speichern..." : "Speichern"}
             </Button>

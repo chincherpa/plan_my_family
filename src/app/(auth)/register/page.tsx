@@ -24,12 +24,10 @@ export default function RegisterPage() {
     const supabase = createClient();
 
     // 1. Sign up
-    console.log("[Register] 1. signUp →", email);
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
     });
-    console.log("[Register] signUp result — user:", authData.user?.id, "session:", !!authData.session, "error:", authError);
 
     if (authError || !authData.user) {
       setError(authError?.message ?? "Registrierung fehlgeschlagen");
@@ -39,9 +37,7 @@ export default function RegisterPage() {
 
     // If email confirmation is required, signUp returns no session → sign in explicitly
     if (!authData.session) {
-      console.log("[Register] Keine Session nach signUp → versuche signIn");
-      const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-      console.log("[Register] signIn result — session:", !!signInData.session, "error:", signInError);
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
       if (signInError) {
         setError("Bitte bestätige deine E-Mail und melde dich danach an.");
         setLoading(false);
@@ -49,17 +45,11 @@ export default function RegisterPage() {
       }
     }
 
-    // Check active session before DB writes
-    const { data: { session } } = await supabase.auth.getSession();
-    console.log("[Register] 2. aktive Session vor DB-Insert:", !!session, "uid:", session?.user?.id);
-
     // 2. Create family (UUID client-side — kein .select() nötig, da SELECT-Policy den neuen User noch nicht kennt)
     const familyId = crypto.randomUUID();
-    console.log("[Register] 3. families.insert →", familyName || "Meine Familie", "id:", familyId);
     const { error: familyError } = await supabase
       .from("families")
       .insert({ id: familyId, name: familyName || "Meine Familie" });
-    console.log("[Register] families.insert error:", familyError);
 
     if (familyError) {
       setError("Familie konnte nicht erstellt werden");
@@ -69,7 +59,6 @@ export default function RegisterPage() {
     const family = { id: familyId };
 
     // 3. Create first family member (the user themselves)
-    console.log("[Register] 4. family_members.insert → family:", family.id, "user:", authData.user.id);
     const { error: memberError } = await supabase.from("family_members").insert({
       family_id: family.id,
       name: myName || email.split("@")[0],
@@ -78,7 +67,6 @@ export default function RegisterPage() {
       user_id: authData.user.id,
       sort_order: 0,
     });
-    console.log("[Register] family_members.insert error:", memberError);
 
     if (memberError) {
       setError("Familienmitglied konnte nicht erstellt werden");

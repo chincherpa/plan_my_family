@@ -153,6 +153,33 @@ export interface Database {
         };
         Relationships: [];
       };
+      meal_plans: {
+        Row: {
+          id: string;
+          family_id: string;
+          date: string;
+          meal_type: "lunch" | "dinner";
+          text: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          family_id: string;
+          date: string;
+          meal_type: "lunch" | "dinner";
+          text?: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          family_id?: string;
+          date?: string;
+          meal_type?: "lunch" | "dinner";
+          text?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       appointment_participants: {
         Row: {
           appointment_id: string;
@@ -185,6 +212,8 @@ export type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"]
 export type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 export type Appointment = Database["public"]["Tables"]["appointments"]["Row"];
 export type AppointmentParticipant = Database["public"]["Tables"]["appointment_participants"]["Row"];
+export type MealPlan = Database["public"]["Tables"]["meal_plans"]["Row"];
+export type MealType = MealPlan["meal_type"];
 
 /** Appointment enriched with participants */
 export interface AppointmentWithParticipants extends Appointment {

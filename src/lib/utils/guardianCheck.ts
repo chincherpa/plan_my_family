@@ -1,5 +1,4 @@
 import type { FamilyMember, AppointmentWithParticipants } from "@/lib/supabase/types";
-import { addMinutes } from "@/lib/utils";
 
 export interface GuardianWarning {
   memberId: string;
@@ -25,9 +24,10 @@ export function checkGuardianWarnings(
 
   if (dependents.length === 0 || guardians.length === 0) return warnings;
 
-  // Check in 30-min slots
+  // Check in 30-min slots. Events (birthdays etc.) are informational and
+  // neither occupy a guardian nor supervise a dependent.
   const SLOT_MS = 30 * 60 * 1000;
-  const activeAppointments = appointments.filter((a) => !a.is_deleted);
+  const activeAppointments = appointments.filter((a) => !a.is_deleted && !a.is_event);
 
   for (const dependent of dependents) {
     let warningStart: Date | null = null;

@@ -6,11 +6,10 @@ import type { AppointmentOccurrence } from "@/lib/utils/recurrence";
 interface TravelBlockProps {
   occurrence: AppointmentOccurrence;
   type: "before" | "after";
-  columnId: string;
   slotStart: Date;
 }
 
-export default function TravelBlock({ occurrence, type, columnId, slotStart }: TravelBlockProps) {
+export default function TravelBlock({ occurrence, type, slotStart }: TravelBlockProps) {
   const { members } = useDataStore();
   const { appointment, occurrenceStart, occurrenceEnd, travelStart, travelEnd } = occurrence;
 
