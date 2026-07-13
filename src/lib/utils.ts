@@ -34,6 +34,12 @@ export function formatDate(date: Date): string {
   });
 }
 
+/** Local date key "YYYY-MM-DD" (not UTC — matches the calendar's local days) */
+export function toDateKey(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
 /** Get start of day */
 export function startOfDay(date: Date): Date {
   const d = new Date(date);

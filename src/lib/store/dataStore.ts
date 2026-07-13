@@ -4,6 +4,8 @@ import type {
   FamilyMember,
   Vehicle,
   AppointmentWithParticipants,
+  MealPlan,
+  MealType,
 } from "@/lib/supabase/types";
 
 interface DataState {
@@ -11,6 +13,7 @@ interface DataState {
   members: FamilyMember[];
   vehicles: Vehicle[];
   appointments: AppointmentWithParticipants[];
+  meals: MealPlan[];
   isLoading: boolean;
 
   setFamily: (family: Family | null) => void;
@@ -21,6 +24,9 @@ interface DataState {
   addAppointment: (appointment: AppointmentWithParticipants) => void;
   updateAppointment: (id: string, updates: Partial<AppointmentWithParticipants>) => void;
   removeAppointment: (id: string) => void;
+  setMeals: (meals: MealPlan[]) => void;
+  upsertMeal: (meal: MealPlan) => void;
+  removeMeal: (date: string, mealType: MealType) => void;
   setLoading: (loading: boolean) => void;
 }
 
@@ -29,6 +35,7 @@ export const useDataStore = create<DataState>((set) => ({
   members: [],
   vehicles: [],
   appointments: [],
+  meals: [],
   isLoading: false,
 
   setFamily: (family) => set({ family }),
@@ -53,6 +60,22 @@ export const useDataStore = create<DataState>((set) => ({
   removeAppointment: (id) =>
     set((state) => ({
       appointments: state.appointments.filter((a) => a.id !== id),
+    })),
+  setMeals: (meals) => set({ meals }),
+  upsertMeal: (meal) =>
+    set((state) => ({
+      meals: [
+        ...state.meals.filter(
+          (m) => !(m.date === meal.date && m.meal_type === meal.meal_type)
+        ),
+        meal,
+      ],
+    })),
+  removeMeal: (date, mealType) =>
+    set((state) => ({
+      meals: state.meals.filter(
+        (m) => !(m.date === date && m.meal_type === mealType)
+      ),
     })),
   setLoading: (isLoading) => set({ isLoading }),
 }));
