@@ -162,6 +162,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     }
   });
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Conflicts per vehicle for the currently selected times (derived, not state)
   const vehicleConflicts = useMemo(() => {
@@ -316,7 +317,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   }
 
   async function handleDelete() {
-    if (!existingAppt || !confirm("Termin wirklich löschen?")) return;
+    if (!existingAppt) return;
     const supabase = createClient();
     await supabase.from("appointments").delete().eq("id", existingAppt.id);
     removeAppointment(existingAppt.id);
@@ -325,12 +326,6 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
 
   function toggleParticipant(memberId: string) {
     setParticipants((prev) =>
-      prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]
-    );
-  }
-
-  function toggleSupervisor(memberId: string) {
-    setSupervisorIds((prev) =>
       prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]
     );
   }
@@ -553,36 +548,18 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
           )}
 
           {/* Supervision for dependent members */}
-          {showSupervisorSelect && (
-            <div className="space-y-1.5 p-3 bg-orange-50 dark:bg-orange-950/20 rounded-md border border-orange-200 dark:border-orange-900">
-              <Label className="flex items-center gap-1 text-orange-700 dark:text-orange-400">
-                <AlertTriangle className="w-3.5 h-3.5" />
-                Aufsicht für {dependentMembers.filter((d) => participants.includes(d.id)).map((d) => d.name).join(", ")}
-              </Label>
-              <p className="text-xs text-[var(--muted-foreground)]">
-                Wähle, wer die Aufsicht übernimmt:
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {members
-                  .filter((m) => m.is_guardian && participants.includes(m.id))
-                  .map((m) => (
-                    <button
-                      key={m.id}
-                      type="button"
-                      onClick={() => toggleSupervisor(m.id)}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium border transition-all"
-                      style={{
-                        backgroundColor: supervisorIds.includes(m.id) ? m.color : "transparent",
-                        color: supervisorIds.includes(m.id) ? "#fff" : m.color,
-                        borderColor: m.color,
-                      }}
-                    >
-                      {m.name}
-                    </button>
-                  ))}
+          {showSupervisorSelect && (() => {
+            const ownerMember = members.find((m) => m.id === ownerId);
+            return (
+              <div className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-md border border-orange-200 dark:border-orange-900">
+                <p className="text-sm flex items-center gap-1.5 text-orange-700 dark:text-orange-400">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  Aufsicht für {dependentMembers.filter((d) => participants.includes(d.id)).map((d) => d.name).join(", ")}:{" "}
+                  <span className="font-semibold">{ownerMember?.name ?? "–"}</span>
+                </p>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Recurrence */}
           <div className="space-y-1.5">
@@ -617,23 +594,37 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
           </div>
 
           {/* Actions */}
-          <div className="flex gap-2 pt-2">
-            {existingAppt && (
-              <Button variant="destructive" size="icon" onClick={handleDelete} type="button">
-                <Trash2 className="w-4 h-4" />
+          {confirmDelete ? (
+            <div className="flex flex-col gap-2 pt-2 rounded-lg border border-[var(--destructive)]/40 bg-[var(--destructive)]/5 p-3">
+              <p className="text-sm font-medium text-[var(--destructive)]">Termin wirklich löschen?</p>
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(false)} type="button">
+                  Abbrechen
+                </Button>
+                <Button variant="destructive" className="flex-1" onClick={handleDelete} type="button">
+                  Löschen
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2 pt-2">
+              {existingAppt && (
+                <Button variant="destructive" size="icon" onClick={() => setConfirmDelete(true)} type="button">
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+              <Button variant="outline" className="flex-1" onClick={onClose} type="button">
+                Abbrechen
               </Button>
-            )}
-            <Button variant="outline" className="flex-1" onClick={onClose} type="button">
-              Abbrechen
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={handleSave}
-              disabled={saving || !title.trim() || (isAllDay ? !allDayStartDate : (!startTime || !endTime || timesInvalid))}
-            >
-              {saving ? "Speichern..." : "Speichern"}
-            </Button>
-          </div>
+              <Button
+                className="flex-1"
+                onClick={handleSave}
+                disabled={saving || !title.trim() || (isAllDay ? !allDayStartDate : (!startTime || !endTime || timesInvalid))}
+              >
+                {saving ? "Speichern..." : "Speichern"}
+              </Button>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>

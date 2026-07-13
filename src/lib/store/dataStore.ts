@@ -4,8 +4,8 @@ import type {
   FamilyMember,
   Vehicle,
   AppointmentWithParticipants,
-  MealPlan,
-  MealType,
+  Recipe,
+  MealPlanWithRecipe,
 } from "@/lib/supabase/types";
 
 interface DataState {
@@ -13,7 +13,8 @@ interface DataState {
   members: FamilyMember[];
   vehicles: Vehicle[];
   appointments: AppointmentWithParticipants[];
-  meals: MealPlan[];
+  recipes: Recipe[];
+  mealPlans: MealPlanWithRecipe[];
   isLoading: boolean;
 
   setFamily: (family: Family | null) => void;
@@ -24,9 +25,12 @@ interface DataState {
   addAppointment: (appointment: AppointmentWithParticipants) => void;
   updateAppointment: (id: string, updates: Partial<AppointmentWithParticipants>) => void;
   removeAppointment: (id: string) => void;
-  setMeals: (meals: MealPlan[]) => void;
-  upsertMeal: (meal: MealPlan) => void;
-  removeMeal: (date: string, mealType: MealType) => void;
+  setRecipes: (recipes: Recipe[]) => void;
+  addRecipe: (recipe: Recipe) => void;
+  updateRecipe: (id: number, updates: Partial<Recipe>) => void;
+  removeRecipe: (id: number) => void;
+  setMealPlans: (plans: MealPlanWithRecipe[]) => void;
+  upsertMealPlan: (plan: MealPlanWithRecipe) => void;
   setLoading: (loading: boolean) => void;
 }
 
@@ -35,7 +39,8 @@ export const useDataStore = create<DataState>((set) => ({
   members: [],
   vehicles: [],
   appointments: [],
-  meals: [],
+  recipes: [],
+  mealPlans: [],
   isLoading: false,
 
   setFamily: (family) => set({ family }),
@@ -61,21 +66,26 @@ export const useDataStore = create<DataState>((set) => ({
     set((state) => ({
       appointments: state.appointments.filter((a) => a.id !== id),
     })),
-  setMeals: (meals) => set({ meals }),
-  upsertMeal: (meal) =>
+  setRecipes: (recipes) => set({ recipes }),
+  addRecipe: (recipe) => set((state) => ({ recipes: [...state.recipes, recipe] })),
+  updateRecipe: (id, updates) =>
     set((state) => ({
-      meals: [
-        ...state.meals.filter(
-          (m) => !(m.date === meal.date && m.meal_type === meal.meal_type)
-        ),
-        meal,
-      ],
+      recipes: state.recipes.map((r) => (r.id === id ? { ...r, ...updates } : r)),
     })),
-  removeMeal: (date, mealType) =>
-    set((state) => ({
-      meals: state.meals.filter(
-        (m) => !(m.date === date && m.meal_type === mealType)
-      ),
-    })),
+  removeRecipe: (id) =>
+    set((state) => ({ recipes: state.recipes.filter((r) => r.id !== id) })),
+  setMealPlans: (mealPlans) => set({ mealPlans }),
+  upsertMealPlan: (plan) =>
+    set((state) => {
+      const idx = state.mealPlans.findIndex(
+        (p) => p.family_id === plan.family_id && p.date === plan.date && p.meal_type === plan.meal_type
+      );
+      if (idx >= 0) {
+        const next = [...state.mealPlans];
+        next[idx] = plan;
+        return { mealPlans: next };
+      }
+      return { mealPlans: [...state.mealPlans, plan] };
+    }),
   setLoading: (isLoading) => set({ isLoading }),
 }));
