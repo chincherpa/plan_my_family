@@ -2,7 +2,7 @@
 import { useDraggable } from "@dnd-kit/core";
 import { useCalendarStore } from "@/lib/store/calendarStore";
 import { useDataStore } from "@/lib/store/dataStore";
-import { hexToRgba, SLOT_HEIGHT } from "@/lib/utils";
+import { formatTime, hexToRgba, SLOT_HEIGHT } from "@/lib/utils";
 import type { AppointmentOccurrence } from "@/lib/utils/recurrence";
 import { RepeatIcon } from "lucide-react";
 
@@ -34,15 +34,25 @@ export default function AppointmentBlock({
   const vehicle = vehicles.find((v) => v.id === appointment.vehicle_id);
 
   const durationMin = (occurrenceEnd.getTime() - occurrenceStart.getTime()) / 60000;
-  const heightPx = Math.max((durationMin / 30) * SLOT_HEIGHT, SLOT_HEIGHT);
+  let heightPx = Math.max((durationMin / 30) * SLOT_HEIGHT, SLOT_HEIGHT);
   const minutesIntoSlot = (occurrenceStart.getTime() - slotStart.getTime()) / 60000;
-  const topOffset = (minutesIntoSlot / 30) * SLOT_HEIGHT;
+  let topOffset = (minutesIntoSlot / 30) * SLOT_HEIGHT;
+  // Blocks pinned into an edge slot because they start outside the visible
+  // hour range: clamp them so they stay inside their cell
+  if (topOffset < 0) {
+    heightPx = Math.max(heightPx + topOffset, SLOT_HEIGHT / 2);
+    topOffset = 0;
+  } else if (topOffset >= SLOT_HEIGHT) {
+    topOffset = SLOT_HEIGHT / 2;
+    heightPx = SLOT_HEIGHT / 2;
+  }
 
-  // Only the owner's block is draggable; participant view is read-only
+  // Only the owner's block is draggable; participant view is read-only.
+  // Recurring occurrences stay fixed — dragging one would move the whole series.
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: `appt-${occurrence.key}-${columnId}`,
     data: { ...occurrence, fromColumnId: columnId },
-    disabled: isParticipant,
+    disabled: isParticipant || occurrence.isRecurringInstance,
   });
 
   // Hide participant mirror while the owner's block is being dragged
@@ -69,13 +79,14 @@ export default function AppointmentBlock({
         color: displayColor,
         zIndex: isDragging ? 50 : 10,
         opacity: isDragging ? 0.3 : 1,
-        cursor: isParticipant ? "pointer" : "grab",
+        cursor: isParticipant || occurrence.isRecurringInstance ? "pointer" : "grab",
         overflow: "hidden",
         fontSize: "11px",
         lineHeight: "1.2",
         padding: "1px 3px",
       }}
       className={`${isParticipant ? "border border-dashed" : ""}`}
+      title={`${appointment.title} · ${formatTime(occurrenceStart)}–${formatTime(occurrenceEnd)}`}
       onClick={(e) => {
         e.stopPropagation();
         openForm({ appointmentId: appointment.id });
