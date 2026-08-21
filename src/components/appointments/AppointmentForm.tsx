@@ -97,7 +97,9 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     ? appointments.find((a) => a.id === selectedAppointmentId)
     : null;
 
-<<<<<<< HEAD
+  // Editing an occurrence of a recurring series (id points at the parent)
+  const isSeriesInstance = !!existingAppt?.recurrence_rule;
+
   // Initial values from the existing appointment or the clicked slot.
   // The form is remounted on every open, so plain initializers suffice
   // (and user edits survive background data refreshes while it is open).
@@ -127,97 +129,6 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
           : members[0]?.id ?? "",
     };
   });
-=======
-  // Editing an occurrence of a recurring series (id points at the parent)
-  const isSeriesInstance = !!existingAppt?.recurrence_rule;
-
-  // Form state
-  const [title, setTitle] = useState("");
-  const [notes, setNotes] = useState("");
-  const [ownerId, setOwnerId] = useState<string>("");
-  const [isAllFamily, setIsAllFamily] = useState(false);
-  const [isAllDay, setIsAllDay] = useState(false);
-  const [allDayStartDate, setAllDayStartDate] = useState(() => toDatePart(new Date()));
-  const [allDayEndDate, setAllDayEndDate] = useState(() => toDatePart(new Date()));
-  const [startTime, setStartTime] = useState("");
-  const [endTime, setEndTime] = useState("");
-  const [travelBefore, setTravelBefore] = useState(0);
-  const [travelAfter, setTravelAfter] = useState(0);
-  const [vehicleId, setVehicleId] = useState<string>("none");
-  const [participants, setParticipants] = useState<string[]>([]);
-  const [supervisorIds, setSupervisorIds] = useState<string[]>([]);
-  const [isEvent, setIsEvent] = useState(false);
-  const [recurrence, setRecurrence] = useState<RecurrenceFreq>("none");
-  const [editScope, setEditScope] = useState<EditScope>("single");
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState<string | null>(null);
-  const [vehicleConflict, setVehicleConflict] = useState<AppointmentWithParticipants | null>(null);
-  const [vehicleConflicts, setVehicleConflicts] = useState<Record<string, AppointmentWithParticipants>>({});
-
-  // Initialize from existing or new
-  useEffect(() => {
-    if (existingAppt) {
-      setTitle(existingAppt.title);
-      setNotes(existingAppt.notes ?? "");
-      setOwnerId(existingAppt.owner_id ?? "");
-      setIsAllFamily(existingAppt.is_all_family);
-      setIsEvent(existingAppt.is_event ?? false);
-      const allDay = existingAppt.is_all_day ?? false;
-      setIsAllDay(allDay);
-      // For a series occurrence show the clicked occurrence's times,
-      // not the series' base times
-      const base = new Date(existingAppt.start_time);
-      const durationMs = new Date(existingAppt.end_time).getTime() - base.getTime();
-      const s =
-        existingAppt.recurrence_rule && formOccurrenceStart
-          ? new Date(formOccurrenceStart)
-          : base;
-      const e = new Date(s.getTime() + durationMs);
-      if (allDay) {
-        setAllDayStartDate(toDatePart(s));
-        setAllDayEndDate(toDatePart(e));
-      } else {
-        setStartTime(combine(toDatePart(s), toTimePart(s)));
-        setEndTime(combine(toDatePart(e), toTimePart(e)));
-        setAllDayStartDate(toDatePart(s));
-        setAllDayEndDate(toDatePart(e));
-      }
-      setTravelBefore(existingAppt.travel_before_min);
-      setTravelAfter(existingAppt.travel_after_min);
-      setVehicleId(existingAppt.vehicle_id ?? "none");
-      setParticipants(existingAppt.participants.map((p) => p.member_id));
-      setSupervisorIds(
-        existingAppt.participants.filter((p) => p.is_supervisor).map((p) => p.member_id)
-      );
-
-      if (existingAppt.recurrence_rule) {
-        try {
-          const rule = RRule.fromString(existingAppt.recurrence_rule);
-          if (rule.options.freq === RRule.DAILY) setRecurrence("daily");
-          else if (rule.options.freq === RRule.WEEKLY) setRecurrence("weekly");
-          else if (rule.options.freq === RRule.MONTHLY) setRecurrence("monthly");
-          else if (rule.options.freq === RRule.YEARLY) setRecurrence("yearly");
-          else setRecurrence("none");
-        } catch {
-          setRecurrence("none");
-        }
-      }
-    } else {
-      const now = snapTo15Min(formInitialDate ?? new Date());
-      const end = new Date(now);
-      end.setHours(now.getHours() + 1);
-      setStartTime(combine(toDatePart(now), toTimePart(now)));
-      setEndTime(combine(toDatePart(end), toTimePart(end)));
-      setOwnerId(formMemberId && formMemberId !== "all" && formMemberId !== "events" ? formMemberId : members[0]?.id ?? "");
-      setIsAllFamily(formMemberId === "all");
-      setIsEvent(formMemberId === "events");
-      const dateStr = toDatePart(formInitialDate ?? new Date());
-      setAllDayStartDate(dateStr);
-      setAllDayEndDate(dateStr);
-    }
-    setEditScope("single");
-  }, [existingAppt, formInitialDate, formMemberId, formOccurrenceStart, members]);
->>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
 
   // Form state
   const [title, setTitle] = useState(existingAppt?.title ?? "");
@@ -256,7 +167,9 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
       return "none";
     }
   });
+  const [editScope, setEditScope] = useState<EditScope>("single");
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   // Conflicts per vehicle for the currently selected times (derived, not state)
@@ -312,13 +225,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   async function handleSave() {
     if (!family || !title.trim()) return;
     if (isAllDay && !allDayStartDate) return;
-<<<<<<< HEAD
     if (!isAllDay && (!startTime || !endTime || timesInvalid)) return;
-    setSaving(true);
-=======
-    if (!isAllDay && (!startTime || !endTime)) return;
     setFormError(null);
->>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
 
     let startDate: Date;
     let endDate: Date;
@@ -503,7 +411,6 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
 
     // Occurrence of a series → insert a deletion marker for this date only
     if (isSeriesInstance && editScope === "single" && formOccurrenceStart) {
-      if (!confirm("Nur diesen Termin der Serie löschen?")) return;
       const durationMs =
         new Date(existingAppt.end_time).getTime() - new Date(existingAppt.start_time).getTime();
       const { data, error } = await supabase
@@ -531,7 +438,6 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     // Modified series instance → keep the row as deletion marker,
     // otherwise the original occurrence would reappear
     if (existingAppt.recurrence_parent_id) {
-      if (!confirm("Termin wirklich löschen?")) return;
       const { error } = await supabase
         .from("appointments")
         .update({ is_deleted: true })
@@ -546,10 +452,6 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     }
 
     // Single appointment or whole series
-    const msg = isSeriesInstance
-      ? "Ganze Serie inklusive aller Ausnahmen löschen?"
-      : "Termin wirklich löschen?";
-    if (!confirm(msg)) return;
     if (isSeriesInstance) {
       await supabase.from("appointments").delete().eq("recurrence_parent_id", existingAppt.id);
     }
@@ -880,7 +782,13 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
           {/* Actions */}
           {confirmDelete ? (
             <div className="flex flex-col gap-2 pt-2 rounded-lg border border-[var(--destructive)]/40 bg-[var(--destructive)]/5 p-3">
-              <p className="text-sm font-medium text-[var(--destructive)]">Termin wirklich löschen?</p>
+              <p className="text-sm font-medium text-[var(--destructive)]">
+                {isSeriesInstance && editScope === "single"
+                  ? "Nur diesen Termin der Serie löschen?"
+                  : isSeriesInstance
+                  ? "Ganze Serie inklusive aller Ausnahmen löschen?"
+                  : "Termin wirklich löschen?"}
+              </p>
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={() => setConfirmDelete(false)} type="button">
                   Abbrechen

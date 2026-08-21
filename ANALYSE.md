@@ -95,11 +95,12 @@ In der gemergten `CalendarView.tsx` werden **beide UIs im selben Tages-Header ge
 Konfliktseite auf `meal_plans` oder `meals`.
 
 Das ist eine **Produktentscheidung, keine technische**: Rezeptdatenbank mit
-Wiederverwendung (A) oder schnelles Freitextfeld (B)? Beides parallel zu pflegen ist die
-schlechteste Option. Ich würde A empfehlen (Rezepte sind wiederverwendbar, `/meals` als
-Wochenübersicht existiert bereits), mit einem Freitext-Fallback im Dropdown.
+Wiederverwendung (A) oder schnelles Freitextfeld (B)?
 
-Die Verliererseite gehört **komplett entfernt** — Tabelle, Typen, Store-Slice, Komponenten.
+> **Entschieden (2026-08-21): Freitext.** Eine Mahlzeit ist nur der Name eines Gerichts,
+> keine Rezeptverwaltung. Das `meals`-Modell (B) bleibt, `recipes` + `meal_plans` sind
+> mitsamt Typen, Store-Slice und Komponenten entfernt. Die Wochenübersicht `/meals` wurde
+> auf das Freitext-Modell portiert statt gestrichen.
 
 ---
 
@@ -406,11 +407,13 @@ Slot-Zeile, Tages-Header, Konflikt-Banner bzw. Formularabschnitte + eine
 
 **Sofort — ohne das geht nichts:**
 
-1. Konflikte auflösen. `6b7b984` als Basis, Features aus Linie B gezielt portieren.
-   Verifizieren mit `npx tsc --noEmit` → 0 Fehler.
-2. Eine Essensplanung entscheiden, die andere restlos entfernen (Tabelle, Typen,
-   Store, Komponenten).
+1. ~~Konflikte auflösen.~~ **Erledigt** — alle 25 Konfliktblöcke aufgelöst,
+   `tsc --noEmit` → 0 Fehler, `next build` grün.
+2. ~~Eine Essensplanung entscheiden, die andere restlos entfernen.~~ **Erledigt** —
+   Freitext (`meals`); `recipes`/`meal_plans` entfernt, Migration `007` überträgt
+   vorhandene Pläne und löscht die Tabellen.
 3. CI-Workflow mit `tsc --noEmit` + `eslint`. Damit kann sich Punkt 1 nicht wiederholen.
+   **Weiterhin offen — der wichtigste verbleibende Punkt.**
 
 **Danach — kurzfristig:**
 

@@ -169,35 +169,23 @@ export interface Database {
           member_id?: string;
           is_supervisor?: boolean;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "appointment_participants_appointment_id_fkey";
+            columns: ["appointment_id"];
+            isOneToOne: false;
+            referencedRelation: "appointments";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "appointment_participants_member_id_fkey";
+            columns: ["member_id"];
+            isOneToOne: false;
+            referencedRelation: "family_members";
+            referencedColumns: ["id"];
+          },
+        ];
       };
-<<<<<<< HEAD
-      recipes: {
-        Row: {
-          id: number;
-          name: string;
-          category: string | null;
-        };
-        Insert: {
-          id?: number;
-          name: string;
-          category?: string | null;
-        };
-        Update: {
-          id?: number;
-          name?: string;
-          category?: string | null;
-        };
-        Relationships: [];
-      };
-      meal_plans: {
-        Row: {
-          id: string;
-          family_id: string;
-          date: string;
-          meal_type: "lunch" | "dinner";
-          recipe_id: number | null;
-=======
       family_invites: {
         Row: {
           id: string;
@@ -207,42 +195,73 @@ export interface Database {
           expires_at: string;
           used_at: string | null;
           used_by: string | null;
->>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
           created_at: string;
         };
         Insert: {
           id?: string;
           family_id: string;
-<<<<<<< HEAD
-          date: string;
-          meal_type: "lunch" | "dinner";
-          recipe_id?: number | null;
-=======
           code: string;
           created_by?: string | null;
           expires_at?: string;
           used_at?: string | null;
           used_by?: string | null;
->>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
           created_at?: string;
         };
         Update: {
           id?: string;
           family_id?: string;
-<<<<<<< HEAD
-          date?: string;
-          meal_type?: "lunch" | "dinner";
-          recipe_id?: number | null;
-=======
           code?: string;
           created_by?: string | null;
           expires_at?: string;
           used_at?: string | null;
           used_by?: string | null;
->>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
           created_at?: string;
         };
-        Relationships: [];
+        Relationships: [
+          {
+            foreignKeyName: "family_invites_family_id_fkey";
+            columns: ["family_id"];
+            isOneToOne: false;
+            referencedRelation: "families";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      meals: {
+        Row: {
+          id: string;
+          family_id: string;
+          /** Local date "YYYY-MM-DD" */
+          date: string;
+          lunch: string | null;
+          dinner: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          family_id: string;
+          date: string;
+          lunch?: string | null;
+          dinner?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          family_id?: string;
+          date?: string;
+          lunch?: string | null;
+          dinner?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "meals_family_id_fkey";
+            columns: ["family_id"];
+            isOneToOne: false;
+            referencedRelation: "families";
+            referencedColumns: ["id"];
+          },
+        ];
       };
     };
     Views: Record<string, never>;
@@ -267,19 +286,10 @@ export type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"]
 export type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 export type Appointment = Database["public"]["Tables"]["appointments"]["Row"];
 export type AppointmentParticipant = Database["public"]["Tables"]["appointment_participants"]["Row"];
-<<<<<<< HEAD
-export type Recipe = Database["public"]["Tables"]["recipes"]["Row"];
-export type MealPlan = Database["public"]["Tables"]["meal_plans"]["Row"];
-=======
 export type FamilyInvite = Database["public"]["Tables"]["family_invites"]["Row"];
->>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
+export type Meal = Database["public"]["Tables"]["meals"]["Row"];
 
 /** Appointment enriched with participants */
 export interface AppointmentWithParticipants extends Appointment {
   participants: AppointmentParticipant[];
-}
-
-/** MealPlan enriched with the joined recipe */
-export interface MealPlanWithRecipe extends MealPlan {
-  recipe: Pick<Recipe, "id" | "name" | "category"> | null;
 }

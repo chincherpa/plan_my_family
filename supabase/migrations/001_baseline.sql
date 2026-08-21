@@ -65,20 +65,16 @@ create table if not exists appointment_participants (
   primary key (appointment_id, member_id)
 );
 
-create table if not exists recipes (
-  id bigint generated always as identity primary key,
-  name text not null,
-  category text
-);
-
-create table if not exists meal_plans (
+-- Meal planning is free text: one row per family and day holding the
+-- dish names. No recipe database.
+create table if not exists meals (
   id uuid primary key default gen_random_uuid(),
   family_id uuid not null references families(id) on delete cascade,
   date date not null,
-  meal_type text not null check (meal_type in ('lunch', 'dinner')),
-  recipe_id bigint references recipes(id) on delete set null,
+  lunch text,
+  dinner text,
   created_at timestamptz not null default now(),
-  unique (family_id, date, meal_type)
+  unique (family_id, date)
 );
 
 -- Row Level Security -------------------------------------------------------
@@ -88,8 +84,7 @@ alter table family_members enable row level security;
 alter table vehicles enable row level security;
 alter table appointments enable row level security;
 alter table appointment_participants enable row level security;
-alter table recipes enable row level security;
-alter table meal_plans enable row level security;
+alter table meals enable row level security;
 
 create or replace function is_family_member(target_family_id uuid)
 returns boolean
@@ -102,6 +97,17 @@ as $$
     where family_id = target_family_id
       and user_id = auth.uid()
   );
+$$;
+
+-- Used by the family_invites policies in 005/006.
+create or replace function get_my_family_ids()
+returns setof uuid
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select family_id from family_members where user_id = auth.uid();
 $$;
 
 create policy "family members can read their family" on families
@@ -125,10 +131,5 @@ create policy "family members can manage appointment_participants" on appointmen
     exists (select 1 from appointments a where a.id = appointment_id and is_family_member(a.family_id))
   );
 
-create policy "authenticated users can read recipes" on recipes
-  for select using (auth.role() = 'authenticated');
-create policy "authenticated users can manage recipes" on recipes
-  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-
-create policy "family members can manage meal_plans" on meal_plans
+create policy "family members can manage meals" on meals
   for all using (is_family_member(family_id)) with check (is_family_member(family_id));

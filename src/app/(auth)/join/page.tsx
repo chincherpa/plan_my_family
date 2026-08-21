@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ function randomPresetColor(): string {
   return PRESET_COLORS[Math.floor(Math.random() * PRESET_COLORS.length)];
 }
 
-export default function JoinPage() {
+function JoinPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const code = searchParams.get("code") ?? "";
@@ -241,5 +241,23 @@ export default function JoinPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+function JoinFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
+      <p className="text-[var(--muted-foreground)]">Lädt...</p>
+    </div>
+  );
+}
+
+// useSearchParams() opts the tree into client-side rendering and must sit
+// behind a Suspense boundary, otherwise the static export of /join fails.
+export default function JoinPage() {
+  return (
+    <Suspense fallback={<JoinFallback />}>
+      <JoinPageContent />
+    </Suspense>
   );
 }

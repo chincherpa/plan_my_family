@@ -36,28 +36,6 @@ export default function AppointmentBlock({
 
   const vehicle = vehicles.find((v) => v.id === appointment.vehicle_id);
 
-<<<<<<< HEAD
-  const durationMin = (occurrenceEnd.getTime() - occurrenceStart.getTime()) / 60000;
-  let heightPx = Math.max((durationMin / 30) * SLOT_HEIGHT, SLOT_HEIGHT);
-  const minutesIntoSlot = (occurrenceStart.getTime() - slotStart.getTime()) / 60000;
-  let topOffset = (minutesIntoSlot / 30) * SLOT_HEIGHT;
-  // Blocks pinned into an edge slot because they start outside the visible
-  // hour range: clamp them so they stay inside their cell
-  if (topOffset < 0) {
-    heightPx = Math.max(heightPx + topOffset, SLOT_HEIGHT / 2);
-    topOffset = 0;
-  } else if (topOffset >= SLOT_HEIGHT) {
-    topOffset = SLOT_HEIGHT / 2;
-    heightPx = SLOT_HEIGHT / 2;
-  }
-
-  // Only the owner's block is draggable; participant view is read-only.
-  // Recurring occurrences stay fixed — dragging one would move the whole series.
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `appt-${occurrence.key}-${columnId}`,
-    data: { ...occurrence, fromColumnId: columnId },
-    disabled: isParticipant || occurrence.isRecurringInstance,
-=======
   // Clip to the day's visible window (appointments starting before
   // startHour or ending after endHour would otherwise overflow the grid)
   const effectiveStart = occurrenceStart < slotStart ? slotStart : occurrenceStart;
@@ -77,7 +55,6 @@ export default function AppointmentBlock({
     id: `appt-${occurrence.key}-${columnId}`,
     data: { ...occurrence, fromColumnId: columnId },
     disabled: isParticipant || isRecurringRuleInstance,
->>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
   });
 
   // Hide participant mirror while the owner's block is being dragged
@@ -104,11 +81,7 @@ export default function AppointmentBlock({
         color: displayColor,
         zIndex: isDragging ? 50 : 10,
         opacity: isDragging ? 0.3 : 1,
-<<<<<<< HEAD
-        cursor: isParticipant || occurrence.isRecurringInstance ? "pointer" : "grab",
-=======
         cursor: isParticipant || isRecurringRuleInstance ? "pointer" : "grab",
->>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
         overflow: "hidden",
         fontSize: "11px",
         lineHeight: "1.2",
