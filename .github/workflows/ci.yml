@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# A newer push to the same branch makes the running job obsolete.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # A merge that leaves conflict markers in the tree still typechecks as
+      # "just" 81 syntax errors — this names the real cause up front.
+      - name: Reject unresolved merge conflict markers
+        run: |
+          if git grep -nIE '^(<{7}|={7}|>{7})( |$)' -- . ':(exclude)pnpm-lock.yaml'; then
+            echo "::error::Unresolved merge conflict markers found (see above)."
+            exit 1
+          fi
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      # The domain logic (supervision gaps, vehicle conflicts, recurrence)
+      # works in local time, so the suite pins TZ — see package.json.
+      - name: Test
+        run: pnpm test
+
+      # The build catches what tsc cannot — e.g. a client hook used without
+      # the Suspense boundary its prerendered route needs. Supabase is only
+      # contacted at runtime, so placeholder values are enough here.
+      - name: Build
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key

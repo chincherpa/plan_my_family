@@ -1,10 +1,6 @@
-<<<<<<< HEAD
-import type { FamilyMember, AppointmentWithParticipants } from "@/lib/supabase/types";
-=======
 import type { FamilyMember } from "@/lib/supabase/types";
 import { startOfDay } from "@/lib/utils";
 import type { AppointmentOccurrence } from "@/lib/utils/recurrence";
->>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
 
 export interface GuardianWarning {
   memberId: string;
@@ -33,12 +29,6 @@ export function checkGuardianWarnings(
 
   if (dependents.length === 0 || guardians.length === 0) return warnings;
 
-<<<<<<< HEAD
-  // Check in 30-min slots. Events (birthdays etc.) are informational and
-  // neither occupy a guardian nor supervise a dependent.
-  const SLOT_MS = 30 * 60 * 1000;
-  const activeAppointments = appointments.filter((a) => !a.is_deleted && !a.is_event);
-=======
   // Bucket occurrences by day (travel-inclusive span) so days without
   // appointments can be skipped wholesale — the range spans ~2 years.
   const byDay = new Map<string, AppointmentOccurrence[]>();
@@ -54,7 +44,6 @@ export function checkGuardianWarnings(
       cur.setDate(cur.getDate() + 1);
     }
   }
->>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
 
   for (const dependent of dependents) {
     let warningStart: Date | null = null;

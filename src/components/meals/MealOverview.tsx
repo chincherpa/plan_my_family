@@ -1,28 +1,10 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useDataStore } from "@/lib/store/dataStore";
-import MealDropdown from "./MealDropdown";
+import { getISOWeek, localDateStr, startOfDay } from "@/lib/utils";
+import MealEditDialog from "@/components/calendar/MealEditDialog";
 
 type MealType = "lunch" | "dinner";
-
-function pad(n: number) {
-  return String(n).padStart(2, "0");
-}
-
-function toDateStr(d: Date) {
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function startOfDay(d: Date) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function getISOWeek(d: Date): number {
-  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay() || 7));
-  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
-}
 
 interface DayEntry {
   date: Date;
@@ -31,98 +13,79 @@ interface DayEntry {
   isToday: boolean;
 }
 
-export default function MealOverview() {
-  const { mealPlans } = useDataStore();
-  const [open, setOpen] = useState<{ dateStr: string; mealType: MealType } | null>(null);
+const DAYS_AHEAD = 31;
 
-  const today = startOfDay(new Date());
+export default function MealOverview() {
+  const { meals } = useDataStore();
+  const [editDate, setEditDate] = useState<string | null>(null);
+
+  const mealsByDate = useMemo(
+    () => new Map(meals.map((m) => [m.date, m])),
+    [meals]
+  );
 
   const days = useMemo<DayEntry[]>(() => {
-    // Past days that have at least one meal plan
-    const pastDateStrs = new Set(
-      mealPlans
-        .filter((p) => new Date(p.date) < today)
-        .map((p) => p.date)
-    );
-    const pastDays: DayEntry[] = Array.from(pastDateStrs)
-      .map((ds) => {
-        const date = new Date(ds + "T00:00:00");
-        return { date, dateStr: ds, isPast: true, isToday: false };
-      });
+    const today = startOfDay(new Date());
+    const todayStr = localDateStr(today);
 
-    // All days from today + 30 days ahead
-    const futureDays: DayEntry[] = Array.from({ length: 31 }, (_, i) => {
+    // Today + the next 30 days, plus any past day that already has a meal
+    const entries = new Map<string, DayEntry>();
+
+    for (const meal of meals) {
+      if (meal.date >= todayStr) continue;
+      entries.set(meal.date, {
+        date: new Date(`${meal.date}T00:00:00`),
+        dateStr: meal.date,
+        isPast: true,
+        isToday: false,
+      });
+    }
+
+    for (let i = 0; i < DAYS_AHEAD; i++) {
       const date = new Date(today);
       date.setDate(date.getDate() + i);
-      const dateStr = toDateStr(date);
-      return { date, dateStr, isPast: false, isToday: i === 0 };
-    });
+      const dateStr = localDateStr(date);
+      entries.set(dateStr, { date, dateStr, isPast: false, isToday: i === 0 });
+    }
 
-    // Merge, sort ascending, deduplicate (today might also appear in pastDateStrs edge-case)
-    const all = [...pastDays, ...futureDays];
-    const seen = new Set<string>();
-    return all
-      .filter((d) => {
-        if (seen.has(d.dateStr)) return false;
-        seen.add(d.dateStr);
-        return true;
-      })
-      .sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [mealPlans, today]);
+    return [...entries.values()].sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [meals]);
 
-  // Group by KW
+  // Group by ISO calendar week
   const groups = useMemo(() => {
     const result: { kw: number; year: number; days: DayEntry[] }[] = [];
     for (const day of days) {
       const kw = getISOWeek(day.date);
       const year = day.date.getFullYear();
       const last = result[result.length - 1];
-      if (last && last.kw === kw && last.year === year) {
-        last.days.push(day);
-      } else {
-        result.push({ kw, year, days: [day] });
-      }
+      if (last && last.kw === kw && last.year === year) last.days.push(day);
+      else result.push({ kw, year, days: [day] });
     }
     return result;
   }, [days]);
 
-  function getMealPlan(dateStr: string, mealType: MealType) {
-    return mealPlans.find((p) => p.date === dateStr && p.meal_type === mealType);
-  }
-
   function renderMealCell(dateStr: string, mealType: MealType, isPast: boolean) {
-    const plan = getMealPlan(dateStr, mealType);
-    const hasRecipe = !!plan?.recipe;
-    const isOpen = open?.dateStr === dateStr && open?.mealType === mealType;
+    const dish = mealsByDate.get(dateStr)?.[mealType];
     const emoji = mealType === "lunch" ? "🍽" : "🌙";
     const label = mealType === "lunch" ? "Mittag" : "Abend";
 
     return (
-      <div className="relative">
-        <button
-          onClick={() => setOpen(isOpen ? null : { dateStr, mealType })}
-          disabled={isPast}
-          className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors w-full text-left ${
-            isPast
-              ? "cursor-default text-[var(--muted-foreground)]/60"
-              : hasRecipe
-              ? "text-[var(--foreground)] bg-[var(--primary)]/10 hover:bg-[var(--primary)]/20"
-              : "text-[var(--muted-foreground)] hover:bg-[var(--accent)]"
-          }`}
-        >
-          <span className={isPast ? "opacity-50" : ""}>{emoji}</span>
-          <span className="truncate">
-            {hasRecipe ? plan!.recipe!.name : <span className="italic">{label}</span>}
-          </span>
-        </button>
-        {isOpen && (
-          <MealDropdown
-            dateStr={dateStr}
-            mealType={mealType}
-            onClose={() => setOpen(null)}
-          />
-        )}
-      </div>
+      <button
+        onClick={() => setEditDate(dateStr)}
+        disabled={isPast}
+        className={`flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-colors w-full text-left ${
+          isPast
+            ? "cursor-default text-[var(--muted-foreground)]/60"
+            : dish
+            ? "text-[var(--foreground)] bg-[var(--primary)]/10 hover:bg-[var(--primary)]/20"
+            : "text-[var(--muted-foreground)] hover:bg-[var(--accent)]"
+        }`}
+      >
+        <span className={isPast ? "opacity-50" : ""}>{emoji}</span>
+        <span className="truncate">
+          {dish ?? <span className="italic">{label}</span>}
+        </span>
+      </button>
     );
   }
 
@@ -162,28 +125,33 @@ export default function MealOverview() {
                     )}
                     <span
                       className={`text-xs font-medium ${
-                        isToday ? "text-[var(--primary)]" : isPast ? "text-[var(--muted-foreground)]" : "text-[var(--foreground)]"
+                        isToday
+                          ? "text-[var(--primary)]"
+                          : isPast
+                          ? "text-[var(--muted-foreground)]"
+                          : "text-[var(--foreground)]"
                       }`}
                     >
                       {weekday} {dayLabel}
                     </span>
                   </div>
 
-                  {/* Lunch */}
-                  <div className="flex-1 min-w-0">
-                    {renderMealCell(dateStr, "lunch", isPast)}
-                  </div>
-
-                  {/* Dinner */}
-                  <div className="flex-1 min-w-0">
-                    {renderMealCell(dateStr, "dinner", isPast)}
-                  </div>
+                  <div className="flex-1 min-w-0">{renderMealCell(dateStr, "lunch", isPast)}</div>
+                  <div className="flex-1 min-w-0">{renderMealCell(dateStr, "dinner", isPast)}</div>
                 </div>
               );
             })}
           </div>
         </div>
       ))}
+
+      {editDate && (
+        <MealEditDialog
+          date={editDate}
+          meal={mealsByDate.get(editDate) ?? null}
+          onClose={() => setEditDate(null)}
+        />
+      )}
     </div>
   );
 }

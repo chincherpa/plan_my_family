@@ -1,12 +1,11 @@
--- Baseline schema, reconstructed from src/lib/supabase/types.ts and the
--- now-removed 002_is_event.sql / 003_is_all_day.sql / 004_calendar_hours.sql.
--- The original 001_initial.sql was applied directly (dashboard/SQL editor)
--- and never committed to this repo, so migration history did not match the
--- live database. This file re-establishes a from-scratch baseline so
--- `supabase db reset` can rebuild the schema. RLS policies below follow the
--- app's family-scoped access pattern but were not diffed against the live
--- database's actual policies — verify before relying on this for a fresh
--- environment.
+-- Baseline schema. The original 001_initial.sql was applied directly
+-- (dashboard/SQL editor) and never committed, so migration history did not
+-- match the live database. This file re-establishes a from-scratch baseline
+-- so `supabase db reset` can rebuild the schema.
+--
+-- The RLS section below was diffed against the live project's pg_policies
+-- and pg_proc on 2026-08-21 and now mirrors it (policy names included), so
+-- a local reset reproduces production rather than an idealised guess.
 
 create table if not exists families (
   id uuid primary key default gen_random_uuid(),
@@ -65,20 +64,21 @@ create table if not exists appointment_participants (
   primary key (appointment_id, member_id)
 );
 
-create table if not exists recipes (
-  id bigint generated always as identity primary key,
-  name text not null,
-  category text
-);
-
-create table if not exists meal_plans (
+-- Meal planning is free text: one row per family and day holding the
+-- dish names. No recipe database.
+create table if not exists meals (
   id uuid primary key default gen_random_uuid(),
   family_id uuid not null references families(id) on delete cascade,
   date date not null,
-  meal_type text not null check (meal_type in ('lunch', 'dinner')),
-  recipe_id bigint references recipes(id) on delete set null,
+  lunch text,
+  dinner text,
   created_at timestamptz not null default now(),
-  unique (family_id, date, meal_type)
+  unique (family_id, date)
+);
+
+create table if not exists keep_alive (
+  id bigint generated always as identity primary key,
+  update text not null
 );
 
 -- Row Level Security -------------------------------------------------------
@@ -88,47 +88,78 @@ alter table family_members enable row level security;
 alter table vehicles enable row level security;
 alter table appointments enable row level security;
 alter table appointment_participants enable row level security;
-alter table recipes enable row level security;
-alter table meal_plans enable row level security;
+alter table meals enable row level security;
+-- Deliberately policy-less: RLS on with no policy denies every client.
+alter table keep_alive enable row level security;
 
-create or replace function is_family_member(target_family_id uuid)
+-- Backbone of every policy below. SECURITY DEFINER so it reads
+-- family_members without re-entering that table's own RLS.
+-- `set search_path` is required: without it a caller-controlled search_path
+-- could resolve `family_members` to a shadowing table.
+create or replace function get_my_family_ids()
+returns setof uuid
+language sql
+security definer
+stable
+set search_path = public
+as $$
+  select family_id from family_members where user_id = auth.uid();
+$$;
+
+-- "Is this family still empty?" for the registration bootstrap, in a
+-- SECURITY DEFINER helper so the members_insert policy does not recurse
+-- into family_members (42P17).
+create or replace function family_is_empty(fid uuid)
 returns boolean
 language sql
 security definer
+stable
 set search_path = public
 as $$
-  select exists (
-    select 1 from family_members
-    where family_id = target_family_id
-      and user_id = auth.uid()
-  );
+  select not exists (select 1 from family_members where family_id = fid);
 $$;
 
-create policy "family members can read their family" on families
-  for select using (is_family_member(id));
+-- These back RLS policies and are not meant as public API endpoints.
+-- EXECUTE defaults to PUBLIC, which every Supabase role inherits, so the
+-- default has to be revoked before granting it back deliberately.
+-- `authenticated` is required: policy expressions are evaluated as the
+-- querying role and would fail with "permission denied for function".
+revoke execute on function get_my_family_ids() from public;
+grant execute on function get_my_family_ids() to authenticated, service_role;
+revoke execute on function family_is_empty(uuid) from public;
+grant execute on function family_is_empty(uuid) to authenticated, service_role;
 
-create policy "family members can read family_members" on family_members
-  for select using (is_family_member(family_id));
-create policy "family members can manage family_members" on family_members
-  for all using (is_family_member(family_id)) with check (is_family_member(family_id));
+create policy families_select on families
+  for select using (id in (select get_my_family_ids()));
+create policy families_insert on families
+  for insert with check (auth.uid() is not null);
+create policy families_update on families
+  for update using (id in (select get_my_family_ids()));
 
-create policy "family members can manage vehicles" on vehicles
-  for all using (is_family_member(family_id)) with check (is_family_member(family_id));
+create policy members_select on family_members
+  for select using (family_id in (select get_my_family_ids()));
+create policy members_insert on family_members
+  for insert with check (
+    (user_id = auth.uid() and family_is_empty(family_id))
+    or family_id in (select get_my_family_ids())
+  );
+create policy members_update on family_members
+  for update using (family_id in (select get_my_family_ids()));
+create policy members_delete on family_members
+  for delete using (family_id in (select get_my_family_ids()));
 
-create policy "family members can manage appointments" on appointments
-  for all using (is_family_member(family_id)) with check (is_family_member(family_id));
+create policy vehicles_all on vehicles
+  for all using (family_id in (select get_my_family_ids()));
 
-create policy "family members can manage appointment_participants" on appointment_participants
+create policy appointments_all on appointments
+  for all using (family_id in (select get_my_family_ids()));
+
+create policy participants_all on appointment_participants
   for all using (
-    exists (select 1 from appointments a where a.id = appointment_id and is_family_member(a.family_id))
-  ) with check (
-    exists (select 1 from appointments a where a.id = appointment_id and is_family_member(a.family_id))
+    appointment_id in (
+      select id from appointments where family_id in (select get_my_family_ids())
+    )
   );
 
-create policy "authenticated users can read recipes" on recipes
-  for select using (auth.role() = 'authenticated');
-create policy "authenticated users can manage recipes" on recipes
-  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-
-create policy "family members can manage meal_plans" on meal_plans
-  for all using (is_family_member(family_id)) with check (is_family_member(family_id));
+create policy meals_all on meals
+  for all using (family_id in (select get_my_family_ids()));

@@ -7,31 +7,22 @@ import { useCalendarStore } from "@/lib/store/calendarStore";
 import { useDataStore } from "@/lib/store/dataStore";
 import { expandAppointments, type AppointmentOccurrence } from "@/lib/utils/recurrence";
 import { checkGuardianWarnings } from "@/lib/utils/guardianCheck";
-<<<<<<< HEAD
-import { startOfDay, SLOT_HEIGHT, addMinutes, hexToRgba, getISOWeek } from "@/lib/utils";
-=======
 import { findVehicleConflicts } from "@/lib/utils/conflicts";
-import { startOfDay, SLOT_HEIGHT, addMinutes, hexToRgba, localDateStr, formatDate, formatTime } from "@/lib/utils";
->>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
+import { startOfDay, SLOT_HEIGHT, addMinutes, hexToRgba, localDateStr, formatDate, formatTime, getISOWeek } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import AppointmentBlock from "./AppointmentBlock";
 import TravelBlock from "./TravelBlock";
 import { DroppableSlotCell } from "./DroppableSlotCell";
 import MealEditDialog from "./MealEditDialog";
 import AppointmentForm from "@/components/appointments/AppointmentForm";
-import MealRow from "./MealRow";
 import { createClient } from "@/lib/supabase/client";
 
 const DAYS_BEFORE = 100;
 const DAYS_AFTER = 100;
 const DAY_HEADER_HEIGHT = 36;
 const ALL_DAY_ROW_HEIGHT = 22;
-<<<<<<< HEAD
-const MEAL_ROW_HEIGHT = 24;
-=======
 const MEALS_ROW_HEIGHT = 24;
 const CONFLICT_WINDOW_DAYS = 14;
->>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
 
 type VItem =
   | { type: "day-header"; dayIdx: number; allDayCount: number }
@@ -51,7 +42,7 @@ export default function CalendarView() {
   const [conflictsOpen, setConflictsOpen] = useState(false);
 
   const slotsPerDay = (endHour - startHour) * 2;
-  const heightPerDay = DAY_HEADER_HEIGHT + MEAL_ROW_HEIGHT + slotsPerDay * SLOT_HEIGHT;
+  const heightPerDay = DAY_HEADER_HEIGHT + MEALS_ROW_HEIGHT + slotsPerDay * SLOT_HEIGHT;
 
   // All days: DAYS_BEFORE before today + DAYS_AFTER after
   const allDays = useMemo(() => {
@@ -155,11 +146,7 @@ export default function CalendarView() {
     estimateSize: (i) => {
       const item = items[i];
       if (item.type === "day-header") {
-<<<<<<< HEAD
-        return DAY_HEADER_HEIGHT + MEAL_ROW_HEIGHT + item.allDayCount * ALL_DAY_ROW_HEIGHT;
-=======
         return DAY_HEADER_HEIGHT + MEALS_ROW_HEIGHT + item.allDayCount * ALL_DAY_ROW_HEIGHT;
->>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
       }
       return SLOT_HEIGHT;
     },
@@ -167,8 +154,6 @@ export default function CalendarView() {
     initialOffset: DAYS_BEFORE * heightPerDay,
   });
 
-<<<<<<< HEAD
-=======
   // Scroll to today's current time on mount
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { scrollToToday(); }, []);
@@ -184,7 +169,6 @@ export default function CalendarView() {
   const dayIdxAtOffsetRef = useRef(dayIdxAtOffset);
   dayIdxAtOffsetRef.current = dayIdxAtOffset;
 
->>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
   // Update header date as user scrolls
   useEffect(() => {
     const el = scrollRef.current;
@@ -426,14 +410,10 @@ export default function CalendarView() {
                 const day = allDays[item.dayIdx];
                 const isToday = startOfDay(new Date()).getTime() === day.getTime();
                 const dayAllDayOccs = allDayByDay.get(day.toDateString()) ?? [];
-<<<<<<< HEAD
-                const headerHeight = DAY_HEADER_HEIGHT + MEAL_ROW_HEIGHT + dayAllDayOccs.length * ALL_DAY_ROW_HEIGHT;
-=======
                 const headerHeight =
                   DAY_HEADER_HEIGHT + MEALS_ROW_HEIGHT + dayAllDayOccs.length * ALL_DAY_ROW_HEIGHT;
                 const dayKey = localDateStr(day);
                 const meal = mealsByDate.get(dayKey);
->>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
                 return (
                   <div
                     key={vItem.key}
@@ -459,7 +439,6 @@ export default function CalendarView() {
                         <span className="ml-2 text-xs text-[var(--muted-foreground)]">KW {getISOWeek(day)}</span>
                       </span>
                     </div>
-                    <MealRow day={day} />
                     {dayAllDayOccs.map((occ) => {
                       const ownerMember = members.find((m) => m.id === occ.appointment.owner_id);
                       const color = ownerMember?.color ?? "#6366f1";
@@ -615,15 +594,6 @@ export default function CalendarView() {
                           if (!isOwner && !isParticipant) return false;
                         }
                       }
-<<<<<<< HEAD
-                      if (occ.occurrenceStart.toDateString() !== day.toDateString()) return false;
-                      if (occ.occurrenceStart >= slotStart && occ.occurrenceStart < slotEnd) return true;
-                      // Appointments outside the visible hours are pinned to the edge
-                      // slots instead of disappearing entirely
-                      if (slotIdx === 0 && occ.occurrenceStart < slotStart) return true;
-                      if (slotIdx === slotsPerDay - 1 && occ.occurrenceStart >= slotEnd) return true;
-                      return false;
-=======
                       const sameDay = occ.occurrenceStart.toDateString() === day.toDateString();
                       const startsInSlot =
                         sameDay && occ.occurrenceStart >= slotStart && occ.occurrenceStart < slotEnd;
@@ -635,7 +605,6 @@ export default function CalendarView() {
                         occ.occurrenceStart < slotStart &&
                         occ.occurrenceEnd > slotStart;
                       return startsInSlot || clampedIntoFirstSlot;
->>>>>>> 485593881e3feccb28c04fb2507d4aedbb639398
                     });
 
                     const travelStartOccurrences = isEventsCol ? [] : dayOccurrences.filter((occ) => {
