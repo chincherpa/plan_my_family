@@ -11,8 +11,18 @@ import {
 } from "@/components/ui/dialog";
 import type { FamilyInvite } from "@/lib/supabase/types";
 
+/**
+ * Invite codes are bearer tokens: holding one is enough to join the family.
+ * check_invite_valid() is callable without a session, so a short code can be
+ * guessed at by anyone. 16 random bytes (128 bit) makes that hopeless —
+ * an 8-hex-char code was only 32 bit.
+ */
 function generateCode(): string {
-  return crypto.randomUUID().replace(/-/g, "").slice(0, 8);
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 }
 
 export default function InviteDialog({
@@ -27,6 +37,7 @@ export default function InviteDialog({
   const [invites, setInvites] = useState<FamilyInvite[]>([]);
   const [loading, setLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -46,17 +57,14 @@ export default function InviteDialog({
 
   async function handleCreate() {
     setLoading(true);
+    setError(null);
     const supabase = createClient();
-    let code = generateCode();
-    let { error } = await supabase.from("family_invites").insert({ family_id: familyId, code });
+    const { error: insertError } = await supabase
+      .from("family_invites")
+      .insert({ family_id: familyId, code: generateCode() });
 
-    if (error) {
-      // Unique-Constraint-Kollision (sehr selten bei 8 Zeichen) — einmal neu versuchen
-      code = generateCode();
-      ({ error } = await supabase.from("family_invites").insert({ family_id: familyId, code }));
-    }
-
-    if (!error) await loadInvites();
+    if (insertError) setError("Einladungslink konnte nicht erstellt werden.");
+    else await loadInvites();
     setLoading(false);
   }
 
@@ -92,6 +100,12 @@ export default function InviteDialog({
           <Button onClick={handleCreate} disabled={loading} className="w-full">
             {loading ? "Erstelle..." : "Neuen Einladungslink erstellen"}
           </Button>
+
+          {error && (
+            <p className="text-sm text-[var(--destructive)] bg-[var(--destructive)]/10 rounded-md px-3 py-2">
+              {error}
+            </p>
+          )}
 
           {invites.length > 0 && (
             <div className="space-y-2">

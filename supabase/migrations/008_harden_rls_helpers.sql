@@ -16,13 +16,36 @@ as $$
   select family_id from family_members where user_id = auth.uid();
 $$;
 
--- Both helpers exist to be called from inside policies, not as REST
--- endpoints. PostgREST exposes every executable function under /rpc/, and
--- family_is_empty() would otherwise let anyone probe whether a given
--- family id exists and is empty.
--- (linter: 0028_anon_security_definer_function_executable)
-revoke execute on function get_my_family_ids() from anon;
-revoke execute on function family_is_empty(uuid) from anon;
+-- Postgres grants EXECUTE on a new function to PUBLIC by default and every
+-- Supabase role inherits that, so `revoke ... from anon` alone is a no-op:
+-- the PUBLIC grant has to go first, then EXECUTE goes back only to the
+-- roles that need each function. PostgREST exposes anything executable
+-- under /rest/v1/rpc/.
+--
+-- Verified against the live database: revoking get_my_family_ids() from
+-- `authenticated` makes `select from families` fail with "permission denied
+-- for function get_my_family_ids". RLS policy expressions are evaluated as
+-- the querying role, so the grant to authenticated is required, not
+-- optional — these two cannot be locked down further without rewriting the
+-- policies to inline the subquery.
+revoke execute on function get_my_family_ids() from public;
+grant execute on function get_my_family_ids() to authenticated, service_role;
+
+revoke execute on function family_is_empty(uuid) from public;
+grant execute on function family_is_empty(uuid) to authenticated, service_role;
+
+-- accept_invite() must not be reachable without a session: called as anon,
+-- auth.uid() is null, so it would consume the invite while inserting a
+-- family_members row with a null user_id that nobody can ever claim.
+-- It carried both the PUBLIC default and an explicit anon grant.
+revoke execute on function accept_invite(text, text, text) from public;
+revoke execute on function accept_invite(text, text, text) from anon;
+grant execute on function accept_invite(text, text, text) to authenticated, service_role;
+
+-- check_invite_valid() is the one that legitimately needs anon: /join
+-- checks the link before the visitor has an account.
+revoke execute on function check_invite_valid(text) from public;
+grant execute on function check_invite_valid(text) to anon, authenticated, service_role;
 
 -- Redundant read policies: these tables already carry a FOR ALL policy
 -- whose USING clause covers SELECT. Keeping both means two expression

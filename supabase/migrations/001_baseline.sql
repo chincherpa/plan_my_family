@@ -120,8 +120,14 @@ as $$
 $$;
 
 -- These back RLS policies and are not meant as public API endpoints.
-revoke execute on function get_my_family_ids() from anon;
-revoke execute on function family_is_empty(uuid) from anon;
+-- EXECUTE defaults to PUBLIC, which every Supabase role inherits, so the
+-- default has to be revoked before granting it back deliberately.
+-- `authenticated` is required: policy expressions are evaluated as the
+-- querying role and would fail with "permission denied for function".
+revoke execute on function get_my_family_ids() from public;
+grant execute on function get_my_family_ids() to authenticated, service_role;
+revoke execute on function family_is_empty(uuid) from public;
+grant execute on function family_is_empty(uuid) to authenticated, service_role;
 
 create policy families_select on families
   for select using (id in (select get_my_family_ids()));

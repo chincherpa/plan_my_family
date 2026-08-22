@@ -307,7 +307,21 @@ Zusätzlich sind `get_my_family_ids()` und `family_is_empty()` für die Rolle `a
 ausführbar und damit über `/rest/v1/rpc/…` ohne Login erreichbar. `family_is_empty(uuid)`
 verrät so, ob eine Family-ID existiert und leer ist.
 
-**Behoben in `008_harden_rls_helpers.sql`** — noch nicht auf die Live-Datenbank angewandt.
+> **Behoben und live angewandt (2026-08-21).** `get_my_family_ids()` hat jetzt
+> `search_path=public`; der Linter-Befund `0011_function_search_path_mutable` ist weg.
+>
+> Beim Umsetzen zeigte sich, dass `revoke execute … from anon` wirkungslos ist: Postgres
+> vergibt EXECUTE per Default an `PUBLIC`, das jede Supabase-Rolle erbt. Erst
+> `revoke … from public` plus gezielte Grants greift. Danach kann `anon` nur noch
+> `check_invite_valid` aufrufen — insbesondere nicht mehr `accept_invite`, das ohne Session
+> mit `auth.uid() = null` die Einladung verbraucht und eine Mitgliedszeile ohne Besitzer
+> angelegt hätte.
+>
+> Gegen die Live-DB verifiziert: entzieht man `get_my_family_ids()` der Rolle
+> `authenticated`, schlägt `select from families` mit *permission denied for function*
+> fehl. RLS-Policies werden also mit den Rechten der abfragenden Rolle ausgewertet — der
+> Grant ist Pflicht, nicht Bequemlichkeit. Weiter abschotten ginge nur, indem man die
+> Subquery in die Policies inlint.
 
 ### 7.1 Rezepte sind über alle Familien hinweg sichtbar und änderbar
 
@@ -337,8 +351,10 @@ Damit lässt sich ohne jede Authentifizierung gegen die Codes raten; ein Treffer
 über `accept_invite` den Beitritt zu einer fremden Familie samt Vollzugriff auf deren
 Kalender. Es gibt keine Rate-Begrenzung und keine Sperre nach Fehlversuchen.
 
-**Maßnahme:** Code auf mindestens 128 Bit erhöhen (`crypto.randomUUID()` vollständig oder
-22 Zeichen base64url) — das allein macht Raten aussichtslos und kostet eine Zeile.
+> **Erledigt.** `generateCode()` liefert jetzt 16 Zufallsbytes als base64url (22 Zeichen,
+> 128 Bit). Der Retry-auf-Kollision entfällt damit — er verschluckte ohnehin den echten
+> Fehler; stattdessen wird er jetzt angezeigt. DB-seitig ist `accept_invite` zusätzlich
+> auf angemeldete Nutzer beschränkt (§7.0).
 
 ### 7.3 Registrierung ist nicht atomar
 
@@ -453,11 +469,13 @@ Slot-Zeile, Tages-Header, Konflikt-Banner bzw. Formularabschnitte + eine
 **Danach — kurzfristig:**
 
 4. `types.ts` generieren lassen, die 25 Casts abbauen.
-5. ~~Migrationen konsolidieren.~~ **Teilweise erledigt** — Baseline nach dem Live-Stand
+5. ~~Migrationen konsolidieren.~~ **Weitgehend erledigt** — Baseline nach dem Live-Stand
    nachgezogen, `get_my_family_ids()` definiert, `001_create.sql` aus dem Ordner entfernt.
-   Ein `supabase db reset` gegen eine leere DB steht noch aus.
-6. **`008_harden_rls_helpers.sql` auf die Live-DB anwenden** (search_path-Fix, siehe §7.0).
-   ~~RLS für `recipes`~~ erledigt via 007. Einladungscode auf 128 Bit: offen.
+   Offen: die Dateinamen im Repo (`001_`, `005_`–`008_`) decken sich nicht mit der
+   angewandten Historie in der DB (Zeitstempel-Versionen); ein `supabase db reset` gegen
+   eine leere DB steht noch aus.
+6. ~~RLS-Härtung.~~ **Erledigt und live angewandt** — search_path-Fix, anon-Grants
+   zurückgenommen, `recipes` entfernt, Einladungscode auf 128 Bit.
 7. Fehlerbehandlung + Toasts an den ~26 ungeprüften Supabase-Aufrufen.
 8. ~~`.env.example` und ein echtes README.~~ **Erledigt**.
 
