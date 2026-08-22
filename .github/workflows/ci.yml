@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Lint, typecheck, build
+    name: Lint, typecheck, test, build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,6 +40,11 @@ jobs:
 
       - name: Typecheck
         run: pnpm typecheck
+
+      # The domain logic (supervision gaps, vehicle conflicts, recurrence)
+      # works in local time, so the suite pins TZ — see package.json.
+      - name: Test
+        run: pnpm test
 
       # The build catches what tsc cannot — e.g. a client hook used without
       # the Suspense boundary its prerendered route needs. Supabase is only

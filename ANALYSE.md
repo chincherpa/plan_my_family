@@ -430,17 +430,22 @@ Slot-Zeile, Tages-Header, Konflikt-Banner bzw. Formularabschnitte + eine
   OS-Modus mischen sich helle Variablen mit vereinzelten dunklen Overrides.
 - `expandAppointments()` filtert die Ausnahmen pro Elterntermin erneut über das gesamte
   Array (O(n²)); eine `Map<parentId, exceptions[]>` vorab wäre linear.
-- `occStart.setHours(start.getHours(), start.getMinutes())` in `recurrence.ts` verschiebt
-  Serientermine über Sommer-/Winterzeitwechsel hinweg nicht korrekt.
+- ~~`occStart.setHours(...)` in `recurrence.ts` verschiebt Serientermine über
+  Sommer-/Winterzeitwechsel hinweg nicht korrekt.~~ **Falscher Alarm** — beim Schreiben der
+  Tests gegen Europe/Berlin nachgemessen: ein 09:00-Termin bleibt über den Wechsel am
+  29.03. bei 09:00, auch bei über Nacht laufenden Terminen. Genau das hält jetzt ein Test
+  fest, damit ein Refactoring es nicht kaputtmacht.
 
 ---
 
 ## 9. Fehlende Infrastruktur
 
-- **Keine Tests.** Kein Test-Runner, keine Testdatei. Ausgerechnet `guardianCheck.ts`,
-  `conflicts.ts` und `recurrence.ts` — reine, seiteneffektfreie Funktionen mit der
-  komplexesten Logik im Projekt — wären trivial zu testen und sind die Stellen, an denen
-  ein Fehler am teuersten ist (eine übersehene Aufsichtslücke).
+- ~~**Keine Tests.**~~ **Erledigt** — Vitest, 59 Tests über `guardianCheck.ts` (21),
+  `conflicts.ts` (21) und `recurrence.ts` (17), eingehängt in die CI. Gegen vier gezielte
+  Mutationen im Produktivcode geprüft (Events zählen als Termin, Fahrtzeit ignoriert,
+  Ausnahmetermine wirkungslos, Serie kollidiert mit sich selbst) — jede wird gefangen.
+  Die Suite fixiert `TZ=Europe/Berlin`, weil die Domänenlogik durchgehend in lokaler Zeit
+  rechnet.
 - ~~**Keine CI.**~~ **Erledigt** — `.github/workflows/ci.yml` prüft bei jedem Push auf
   `master` und jedem PR: Konfliktmarker, `lint`, `typecheck`, `build`. Der
   Konfliktmarker-Schritt hätte `aa68d15` in allen 9 Dateien gefangen.
@@ -448,7 +453,8 @@ Slot-Zeile, Tages-Header, Konflikt-Banner bzw. Formularabschnitte + eine
 - ~~**`README.md` ist das create-next-app-Template.**~~ **Erledigt**; `package.json` hat
   jetzt ein `typecheck`-Script. Ein `test`-Script fehlt weiter — es gibt nichts zu testen.
 - ~~**`todos.md` enthält Konfliktmarker.**~~ **Erledigt**.
-- **Weiterhin keine Tests.** Siehe oben — das ist der grösste verbleibende Posten.
+- **Komponenten sind weiterhin ungetestet.** Die reine Domänenlogik ist abgedeckt;
+  `CalendarView` und `AppointmentForm` nicht — die brauchen erst die Zerlegung aus §8.3.
 - **Leaked-Password-Schutz ist im Supabase-Projekt deaktiviert.** Ein Schalter unter
   Auth → Policies, prüft Passwörter gegen HaveIBeenPwned.
 
@@ -481,7 +487,7 @@ Slot-Zeile, Tages-Header, Konflikt-Banner bzw. Formularabschnitte + eine
 
 **Mittelfristig:**
 
-9. Unit-Tests für `guardianCheck`, `conflicts`, `recurrence`.
+9. ~~Unit-Tests für `guardianCheck`, `conflicts`, `recurrence`.~~ **Erledigt** (59 Tests).
 10. Termine zeitfensterweise laden; Realtime-Payloads direkt in den Store.
 11. `CalendarView` zerlegen, Slot-Berechnungen vorziehen.
 12. `AppointmentForm` zerlegen; Speichern atomar per Postgres-Funktion.
