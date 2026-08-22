@@ -1,36 +1,67 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Familienplaner
 
-## Getting Started
+Ein Familienkalender: eine vertikal scrollende Tagesliste mit einer Spalte pro
+Familienmitglied, plus die Spalten „Alle" (Familienausflüge) und „Ereignisse"
+(Geburtstage, Feiertage).
 
-First, run the development server:
+Über einen gewöhnlichen Kalender hinaus:
+
+- **Aufsichtsprüfung** — Mitglieder mit „kann nicht alleine sein" werden markiert,
+  sobald kein erziehungsberechtigtes Mitglied verfügbar ist.
+- **Fahrzeugkonflikte** — Doppelbuchungen eines Fahrzeugs werden inklusive
+  Anfahrts- und Rückfahrtszeiten erkannt.
+- **Konflikt-Banner** — beides gebündelt für die nächsten 14 Tage, mit Sprunglinks.
+- **Serientermine** — wiederkehrende Termine (RRULE), einzeln oder als ganze
+  Serie bearbeit- und löschbar.
+- **Essensplanung** — Mittag- und Abendessen pro Tag als freier Text.
+
+## Stack
+
+Next.js 16 (App Router) · React 19 · TypeScript · Tailwind CSS 4 ·
+Supabase (Postgres, Auth, Realtime) · Zustand · dnd-kit · rrule
+
+## Einrichtung
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
+cp .env.example .env.local   # und die beiden Werte eintragen
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Die App läuft auf http://localhost:3000 und leitet auf `/calendar` weiter.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Datenbank
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Das Schema liegt in `supabase/migrations/`. Gegen ein lokales Supabase:
 
-## Learn More
+```bash
+supabase start
+supabase db reset
+```
 
-To learn more about Next.js, take a look at the following resources:
+`docs/live-schema-reference.sql` ist ein Abzug des Live-Schemas zum Nachschlagen
+und **keine** Migration — die Datei wird nicht ausgeführt.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Nach Schemaänderungen die Typen neu generieren, statt `src/lib/supabase/types.ts`
+von Hand zu pflegen:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npx supabase gen types typescript --project-id <project-ref> > src/lib/supabase/types.ts
+```
 
-## Deploy on Vercel
+## Prüfen
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```bash
+pnpm lint        # ESLint
+pnpm typecheck   # tsc --noEmit
+pnpm build       # Produktionsbuild
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Alle drei laufen in der CI (`.github/workflows/ci.yml`) bei jedem Push auf
+`master` und jedem Pull Request, zusammen mit einer Prüfung auf offene
+Merge-Konfliktmarker.
+
+## Offene Punkte
+
+`ANALYSE.md` enthält eine priorisierte Bestandsaufnahme des Projekts —
+Architektur, Sicherheit, Performance und was als Nächstes ansteht.

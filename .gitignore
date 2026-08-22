@@ -47,3 +47,5 @@ next-env.d.ts
 
 *.gif
 *.log
+# keep the template tracked
+!.env.example

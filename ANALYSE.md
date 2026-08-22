@@ -123,6 +123,13 @@ Wiederverwendung (A) oder schnelles Freitextfeld (B)?
 - `001_baseline.sql` warnt selbst: *„RLS policies were not diffed against the live
   database's actual policies"*. Repo und Produktivdatenbank sind nachweislich auseinander.
 
+> **Gegen die Live-DB geprüft (2026-08-21, Projekt `gciyahpatcawiyhbwvkq`):** bestätigt.
+> Live heißen die Policies `families_select`, `vehicles_all`, `appointments_all` … und
+> stützen sich durchgehend auf `get_my_family_ids()`. Die im Baseline erfundene Funktion
+> `is_family_member()` **existiert live überhaupt nicht** — Migration 007 hätte in dieser
+> Form gegen die echte Datenbank abgebrochen. Der Baseline ist jetzt aus `pg_policies` und
+> `pg_proc` nachgezogen und bildet den Live-Stand ab (Policy-Namen inklusive).
+
 **Maßnahme:** `001_create.sql` löschen (oder nach `docs/` verschieben), `get_my_family_ids()`
 im Baseline definieren, `family_invites` + die gewählte Meal-Tabelle ins Baseline aufnehmen,
 danach einmal `supabase db reset` gegen eine leere Datenbank verifizieren.
@@ -277,6 +284,31 @@ die Sortierung bei einem Teilfehler inkonsistent zurückbleiben (unbemerkt, sieh
 
 ## 7. Sicherheit
 
+### 7.0 `get_my_family_ids()` ohne fixierten `search_path` (live bestätigt)
+
+Die Funktion trägt **jede einzelne RLS-Policy** der Datenbank und ist `SECURITY DEFINER` —
+aber sie wurde ohne `set search_path` angelegt:
+
+```
+proname            | security_definer | config
+get_my_family_ids  | true             | (none)
+accept_invite      | true             | search_path=public
+check_invite_valid | true             | search_path=public
+family_is_empty    | true             | search_path=public
+```
+
+Die drei anderen Funktionen setzen ihn, ausgerechnet die zentrale nicht. Wer Objekte in
+einem Schema anlegen kann, das im `search_path` vor `public` liegt, kann damit
+`family_members` überschatten und die Funktion beliebige Family-IDs zurückgeben lassen —
+also jede Familie lesen und schreiben. Der Supabase-Linter meldet das als
+`0011_function_search_path_mutable`.
+
+Zusätzlich sind `get_my_family_ids()` und `family_is_empty()` für die Rolle `anon`
+ausführbar und damit über `/rest/v1/rpc/…` ohne Login erreichbar. `family_is_empty(uuid)`
+verrät so, ob eine Family-ID existiert und leer ist.
+
+**Behoben in `008_harden_rls_helpers.sql`** — noch nicht auf die Live-Datenbank angewandt.
+
 ### 7.1 Rezepte sind über alle Familien hinweg sichtbar und änderbar
 
 `recipes` hat **keine `family_id`**, und die Policy lautet:
@@ -286,10 +318,12 @@ create policy "authenticated users can manage recipes" on recipes
   for all using (auth.role() = 'authenticated');
 ```
 
-Jeder eingeloggte Nutzer sieht und *bearbeitet* die Rezepte **aller** Familien. Das ist ein
-echter Mandantenbruch — je nach gewünschtem Verhalten braucht `recipes` entweder eine
-`family_id` mit `is_family_member()`-Policy, oder eine bewusste Trennung in globale
-Vorlagen (nur lesbar) und familieneigene Rezepte.
+Jeder eingeloggte Nutzer sieht und *bearbeitet* die Rezepte **aller** Familien. Live ist es
+sogar schlimmer als im Repo: dort lautet die Bedingung schlicht `using (true)` — ohne jede
+Rollenprüfung, also auch für `anon` offen.
+
+> **Erledigt:** mit der Entscheidung für Freitext-Essensplanung ist `recipes` samt Policy
+> entfernt (Migration 007).
 
 ### 7.2 Einladungscodes: 32 Bit Entropie, öffentlich prüfbar, ohne Rate Limit
 
@@ -391,15 +425,16 @@ Slot-Zeile, Tages-Header, Konflikt-Banner bzw. Formularabschnitte + eine
   `conflicts.ts` und `recurrence.ts` — reine, seiteneffektfreie Funktionen mit der
   komplexesten Logik im Projekt — wären trivial zu testen und sind die Stellen, an denen
   ein Fehler am teuersten ist (eine übersehene Aufsichtslücke).
-- **Keine CI.** Kein `.github/workflows`. Genau deshalb konnte ein Commit mit 81
-  Typfehlern auf `master` landen. Ein Workflow mit `tsc --noEmit` + `eslint` hätte das
-  verhindert.
-- **Keine `.env.example`.** `NEXT_PUBLIC_SUPABASE_URL` und `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-  sind nirgends dokumentiert; ein neuer Entwickler bekommt zur Laufzeit ein `undefined!`.
-- **`README.md` ist unverändert das create-next-app-Template.** Kein Wort über
-  Familienplaner, Supabase-Setup oder Migrationen. `package.json` hat weder ein
-  `typecheck`- noch ein `test`-Script.
-- **`todos.md` enthält Konfliktmarker** und listet dieselben Punkte doppelt in DONE und OPEN.
+- ~~**Keine CI.**~~ **Erledigt** — `.github/workflows/ci.yml` prüft bei jedem Push auf
+  `master` und jedem PR: Konfliktmarker, `lint`, `typecheck`, `build`. Der
+  Konfliktmarker-Schritt hätte `aa68d15` in allen 9 Dateien gefangen.
+- ~~**Keine `.env.example`.**~~ **Erledigt** (inkl. `.gitignore`-Ausnahme).
+- ~~**`README.md` ist das create-next-app-Template.**~~ **Erledigt**; `package.json` hat
+  jetzt ein `typecheck`-Script. Ein `test`-Script fehlt weiter — es gibt nichts zu testen.
+- ~~**`todos.md` enthält Konfliktmarker.**~~ **Erledigt**.
+- **Weiterhin keine Tests.** Siehe oben — das ist der grösste verbleibende Posten.
+- **Leaked-Password-Schutz ist im Supabase-Projekt deaktiviert.** Ein Schalter unter
+  Auth → Policies, prüft Passwörter gegen HaveIBeenPwned.
 
 ---
 
@@ -412,16 +447,19 @@ Slot-Zeile, Tages-Header, Konflikt-Banner bzw. Formularabschnitte + eine
 2. ~~Eine Essensplanung entscheiden, die andere restlos entfernen.~~ **Erledigt** —
    Freitext (`meals`); `recipes`/`meal_plans` entfernt, Migration `007` überträgt
    vorhandene Pläne und löscht die Tabellen.
-3. CI-Workflow mit `tsc --noEmit` + `eslint`. Damit kann sich Punkt 1 nicht wiederholen.
-   **Weiterhin offen — der wichtigste verbleibende Punkt.**
+3. ~~CI-Workflow.~~ **Erledigt** — Konfliktmarker-Guard, Lint, Typecheck und Build
+   laufen bei jedem Push und PR.
 
 **Danach — kurzfristig:**
 
 4. `types.ts` generieren lassen, die 25 Casts abbauen.
-5. Migrationen konsolidieren, `supabase db reset` gegen leere DB verifizieren.
-6. RLS für `recipes` einziehen; Einladungscode auf 128 Bit.
+5. ~~Migrationen konsolidieren.~~ **Teilweise erledigt** — Baseline nach dem Live-Stand
+   nachgezogen, `get_my_family_ids()` definiert, `001_create.sql` aus dem Ordner entfernt.
+   Ein `supabase db reset` gegen eine leere DB steht noch aus.
+6. **`008_harden_rls_helpers.sql` auf die Live-DB anwenden** (search_path-Fix, siehe §7.0).
+   ~~RLS für `recipes`~~ erledigt via 007. Einladungscode auf 128 Bit: offen.
 7. Fehlerbehandlung + Toasts an den ~26 ungeprüften Supabase-Aufrufen.
-8. `.env.example` und ein echtes README.
+8. ~~`.env.example` und ein echtes README.~~ **Erledigt**.
 
 **Mittelfristig:**
 
