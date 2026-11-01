@@ -1,0 +1,87 @@
+"use client";
+import { useEffect, useState } from "react";
+import { ListTodo, X } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { useDataStore } from "@/lib/store/dataStore";
+import { useTodoStore } from "@/lib/store/todoStore";
+import { sortTodos } from "@/lib/utils/todos";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import TodoCard from "./TodoCard";
+import type { TodoWithItems } from "@/lib/supabase/types";
+
+/** Slide-over todo list, opened from the nav on every screen. */
+export default function TodoSheet() {
+  const { family, todos, addTodo } = useDataStore();
+  const { isSidebarOpen, toggleSidebar } = useTodoStore();
+  const [newTitle, setNewTitle] = useState("");
+
+  const openCount = todos.filter((t) => !t.is_done).length;
+  const sorted = sortTodos(todos);
+
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && toggleSidebar();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isSidebarOpen, toggleSidebar]);
+
+  async function handleAddTodo() {
+    const title = newTitle.trim();
+    if (!title || !family) return;
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("todos")
+      .insert({ family_id: family.id, title })
+      .select()
+      .single();
+    if (error || !data) {
+      console.error("Todo konnte nicht angelegt werden.", error);
+      return;
+    }
+    addTodo({ ...(data as TodoWithItems), items: [] });
+    setNewTitle("");
+  }
+
+  if (!isSidebarOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-40 flex justify-end">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={toggleSidebar} />
+      <aside className="relative flex h-full w-full max-w-md flex-col border-l border-[var(--border)] bg-[var(--card)] shadow-2xl">
+        <div className="flex items-center justify-between px-5 py-4 shrink-0">
+          <span className="flex items-center gap-2 text-lg font-semibold">
+            <ListTodo className="w-5 h-5" />
+            Todos
+            {openCount > 0 && (
+              <span className="text-sm font-normal text-[var(--muted-foreground)] tabular">{openCount} offen</span>
+            )}
+          </span>
+          <Button variant="ghost" size="icon" onClick={toggleSidebar} title="Todos schließen">
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
+
+        <div className="px-5 pb-3 shrink-0">
+          <Input
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAddTodo()}
+            placeholder="Neues Todo …"
+          />
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 pb-6 space-y-2">
+          {sorted.length === 0 && (
+            <p className="text-sm text-[var(--muted-foreground)] text-center py-10">
+              Noch keine Todos.
+            </p>
+          )}
+          {sorted.map((todo) => (
+            <TodoCard key={todo.id} todo={todo} />
+          ))}
+        </div>
+      </aside>
+    </div>
+  );
+}

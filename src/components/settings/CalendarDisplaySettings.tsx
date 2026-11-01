@@ -1,4 +1,5 @@
 "use client";
+import { useRef, useState } from "react";
 import { Clock } from "lucide-react";
 import { useCalendarStore } from "@/lib/store/calendarStore";
 import { useDataStore } from "@/lib/store/dataStore";
@@ -7,20 +8,37 @@ import { createClient } from "@/lib/supabase/client";
 export default function CalendarDisplaySettings() {
   const { startHour, endHour, setTimeRange } = useCalendarStore();
   const { family } = useDataStore();
+  const [error, setError] = useState<string | null>(null);
+  // The range the database last accepted, and the id of the newest request.
+  // Rolling back to the render closure's startHour/endHour would restore a
+  // value that a change still in flight has already replaced.
+  const confirmed = useRef<{ startHour: number; endHour: number } | null>(null);
+  const latestRequest = useRef(0);
 
   async function handleChange(newStart: number, newEnd: number) {
     if (!family) return;
     if (newStart >= newEnd) return; // invalid range must not reach the DB
+    const fallback = confirmed.current ?? { startHour, endHour };
+    const request = ++latestRequest.current;
     setTimeRange(newStart, newEnd);
+    setError(null);
     const supabase = createClient();
-    await supabase
+    const { error: updateError } = await supabase
       .from("families")
       .update({ calendar_start_hour: newStart, calendar_end_hour: newEnd })
       .eq("id", family.id);
+    // A response a newer change has overtaken must not touch the range.
+    if (request !== latestRequest.current) return;
+    if (updateError) {
+      setTimeRange(fallback.startHour, fallback.endHour);
+      setError(updateError.message);
+      return;
+    }
+    confirmed.current = { startHour: newStart, endHour: newEnd };
   }
 
   return (
-    <div className="p-4 rounded-lg border border-[var(--border)] bg-[var(--card)] space-y-3">
+    <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-3">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-full bg-[var(--primary)]/10 flex items-center justify-center shrink-0">
           <Clock className="w-5 h-5 text-[var(--primary)]" />
@@ -56,6 +74,7 @@ export default function CalendarDisplaySettings() {
           </select>
         </label>
       </div>
+      {error && <p className="text-sm text-[var(--destructive)]">{error}</p>}
     </div>
   );
 }

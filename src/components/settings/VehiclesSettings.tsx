@@ -25,8 +25,10 @@ export default function VehiclesSettings() {
   const [name, setName] = useState("");
   const [emoji, setEmoji] = useState(VEHICLE_EMOJIS[0]);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   function openCreate() {
+    setError(null); // a previous delete's message must not surface in a fresh form
     setEditing(null);
     setName("");
     setEmoji(VEHICLE_EMOJIS[0]);
@@ -34,6 +36,7 @@ export default function VehiclesSettings() {
   }
 
   function openEdit(vehicle: Vehicle) {
+    setError(null);
     setEditing(vehicle);
     setName(vehicle.name);
     setEmoji(vehicle.icon_emoji);
@@ -43,23 +46,34 @@ export default function VehiclesSettings() {
   async function handleSave() {
     if (!family || !name.trim()) return;
     setSaving(true);
+    setError(null);
     const supabase = createClient();
 
     if (editing) {
-      const { data } = await supabase
+      const { data, error: saveError } = await supabase
         .from("vehicles")
         .update({ name: name.trim(), icon_emoji: emoji })
         .eq("id", editing.id)
         .select();
       const rows = data as Vehicle[] | null;
-      if (rows) setVehicles(vehicles.map((v) => (v.id === editing.id ? rows[0] : v)));
+      if (saveError || !rows?.[0]) {
+        setError(saveError?.message ?? "Fahrzeug konnte nicht gespeichert werden.");
+        setSaving(false);
+        return;
+      }
+      setVehicles(vehicles.map((v) => (v.id === editing.id ? rows[0] : v)));
     } else {
-      const { data } = await supabase
+      const { data, error: saveError } = await supabase
         .from("vehicles")
         .insert({ family_id: family.id, name: name.trim(), icon_emoji: emoji })
         .select();
       const rows = data as Vehicle[] | null;
-      if (rows) setVehicles([...vehicles, rows[0]]);
+      if (saveError || !rows?.[0]) {
+        setError(saveError?.message ?? "Fahrzeug konnte nicht erstellt werden.");
+        setSaving(false);
+        return;
+      }
+      setVehicles([...vehicles, rows[0]]);
     }
 
     setSaving(false);
@@ -68,27 +82,33 @@ export default function VehiclesSettings() {
 
   async function handleDelete(id: string) {
     if (!confirm("Fahrzeug wirklich löschen?")) return;
+    setError(null);
     const supabase = createClient();
-    await supabase.from("vehicles").delete().eq("id", id);
+    const { error: deleteError } = await supabase.from("vehicles").delete().eq("id", id);
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
     setVehicles(vehicles.filter((v) => v.id !== id));
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6 space-y-4">
+    <div className="h-full overflow-y-auto">
+    <div className="max-w-2xl mx-auto px-3 py-5 sm:p-6 space-y-4">
       <div className="flex items-center gap-2">
         <Link href="/settings">
           <Button variant="ghost" size="icon">
             <ChevronLeft className="w-4 h-4" />
           </Button>
         </Link>
-        <h1 className="text-2xl font-bold">Fahrzeuge</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Fahrzeuge</h1>
       </div>
 
       <div className="space-y-2">
         {vehicles.map((vehicle) => (
           <div
             key={vehicle.id}
-            className="flex items-center gap-3 p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]"
+            className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--card)]"
           >
             <span className="text-2xl">{vehicle.icon_emoji}</span>
             <div className="flex-1">
@@ -119,6 +139,8 @@ export default function VehiclesSettings() {
         Fahrzeug hinzufügen
       </Button>
 
+      {error && <p className="text-sm text-[var(--destructive)]">{error}</p>}
+
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -126,6 +148,7 @@ export default function VehiclesSettings() {
           </DialogHeader>
 
           <div className="space-y-4">
+            {error && <p className="text-sm text-[var(--destructive)]">{error}</p>}
             <div className="space-y-1.5">
               <Label>Name</Label>
               <Input
@@ -167,6 +190,7 @@ export default function VehiclesSettings() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
     </div>
   );
 }

@@ -184,9 +184,9 @@ function JoinPageContent() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[var(--background)] p-4">
-      <div className="w-full max-w-sm space-y-8">
+      <div className="w-full max-w-sm space-y-8 rounded-2xl border border-[var(--border)] bg-[var(--card)] p-6 sm:p-8 shadow-2xl">
         <div className="flex flex-col items-center gap-2 text-center">
-          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-[var(--primary)] text-white">
+          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)]">
             <Calendar className="w-6 h-6" />
           </div>
           <h1 className="text-2xl font-bold">Familie beitreten</h1>

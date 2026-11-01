@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -17,13 +17,28 @@ export const metadata: Metadata = {
   description: "Dein digitaler Familienkalender",
 };
 
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#111215" },
+    { media: "(prefers-color-scheme: light)", color: "#f4f4f6" },
+  ],
+  viewportFit: "cover",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="de">
+    <html lang="de" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem("theme");if(t==="light"||t==="dark")document.documentElement.dataset.theme=t}catch(e){}`,
+          }}
+        />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {children}
       </body>

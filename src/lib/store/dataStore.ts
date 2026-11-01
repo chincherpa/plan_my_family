@@ -4,7 +4,10 @@ import type {
   FamilyMember,
   Vehicle,
   Meal,
+  MealCatalogItem,
   AppointmentWithParticipants,
+  TodoWithItems,
+  TodoItem,
 } from "@/lib/supabase/types";
 
 interface DataState {
@@ -13,6 +16,8 @@ interface DataState {
   vehicles: Vehicle[];
   appointments: AppointmentWithParticipants[];
   meals: Meal[];
+  mealCatalog: MealCatalogItem[];
+  todos: TodoWithItems[];
   isLoading: boolean;
 
   setFamily: (family: Family | null) => void;
@@ -25,6 +30,14 @@ interface DataState {
   removeAppointment: (id: string) => void;
   setMeals: (meals: Meal[]) => void;
   upsertMeal: (meal: Meal) => void;
+  setMealCatalog: (mealCatalog: MealCatalogItem[]) => void;
+  setTodos: (todos: TodoWithItems[]) => void;
+  addTodo: (todo: TodoWithItems) => void;
+  updateTodo: (id: string, updates: Partial<TodoWithItems>) => void;
+  removeTodo: (id: string) => void;
+  addTodoItem: (todoId: string, item: TodoItem) => void;
+  updateTodoItem: (todoId: string, itemId: string, updates: Partial<TodoItem>) => void;
+  removeTodoItem: (todoId: string, itemId: string) => void;
   setLoading: (loading: boolean) => void;
 }
 
@@ -34,6 +47,8 @@ export const useDataStore = create<DataState>((set) => ({
   vehicles: [],
   appointments: [],
   meals: [],
+  mealCatalog: [],
+  todos: [],
   isLoading: false,
 
   setFamily: (family) => set({ family }),
@@ -66,6 +81,35 @@ export const useDataStore = create<DataState>((set) => ({
         ...state.meals.filter((m) => !(m.family_id === meal.family_id && m.date === meal.date)),
         meal,
       ],
+    })),
+  setMealCatalog: (mealCatalog) => set({ mealCatalog }),
+  setTodos: (todos) => set({ todos }),
+  addTodo: (todo) => set((state) => ({ todos: [...state.todos, todo] })),
+  updateTodo: (id, updates) =>
+    set((state) => ({
+      todos: state.todos.map((t) => (t.id === id ? { ...t, ...updates } : t)),
+    })),
+  removeTodo: (id) =>
+    set((state) => ({ todos: state.todos.filter((t) => t.id !== id) })),
+  addTodoItem: (todoId, item) =>
+    set((state) => ({
+      todos: state.todos.map((t) =>
+        t.id === todoId ? { ...t, items: [...t.items, item] } : t
+      ),
+    })),
+  updateTodoItem: (todoId, itemId, updates) =>
+    set((state) => ({
+      todos: state.todos.map((t) =>
+        t.id === todoId
+          ? { ...t, items: t.items.map((i) => (i.id === itemId ? { ...i, ...updates } : i)) }
+          : t
+      ),
+    })),
+  removeTodoItem: (todoId, itemId) =>
+    set((state) => ({
+      todos: state.todos.map((t) =>
+        t.id === todoId ? { ...t, items: t.items.filter((i) => i.id !== itemId) } : t
+      ),
     })),
   setLoading: (isLoading) => set({ isLoading }),
 }));

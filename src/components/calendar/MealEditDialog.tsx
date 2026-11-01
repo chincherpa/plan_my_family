@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Combobox } from "@/components/ui/combobox";
 import { Label } from "@/components/ui/label";
 import type { Meal } from "@/lib/supabase/types";
 
@@ -22,11 +22,13 @@ interface MealEditDialogProps {
 }
 
 export default function MealEditDialog({ date, meal, onClose }: MealEditDialogProps) {
-  const { family, upsertMeal } = useDataStore();
+  const { family, upsertMeal, mealCatalog } = useDataStore();
   const [lunch, setLunch] = useState(meal?.lunch ?? "");
   const [dinner, setDinner] = useState(meal?.dinner ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const mealOptions = mealCatalog.map((item) => ({ value: item.name, group: item.category }));
 
   const dateLabel = new Date(`${date}T12:00:00`).toLocaleDateString("de-DE", {
     weekday: "long",
@@ -75,18 +77,20 @@ export default function MealEditDialog({ date, meal, onClose }: MealEditDialogPr
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label>🥗 Mittag</Label>
-            <Input
+            <Combobox
               value={lunch}
-              onChange={(e) => setLunch(e.target.value)}
+              onChange={setLunch}
+              options={mealOptions}
               placeholder="z.B. Nudeln mit Tomatensoße"
               autoFocus
             />
           </div>
           <div className="space-y-1.5">
             <Label>🍲 Abend</Label>
-            <Input
+            <Combobox
               value={dinner}
-              onChange={(e) => setDinner(e.target.value)}
+              onChange={setDinner}
+              options={mealOptions}
               placeholder="z.B. Brotzeit"
               onKeyDown={(e) => e.key === "Enter" && handleSave()}
             />

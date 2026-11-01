@@ -54,7 +54,7 @@ function SortableMemberRow({
         transition,
         opacity: isDragging ? 0.5 : 1,
       }}
-      className="flex items-center gap-3 p-3 rounded-lg border border-[var(--border)] bg-[var(--card)]"
+      className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--card)]"
     >
       <button
         {...attributes}
@@ -104,8 +104,10 @@ export default function MembersSettings() {
   const [cannotBeAlone, setCannotBeAlone] = useState(false);
   const [isGuardian, setIsGuardian] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   function openCreate() {
+    setError(null); // a previous delete's message must not surface in a fresh form
     setEditing(null);
     setName("");
     setColor(PRESET_COLORS[members.length % PRESET_COLORS.length]);
@@ -115,6 +117,7 @@ export default function MembersSettings() {
   }
 
   function openEdit(member: FamilyMember) {
+    setError(null);
     setEditing(member);
     setName(member.name);
     setColor(member.color);
@@ -126,18 +129,24 @@ export default function MembersSettings() {
   async function handleSave() {
     if (!family || !name.trim()) return;
     setSaving(true);
+    setError(null);
     const supabase = createClient();
 
     if (editing) {
-      const { data } = await supabase
+      const { data, error: saveError } = await supabase
         .from("family_members")
         .update({ name: name.trim(), color, cannot_be_alone: cannotBeAlone, is_guardian: isGuardian })
         .eq("id", editing.id)
         .select();
       const rows = data as FamilyMember[] | null;
-      if (rows) setMembers(members.map((m) => (m.id === editing.id ? rows[0] : m)));
+      if (saveError || !rows?.[0]) {
+        setError(saveError?.message ?? "Mitglied konnte nicht gespeichert werden.");
+        setSaving(false);
+        return;
+      }
+      setMembers(members.map((m) => (m.id === editing.id ? rows[0] : m)));
     } else {
-      const { data } = await supabase
+      const { data, error: saveError } = await supabase
         .from("family_members")
         .insert({
           family_id: family.id,
@@ -149,7 +158,12 @@ export default function MembersSettings() {
         })
         .select();
       const rows = data as FamilyMember[] | null;
-      if (rows) setMembers([...members, rows[0]]);
+      if (saveError || !rows?.[0]) {
+        setError(saveError?.message ?? "Mitglied konnte nicht erstellt werden.");
+        setSaving(false);
+        return;
+      }
+      setMembers([...members, rows[0]]);
     }
 
     setSaving(false);
@@ -158,8 +172,13 @@ export default function MembersSettings() {
 
   async function handleDelete(id: string) {
     if (!confirm("Mitglied wirklich löschen?")) return;
+    setError(null);
     const supabase = createClient();
-    await supabase.from("family_members").delete().eq("id", id);
+    const { error: deleteError } = await supabase.from("family_members").delete().eq("id", id);
+    if (deleteError) {
+      setError(deleteError.message);
+      return;
+    }
     setMembers(members.filter((m) => m.id !== id));
   }
 
@@ -171,25 +190,28 @@ export default function MembersSettings() {
     const newIndex = members.findIndex((m) => m.id === over.id);
     const reordered = arrayMove(members, oldIndex, newIndex);
     const orderedIds = reordered.map((m) => m.id);
-    reorderMembers(orderedIds);
 
     const supabase = createClient();
-    await Promise.all(
-      orderedIds.map((id, i) =>
-        supabase.from("family_members").update({ sort_order: i }).eq("id", id)
-      )
-    );
+    const { error: reorderError } = await supabase.rpc("reorder_family_members", {
+      member_ids: orderedIds,
+    });
+    if (reorderError) {
+      setError(reorderError.message);
+      return;
+    }
+    reorderMembers(orderedIds);
   }
 
   return (
-    <div className="max-w-2xl mx-auto p-6 space-y-4">
+    <div className="h-full overflow-y-auto">
+    <div className="max-w-2xl mx-auto px-3 py-5 sm:p-6 space-y-4">
       <div className="flex items-center gap-2">
         <Link href="/settings">
           <Button variant="ghost" size="icon">
             <ChevronLeft className="w-4 h-4" />
           </Button>
         </Link>
-        <h1 className="text-2xl font-bold">Familienmitglieder</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Familienmitglieder</h1>
       </div>
 
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -208,7 +230,7 @@ export default function MembersSettings() {
       </DndContext>
 
       <div className="flex gap-2">
-        <Button onClick={openCreate} className="gap-2">
+        <Button onClick={openCreate} className="gap-2" disabled={!family}>
           <Plus className="w-4 h-4" />
           Mitglied hinzufügen
         </Button>
@@ -218,6 +240,8 @@ export default function MembersSettings() {
         </Button>
       </div>
 
+      {error && <p className="text-sm text-[var(--destructive)]">{error}</p>}
+
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -225,6 +249,7 @@ export default function MembersSettings() {
           </DialogHeader>
 
           <div className="space-y-4">
+            {error && <p className="text-sm text-[var(--destructive)]">{error}</p>}
             <div className="space-y-1.5">
               <Label>Name</Label>
               <Input
@@ -296,6 +321,7 @@ export default function MembersSettings() {
       {family && (
         <InviteDialog familyId={family.id} open={inviteOpen} onOpenChange={setInviteOpen} />
       )}
+    </div>
     </div>
   );
 }

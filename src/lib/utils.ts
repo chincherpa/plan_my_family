@@ -15,6 +15,15 @@ export function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
+/** Black or white — whichever reads better on the given hex background */
+export function readableTextColor(hex: string): string {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!result) return "#ffffff";
+  const [r, g, b] = result.slice(1).map((c) => parseInt(c, 16) / 255);
+  const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return luminance > 0.62 ? "#111215" : "#ffffff";
+}
+
 /** Add minutes to a Date */
 export function addMinutes(date: Date, minutes: number): Date {
   return new Date(date.getTime() + minutes * 60 * 1000);

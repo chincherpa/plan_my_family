@@ -1,33 +1,90 @@
 @import "tailwindcss";
 
+/* Dark-first palette; light via data-theme or system preference */
 :root {
-  --background: #f0f9ff;
-  --foreground: #0c4a6e;
-  --card: #ffffff;
-  --card-foreground: #0c4a6e;
-  --popover: #ffffff;
-  --popover-foreground: #0c4a6e;
-  --primary: #0284c7;
-  --primary-foreground: #ffffff;
-  --secondary: #e0f2fe;
-  --secondary-foreground: #0369a1;
-  --muted: #f0f9ff;
-  --muted-foreground: #4a90a4;
-  --accent: #e0f2fe;
-  --accent-foreground: #0369a1;
-  --destructive: #ef4444;
+  color-scheme: dark;
+  --background: #111215;
+  --foreground: #ececef;
+  --card: #1a1b1f;
+  --card-foreground: #ececef;
+  --popover: #202126;
+  --popover-foreground: #ececef;
+  --primary: #6d8cff;
+  --primary-foreground: #0b0d14;
+  --secondary: #26272d;
+  --secondary-foreground: #ececef;
+  --muted: #1a1b1f;
+  --muted-foreground: #8b8d98;
+  --accent: #26272d;
+  --accent-foreground: #ececef;
+  --destructive: #f05252;
   --destructive-foreground: #ffffff;
-  --border: #bae6fd;
-  --input: #bae6fd;
-  --ring: #0284c7;
-  --radius: 0.5rem;
+  --warning: #f5a524;
+  --border: #2a2b31;
+  --input: #34353c;
+  --ring: #6d8cff;
+  --radius: 0.75rem;
 
-  /* Calendar specific */
-  --time-col-width: 60px;
-  --member-col-width: 160px;
-  --slot-height: 40px; /* 30 min slot */
+  /* Calendar surfaces */
+  --lane: #18191d;
+  --lane-alt: #1c1d22;
+  --gridline: #26272d;
+  --now: #f05252;
+  --hatch: rgba(255, 255, 255, 0.08);
 }
 
+/* Explicit choice via data-theme wins; otherwise follow the system */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --background: #f4f4f6;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+  --primary: #3b5bdb;
+  --primary-foreground: #ffffff;
+  --secondary: #e9e9ee;
+  --secondary-foreground: #18181b;
+  --muted: #ececf0;
+  --muted-foreground: #6b6d78;
+  --accent: #e9e9ee;
+  --accent-foreground: #18181b;
+  --border: #dcdce2;
+  --input: #d0d0d8;
+  --ring: #3b5bdb;
+  --lane: #ffffff;
+  --lane-alt: #f8f8fa;
+  --gridline: #ececf0;
+  --hatch: rgba(0, 0, 0, 0.08);
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="light"]) {
+    color-scheme: light;
+    --background: #f4f4f6;
+    --foreground: #18181b;
+    --card: #ffffff;
+    --card-foreground: #18181b;
+    --popover: #ffffff;
+    --popover-foreground: #18181b;
+    --primary: #3b5bdb;
+    --primary-foreground: #ffffff;
+    --secondary: #e9e9ee;
+    --secondary-foreground: #18181b;
+    --muted: #ececf0;
+    --muted-foreground: #6b6d78;
+    --accent: #e9e9ee;
+    --accent-foreground: #18181b;
+    --border: #dcdce2;
+    --input: #d0d0d8;
+    --ring: #3b5bdb;
+    --lane: #ffffff;
+    --lane-alt: #f8f8fa;
+    --gridline: #ececf0;
+    --hatch: rgba(0, 0, 0, 0.08);
+  }
+}
 
 @theme inline {
   --color-background: var(--background);
@@ -51,34 +108,58 @@
   border-color: var(--border);
 }
 
+html,
+body {
+  height: 100%;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
   margin: 0;
   padding: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Calendar travel block striped pattern */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Travel time: hatched band before/after an appointment */
 .travel-block-pattern {
   background-image: repeating-linear-gradient(
-    45deg,
+    -45deg,
     transparent,
     transparent 4px,
-    rgba(255, 255, 255, 0.25) 4px,
-    rgba(255, 255, 255, 0.25) 8px
+    var(--hatch) 4px,
+    var(--hatch) 8px
   );
 }
 
-/* Scrollbar styling */
+/* Supervision gap: red hatched overlay */
+.guardian-gap {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    rgba(240, 82, 82, 0.16),
+    rgba(240, 82, 82, 0.16) 6px,
+    rgba(240, 82, 82, 0.05) 6px,
+    rgba(240, 82, 82, 0.05) 12px
+  );
+}
+
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 8px;
+  height: 8px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--muted);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--muted-foreground);
-  border-radius: 3px;
+  background: var(--input);
+  border-radius: 4px;
 }

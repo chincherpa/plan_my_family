@@ -49,3 +49,6 @@ next-env.d.ts
 *.log
 # keep the template tracked
 !.env.example
+
+# brainstorming mockups
+.superpowers/

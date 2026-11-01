@@ -1,46 +1,85 @@
 "use client";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { Calendar, Settings, LogOut, UtensilsCrossed } from "lucide-react";
+import { Calendar, Settings, LogOut, UtensilsCrossed, ListTodo } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useCalendarStore } from "@/lib/store/calendarStore";
-import { Button } from "@/components/ui/button";
-import type { AppointmentWithParticipants, FamilyMember, Family, Vehicle, Meal } from "@/lib/supabase/types";
+import { useTodoStore } from "@/lib/store/todoStore";
+import { cn } from "@/lib/utils";
+import ThemeToggle from "@/components/ThemeToggle";
+import TodoSheet from "@/components/todos/TodoSheet";
+import type {
+  AppointmentWithParticipants,
+  FamilyMember,
+  Family,
+  Vehicle,
+  Meal,
+  MealCatalogItem,
+  TodoWithItems,
+} from "@/lib/supabase/types";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { setFamily, setMembers, setVehicles, setAppointments, setMeals, setLoading } = useDataStore();
+  const {
+    setFamily,
+    setMembers,
+    setVehicles,
+    setAppointments,
+    setMeals,
+    setMealCatalog,
+    setTodos,
+    setLoading,
+  } = useDataStore();
   const { setTimeRange } = useCalendarStore();
+  const todos = useDataStore((s) => s.todos);
+  const { isSidebarOpen: isTodosOpen, toggleSidebar: toggleTodos } = useTodoStore();
+  const openTodoCount = todos.filter((t) => !t.is_done).length;
+  const loadVersion = useRef(0);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
+    let isMounted = true;
+    let currentFamilyId: string | null = null;
 
     // showSpinner only on initial load — realtime refetches must not unmount
     // the calendar (spinner remount resets scroll position to today)
     async function loadData(showSpinner = false) {
+      const requestVersion = ++loadVersion.current;
       if (showSpinner) setLoading(true);
       try {
         const {
           data: { user },
+          error: authError,
         } = await supabase.auth.getUser();
-        if (!user) return;
+        if (!user || authError) throw authError ?? new Error("Nicht angemeldet.");
 
         // Get family via member
-        const { data: memberDataRaw } = await supabase
+        const { data: memberDataRaw, error: memberError } = await supabase
           .from("family_members")
           .select("*")
           .eq("user_id", user.id)
-          .single();
+          .maybeSingle();
 
         const memberData = memberDataRaw as FamilyMember | null;
-        if (!memberData) return;
+        if (!memberData || memberError) {
+          throw memberError ?? new Error("Kein Familienkonto gefunden.");
+        }
 
         const familyId = memberData.family_id;
 
-        const [familyRes, membersRes, vehiclesRes, apptRes, mealsRes] = await Promise.all([
+        const [
+          familyRes,
+          membersRes,
+          vehiclesRes,
+          apptRes,
+          mealsRes,
+          mealCatalogRes,
+          todosRes,
+        ] = await Promise.all([
           supabase.from("families").select("*").eq("id", familyId).single(),
           supabase
             .from("family_members")
@@ -53,21 +92,48 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             .select("*, participants:appointment_participants(*)")
             .eq("family_id", familyId),
           supabase.from("meals").select("*").eq("family_id", familyId),
+          supabase.from("meal_catalog").select("*").eq("family_id", familyId),
+          supabase
+            .from("todos")
+            .select("*, items:todo_items(*)")
+            .eq("family_id", familyId)
+            .order("created_at"),
         ]);
 
-        if (familyRes.data) {
-          const family = familyRes.data as Family;
-          setFamily(family);
-          setTimeRange(family.calendar_start_hour, family.calendar_end_hour);
+        if (!isMounted || requestVersion !== loadVersion.current) return;
+        const responseError = [
+          familyRes,
+          membersRes,
+          vehiclesRes,
+          apptRes,
+          mealsRes,
+          mealCatalogRes,
+          todosRes,
+        ]
+          .map((result) => result.error)
+          .find(Boolean);
+        if (responseError) throw responseError;
+
+        const family = familyRes.data as Family | null;
+        if (!family) throw new Error("Familie konnte nicht geladen werden.");
+
+        currentFamilyId = familyId;
+        setFamily(family);
+        setTimeRange(family.calendar_start_hour, family.calendar_end_hour);
+        setMembers((membersRes.data ?? []) as FamilyMember[]);
+        setVehicles((vehiclesRes.data ?? []) as Vehicle[]);
+        setAppointments((apptRes.data ?? []) as AppointmentWithParticipants[]);
+        setMeals((mealsRes.data ?? []) as Meal[]);
+        setMealCatalog((mealCatalogRes.data ?? []) as MealCatalogItem[]);
+        setTodos((todosRes.data ?? []) as TodoWithItems[]);
+        setLoadError(null);
+      } catch (error) {
+        console.error("loadData failed", error);
+        if (isMounted && requestVersion === loadVersion.current) {
+          setLoadError("Daten konnten nicht geladen werden. Bitte lade die Seite erneut.");
         }
-        if (membersRes.data) setMembers(membersRes.data as FamilyMember[]);
-        if (vehiclesRes.data) setVehicles(vehiclesRes.data as Vehicle[]);
-        if (apptRes.data) {
-          setAppointments(apptRes.data as AppointmentWithParticipants[]);
-        }
-        if (mealsRes.data) setMeals(mealsRes.data as Meal[]);
       } finally {
-        if (showSpinner) setLoading(false);
+        if (showSpinner && isMounted && requestVersion === loadVersion.current) setLoading(false);
       }
     }
 
@@ -76,21 +142,40 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     // Realtime subscriptions
     const channel = supabase
       .channel("family-changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, () =>
-        loadData()
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "family_members" }, () =>
-        loadData()
-      )
-      .on("postgres_changes", { event: "*", schema: "public", table: "meals" }, () =>
-        loadData()
-      )
+      .on("postgres_changes", { event: "*", schema: "public", table: "appointments" }, handleChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "family_members" }, handleChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "vehicles" }, handleChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "meals" }, handleChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "meal_catalog" }, handleChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "todos" }, handleChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "todo_items" }, handleChange)
       .subscribe();
 
+    function handleChange(payload: { new: Record<string, unknown>; old: Record<string, unknown> }) {
+      const record = Object.keys(payload.new).length > 0 ? payload.new : payload.old;
+      // A DELETE payload carries only the replica identity. Migration 009 sets
+      // REPLICA IDENTITY FULL so family_id is there, but a project whose
+      // migrations lag would otherwise lose every deletion — when the column is
+      // missing, refetch instead of dropping the event.
+      const familyId = record?.family_id;
+      if (familyId === undefined || familyId === currentFamilyId) loadData();
+    }
+
     return () => {
+      isMounted = false;
       supabase.removeChannel(channel);
     };
-  }, [setFamily, setMembers, setVehicles, setAppointments, setMeals, setLoading, setTimeRange]);
+  }, [
+    setFamily,
+    setMembers,
+    setVehicles,
+    setAppointments,
+    setMeals,
+    setMealCatalog,
+    setTodos,
+    setLoading,
+    setTimeRange,
+  ]);
 
   async function handleLogout() {
     const supabase = createClient();
@@ -98,54 +183,91 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     router.push("/login");
   }
 
+  const links = [
+    { href: "/calendar", label: "Kalender", icon: Calendar },
+    { href: "/meals", label: "Essen", icon: UtensilsCrossed },
+    { href: "/settings", label: "Einstellungen", icon: Settings },
+  ];
+
+  const navItem = (active: boolean) =>
+    cn(
+      "flex flex-col items-center justify-center gap-1 rounded-xl text-[11px] font-medium transition-colors",
+      active
+        ? "text-[var(--foreground)] bg-[var(--accent)]"
+        : "text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+    );
+
+  const todoButton = (className: string) => (
+    <button
+      type="button"
+      onClick={toggleTodos}
+      className={cn(navItem(isTodosOpen), className)}
+    >
+      <span className="relative">
+        <ListTodo className="w-5 h-5" />
+        {openTodoCount > 0 && (
+          <span className="absolute -top-1.5 -right-2.5 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] text-[10px] font-semibold tabular">
+            {openTodoCount}
+          </span>
+        )}
+      </span>
+      Todos
+    </button>
+  );
+
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
-      {/* Top Nav */}
-      <header className="flex h-12 items-center justify-between border-b border-[var(--border)] bg-[var(--muted)] px-4 shrink-0">
-        <div className="flex items-center gap-2">
-          <Calendar className="w-5 h-5 text-[var(--primary)]" />
-          <span className="font-semibold text-sm">Familienplaner</span>
+    <div className="flex h-dvh overflow-hidden">
+      {/* Side rail — tablet and up */}
+      <nav className="hidden md:flex w-20 shrink-0 flex-col items-center gap-1 border-r border-[var(--border)] bg-[var(--card)] py-4">
+        <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)]">
+          <Calendar className="w-5 h-5" />
         </div>
+        {links.map(({ href, label, icon: Icon }) => (
+          <Link key={href} href={href} className={cn(navItem(pathname.startsWith(href)), "h-16 w-16")}>
+            <Icon className="w-5 h-5" />
+            {label === "Einstellungen" ? "Setup" : label}
+          </Link>
+        ))}
+        {todoButton("h-16 w-16")}
+        <button
+          type="button"
+          onClick={handleLogout}
+          title="Abmelden"
+          className={cn(navItem(false), "mt-auto h-12 w-16")}
+        >
+          <LogOut className="w-5 h-5" />
+        </button>
+      </nav>
 
-        <nav className="flex items-center gap-1">
-          <Link href="/calendar">
-            <Button
-              variant={pathname.startsWith("/calendar") ? "secondary" : "ghost"}
-              size="sm"
-              className="gap-1.5"
-            >
-              <Calendar className="w-4 h-4" />
-              Kalender
-            </Button>
-          </Link>
-          <Link href="/meals">
-            <Button
-              variant={pathname.startsWith("/meals") ? "secondary" : "ghost"}
-              size="sm"
-              className="gap-1.5"
-            >
-              <UtensilsCrossed className="w-4 h-4" />
-              Mahlzeiten
-            </Button>
-          </Link>
-          <Link href="/settings">
-            <Button
-              variant={pathname.startsWith("/settings") ? "secondary" : "ghost"}
-              size="sm"
-              className="gap-1.5"
-            >
-              <Settings className="w-4 h-4" />
-              Einstellungen
-            </Button>
-          </Link>
-          <Button variant="ghost" size="icon" onClick={handleLogout} title="Abmelden">
-            <LogOut className="w-4 h-4" />
-          </Button>
+      <div className="flex min-w-0 flex-1 flex-col">
+        {loadError && (
+          <p className="shrink-0 border-b border-[var(--destructive)]/30 bg-[var(--destructive)]/10 px-4 py-2 text-sm text-[var(--destructive)]">
+            {loadError}
+          </p>
+        )}
+
+        <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
+
+        {/* Bottom bar — phone */}
+        <nav className="md:hidden pb-safe shrink-0 border-t border-[var(--border)] bg-[var(--card)]">
+          <div className="grid grid-cols-5 gap-1 px-2 py-1.5">
+            {links.map(({ href, label, icon: Icon }) => (
+              <Link key={href} href={href} className={cn(navItem(pathname.startsWith(href)), "h-14")}>
+                <Icon className="w-5 h-5" />
+                {label === "Einstellungen" ? "Setup" : label}
+              </Link>
+            ))}
+            {todoButton("h-14")}
+            <button type="button" onClick={handleLogout} className={cn(navItem(false), "h-14")}>
+              <LogOut className="w-5 h-5" />
+              Abmelden
+            </button>
+          </div>
         </nav>
-      </header>
+      </div>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-hidden">{children}</main>
+      <ThemeToggle />
+      <TodoSheet />
     </div>
   );
 }

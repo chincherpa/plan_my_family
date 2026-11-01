@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Trash2, Repeat, Car, Users, Clock, AlertTriangle } from "lucide-react";
 import { RRule } from "rrule";
 import { createClient } from "@/lib/supabase/client";
@@ -17,11 +17,29 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { AppointmentWithParticipants } from "@/lib/supabase/types";
 import { hexToRgba } from "@/lib/utils";
 import { occurrenceDateKey } from "@/lib/utils/recurrence";
 
-type RecurrenceFreq = "none" | "daily" | "weekly" | "monthly" | "yearly";
+type RecurrenceFreq =
+  | "none"
+  | "daily"
+  | "weekdays"
+  | "weekend"
+  | "weekly"
+  | "biweekly"
+  | "monthly"
+  | "yearly";
+
+const WEEKDAYS_DE = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+/** rrule weekday numbers: Mon=0 … Sun=6 */
+const MON_TO_FRI = [0, 1, 2, 3, 4];
+const SAT_SUN = [5, 6];
+
+function sameDays(a: number[], b: number[]): boolean {
+  return a.length === b.length && [...a].sort().join() === [...b].sort().join();
+}
 type EditScope = "single" | "series";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -70,16 +88,73 @@ function DateTimePicker({
         onChange={(e) => onChange(combine(e.target.value, timePart))}
         className="flex-1 min-w-0 rounded-md border border-[var(--input)] bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
       />
-      <select
-        value={timePart}
-        onChange={(e) => onChange(combine(datePart, e.target.value))}
-        className="w-24 rounded-md border border-[var(--input)] bg-[var(--background)] px-2 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
+      <TimeSelect value={timePart} onChange={(t) => onChange(combine(datePart, t))} />
+    </div>
+  );
+}
+
+/**
+ * Custom list instead of a native <select>: browsers scroll the native list so
+ * the selected time sits at the very bottom, we want it centered.
+ */
+function TimeSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  function focusItem(item: HTMLElement | null | undefined) {
+    if (item instanceof HTMLButtonElement) item.focus({ preventScroll: true });
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          className="w-24 rounded-md border border-[var(--input)] bg-[var(--background)] px-2 py-2 text-left text-sm tabular focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
+        >
+          {value}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        ref={listRef}
+        className="relative max-h-64 w-24 overflow-y-auto p-1"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          const list = listRef.current;
+          const item = list?.querySelector<HTMLElement>('[data-selected="true"]');
+          if (!list || !item) return;
+          list.scrollTop = item.offsetTop - list.clientHeight / 2 + item.offsetHeight / 2;
+          focusItem(item);
+        }}
+        onKeyDown={(e) => {
+          const current = document.activeElement as HTMLElement | null;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            focusItem(current?.nextElementSibling as HTMLElement | null);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            focusItem(current?.previousElementSibling as HTMLElement | null);
+          }
+        }}
       >
         {TIME_OPTIONS.map((t) => (
-          <option key={t} value={t}>{t}</option>
+          <button
+            key={t}
+            type="button"
+            data-selected={t === value}
+            onClick={() => {
+              onChange(t);
+              setOpen(false);
+            }}
+            className={`flex w-full rounded-sm px-2 py-1.5 text-left text-sm tabular hover:bg-[var(--accent)] focus-visible:bg-[var(--accent)] focus-visible:outline-none ${
+              t === value ? "bg-[var(--primary)]/15 font-semibold text-[var(--primary)]" : ""
+            }`}
+          >
+            {t}
+          </button>
         ))}
-      </select>
-    </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -157,9 +232,14 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   const [recurrence, setRecurrence] = useState<RecurrenceFreq>(() => {
     if (!existingAppt?.recurrence_rule) return "none";
     try {
-      const freq = RRule.fromString(existingAppt.recurrence_rule).options.freq;
+      const { freq, interval, byweekday } = RRule.fromString(existingAppt.recurrence_rule).options;
       if (freq === RRule.DAILY) return "daily";
-      if (freq === RRule.WEEKLY) return "weekly";
+      if (freq === RRule.WEEKLY) {
+        if (interval === 2) return "biweekly";
+        if (byweekday && sameDays(byweekday, MON_TO_FRI)) return "weekdays";
+        if (byweekday && sameDays(byweekday, SAT_SUN)) return "weekend";
+        return "weekly";
+      }
       if (freq === RRule.MONTHLY) return "monthly";
       if (freq === RRule.YEARLY) return "yearly";
       return "none";
@@ -211,16 +291,29 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     if (freq === "none") return null;
     const freqMap = {
       daily: RRule.DAILY,
+      weekdays: RRule.WEEKLY,
+      weekend: RRule.WEEKLY,
       weekly: RRule.WEEKLY,
+      biweekly: RRule.WEEKLY,
       monthly: RRule.MONTHLY,
       yearly: RRule.YEARLY,
     };
     const rule = new RRule({
       freq: freqMap[freq],
       dtstart: from,
+      ...(freq === "biweekly" && { interval: 2 }),
+      ...(freq === "weekdays" && { byweekday: [RRule.MO, RRule.TU, RRule.WE, RRule.TH, RRule.FR] }),
+      ...(freq === "weekend" && { byweekday: [RRule.SA, RRule.SU] }),
     });
     return rule.toString();
   }
+
+  // Weekday of the (first) occurrence, for labels like "Jeden Montag"
+  const formStart = isAllDay
+    ? allDayStartDate && new Date(`${allDayStartDate}T00:00:00`)
+    : startTime && new Date(startTime);
+  const weekdayName =
+    formStart && !isNaN(formStart.getTime()) ? WEEKDAYS_DE[formStart.getDay()] : null;
 
   async function handleSave() {
     if (!family || !title.trim()) return;
@@ -272,44 +365,24 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
       if (existingAppt && isSeriesInstance && editScope === "single" && formOccurrenceStart) {
         // "Only this occurrence": insert an exception row; the parent's
         // expansion skips the original date via exception_date
-        const { data: insertedData, error } = await supabase
-          .from("appointments")
-          .insert({
+        const { data, error } = await supabase.rpc("save_appointment_with_participants", {
+          appointment_data: {
             ...apptData,
             recurrence_rule: null,
             recurrence_parent_id: existingAppt.id,
             exception_date: occurrenceDateKey(formOccurrenceStart),
-          })
-          .select()
-          .single();
-
-        const data = insertedData as { id: string } | null;
-        if (error || !data) {
+          },
+          participant_data: participants.map((memberId) => ({
+            member_id: memberId,
+            is_supervisor: supervisorIds.includes(memberId),
+          })),
+        });
+        const appointment = data as AppointmentWithParticipants | null;
+        if (error || !appointment) {
           setFormError(error?.message ?? "Termin konnte nicht gespeichert werden.");
           return;
         }
-
-        if (participants.length > 0) {
-          const { error: partError } = await supabase.from("appointment_participants").insert(
-            participants.map((memberId) => ({
-              appointment_id: data.id,
-              member_id: memberId,
-              is_supervisor: supervisorIds.includes(memberId),
-            }))
-          );
-          if (partError) {
-            setFormError("Teilnehmer konnten nicht gespeichert werden.");
-            return;
-          }
-        }
-
-        const { data: fullData } = await supabase
-          .from("appointments")
-          .select("*, participants:appointment_participants(*)")
-          .eq("id", data.id)
-          .single();
-
-        if (fullData) addAppointment(fullData as AppointmentWithParticipants);
+        addAppointment(appointment);
       } else if (existingAppt) {
         if (isSeriesInstance && editScope === "series") {
           // Whole series: keep the series anchored at its original start
@@ -324,79 +397,34 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
           apptData.recurrence_rule = buildRRule(recurrence, seriesStart);
         }
 
-        const { data, error } = await supabase
-          .from("appointments")
-          .update(apptData)
-          .eq("id", existingAppt.id)
-          .select()
-          .single();
-
-        if (error || !data) {
+        const { data, error } = await supabase.rpc("save_appointment_with_participants", {
+          appointment_data: apptData,
+          participant_data: participants.map((memberId) => ({
+            member_id: memberId,
+            is_supervisor: supervisorIds.includes(memberId),
+          })),
+          existing_appointment_id: existingAppt.id,
+        });
+        const appointment = data as AppointmentWithParticipants | null;
+        if (error || !appointment) {
           setFormError(error?.message ?? "Termin konnte nicht gespeichert werden.");
           return;
         }
-
-        // Update participants
-        await supabase
-          .from("appointment_participants")
-          .delete()
-          .eq("appointment_id", existingAppt.id);
-
-        if (participants.length > 0) {
-          const { error: partError } = await supabase.from("appointment_participants").insert(
-            participants.map((memberId) => ({
-              appointment_id: existingAppt.id,
-              member_id: memberId,
-              is_supervisor: supervisorIds.includes(memberId),
-            }))
-          );
-          if (partError) {
-            setFormError("Teilnehmer konnten nicht gespeichert werden.");
-            return;
-          }
-        }
-
-        const { data: fullData } = await supabase
-          .from("appointments")
-          .select("*, participants:appointment_participants(*)")
-          .eq("id", existingAppt.id)
-          .single();
-
-        if (fullData) updateAppointment(existingAppt.id, fullData as AppointmentWithParticipants);
+        updateAppointment(existingAppt.id, appointment);
       } else {
-        const { data: insertedData, error } = await supabase
-          .from("appointments")
-          .insert(apptData)
-          .select()
-          .single();
-
-        const data = insertedData as { id: string } | null;
-        if (error || !data) {
+        const { data, error } = await supabase.rpc("save_appointment_with_participants", {
+          appointment_data: apptData,
+          participant_data: participants.map((memberId) => ({
+            member_id: memberId,
+            is_supervisor: supervisorIds.includes(memberId),
+          })),
+        });
+        const appointment = data as AppointmentWithParticipants | null;
+        if (error || !appointment) {
           setFormError(error?.message ?? "Termin konnte nicht erstellt werden.");
           return;
         }
-
-        if (participants.length > 0) {
-          const { error: partError } = await supabase.from("appointment_participants").insert(
-            participants.map((memberId) => ({
-              appointment_id: data.id,
-              member_id: memberId,
-              is_supervisor: supervisorIds.includes(memberId),
-            }))
-          );
-          if (partError) {
-            setFormError("Teilnehmer konnten nicht gespeichert werden.");
-            return;
-          }
-        }
-
-        const { data: fullData } = await supabase
-          .from("appointments")
-          .select("*, participants:appointment_participants(*)")
-          .eq("id", data.id)
-          .single();
-
-        if (fullData) addAppointment(fullData as AppointmentWithParticipants);
+        addAppointment(appointment);
       }
     } finally {
       setSaving(false);
@@ -753,7 +781,14 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
               <SelectContent>
                 <SelectItem value="none">Keine Wiederholung</SelectItem>
                 <SelectItem value="daily">Täglich</SelectItem>
-                <SelectItem value="weekly">Wöchentlich</SelectItem>
+                <SelectItem value="weekdays">Mo. bis Fr.</SelectItem>
+                <SelectItem value="weekend">Sa. und So.</SelectItem>
+                <SelectItem value="weekly">
+                  {weekdayName ? `Jeden ${weekdayName}` : "Wöchentlich"}
+                </SelectItem>
+                <SelectItem value="biweekly">
+                  {weekdayName ? `Jeden zweiten ${weekdayName}` : "Alle 2 Wochen"}
+                </SelectItem>
                 <SelectItem value="monthly">Monatlich</SelectItem>
                 <SelectItem value="yearly">Jährlich</SelectItem>
               </SelectContent>
