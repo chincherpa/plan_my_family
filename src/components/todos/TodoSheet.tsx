@@ -8,6 +8,7 @@ import { sortTodos } from "@/lib/utils/todos";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import TodoCard from "./TodoCard";
+import AssigneeSelect from "./AssigneeSelect";
 import type { TodoWithItems } from "@/lib/supabase/types";
 
 /** Slide-over todo list, opened from the nav on every screen. */
@@ -15,6 +16,7 @@ export default function TodoSheet() {
   const { family, todos, addTodo } = useDataStore();
   const { isSidebarOpen, toggleSidebar } = useTodoStore();
   const [newTitle, setNewTitle] = useState("");
+  const [newAssigneeId, setNewAssigneeId] = useState<string | null>(null);
 
   const openCount = todos.filter((t) => !t.is_done).length;
   const sorted = sortTodos(todos);
@@ -32,7 +34,7 @@ export default function TodoSheet() {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("todos")
-      .insert({ family_id: family.id, title })
+      .insert({ family_id: family.id, title, assignee_id: newAssigneeId })
       .select()
       .single();
     if (error || !data) {
@@ -41,6 +43,7 @@ export default function TodoSheet() {
     }
     addTodo({ ...(data as TodoWithItems), items: [] });
     setNewTitle("");
+    setNewAssigneeId(null);
   }
 
   if (!isSidebarOpen) return null;
@@ -62,13 +65,15 @@ export default function TodoSheet() {
           </Button>
         </div>
 
-        <div className="px-5 pb-3 shrink-0">
+        <div className="flex items-center gap-2 px-5 pb-3 shrink-0">
           <Input
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleAddTodo()}
             placeholder="Neues Todo …"
+            className="flex-1 min-w-0"
           />
+          <AssigneeSelect value={newAssigneeId} onChange={setNewAssigneeId} />
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 pb-6 space-y-2">
