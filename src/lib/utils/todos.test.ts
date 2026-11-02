@@ -7,6 +7,7 @@ function todo(overrides: Partial<TodoWithItems> & { id: string; created_at: stri
     family_id: "family-1",
     title: "Todo",
     assignee_id: null,
+    due_date: null,
     is_done: false,
     items: [],
     ...overrides,

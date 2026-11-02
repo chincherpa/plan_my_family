@@ -192,6 +192,7 @@ export interface Database {
           family_id: string;
           title: string;
           assignee_id: string | null;
+          due_date: string | null;
           is_done: boolean;
           created_at: string;
         };
@@ -200,6 +201,7 @@ export interface Database {
           family_id: string;
           title: string;
           assignee_id?: string | null;
+          due_date?: string | null;
           is_done?: boolean;
           created_at?: string;
         };
@@ -208,6 +210,7 @@ export interface Database {
           family_id?: string;
           title?: string;
           assignee_id?: string | null;
+          due_date?: string | null;
           is_done?: boolean;
           created_at?: string;
         };

@@ -1,11 +1,67 @@
 "use client";
-import { AlertTriangle, ChevronRight, Plus, UtensilsCrossed } from "lucide-react";
+import { AlertTriangle, ChevronRight, ListTodo, Plus, UtensilsCrossed } from "lucide-react";
 import { useDataStore } from "@/lib/store/dataStore";
+import { useTodoStore } from "@/lib/store/todoStore";
 import { formatTime, hexToRgba, readableTextColor } from "@/lib/utils";
+import { todosDueByColumn } from "@/lib/utils/todoCalendar";
 import type { AppointmentOccurrence } from "@/lib/utils/recurrence";
-import type { Meal } from "@/lib/supabase/types";
+import type { Meal, TodoWithItems } from "@/lib/supabase/types";
 import { TIME_GUTTER } from "./DayTimeline";
 import { ALL_COLUMN_COLOR, EVENT_COLOR, placementsFor, type Column, type DayData } from "./model";
+
+/** Chips for todos due ("Endtermin") on a day, shown inside one calendar column. */
+export function TodoDueChips({ todos, color }: { todos: TodoWithItems[]; color: string }) {
+  const openSidebar = useTodoStore((s) => s.openSidebar);
+  if (todos.length === 0) return null;
+  return (
+    <>
+      {todos.map((todo) => (
+        <button
+          key={`todo-${todo.id}`}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            openSidebar();
+          }}
+          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-left text-[11px] leading-tight"
+          style={{
+            backgroundColor: hexToRgba(color, 0.14),
+            color,
+            boxShadow: `inset 0 0 0 1px ${hexToRgba(color, 0.45)}`,
+          }}
+          title={`Endtermin: ${todo.title}`}
+        >
+          <ListTodo className="h-3 w-3 shrink-0" />
+          <span className="truncate font-medium">{todo.title}</span>
+        </button>
+      ))}
+    </>
+  );
+}
+
+/**
+ * Column-aligned row of due-todo chips, sized to match a {@link DayTimeline}
+ * (time gutter + one flex cell per column). Rendered above the timeline so each
+ * todo sits over its assignee's column — or "Alle" when unassigned.
+ */
+export function TodoDueStrip({ day, columns }: { day: Date; columns: Column[] }) {
+  const todos = useDataStore((s) => s.todos);
+  const members = useDataStore((s) => s.members);
+  const byColumn = todosDueByColumn(todos, day, members);
+  if (byColumn.size === 0) return null;
+  return (
+    <div className="flex pb-1.5">
+      <div className={`${TIME_GUTTER} shrink-0`} />
+      <div className="flex flex-1 gap-1 min-w-0">
+        {columns.map((col) => (
+          <div key={col.id} className="flex flex-1 min-w-0 flex-col gap-0.5">
+            <TodoDueChips todos={byColumn.get(col.id) ?? []} color={col.color} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function useOccurrenceColor() {
   const members = useDataStore((s) => s.members);
@@ -144,6 +200,8 @@ export function UpcomingDay({
   onEditMeal: () => void;
 }) {
   const colorOf = useOccurrenceColor();
+  const todos = useDataStore((s) => s.todos);
+  const members = useDataStore((s) => s.members);
   const { day } = data;
   const isWeekend = day.getDay() === 0 || day.getDay() === 6;
 
@@ -155,6 +213,7 @@ export function UpcomingDay({
       cells.set(p.columnId, list);
     }
   }
+  const dueTodos = todosDueByColumn(todos, day, members);
 
   return (
     <section
@@ -247,6 +306,7 @@ export function UpcomingDay({
                     </button>
                   );
                 })}
+                <TodoDueChips todos={dueTodos.get(col.id) ?? []} color={col.color} />
               </div>
             );
           })}
