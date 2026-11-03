@@ -62,7 +62,7 @@ export default function DayTimeline({
   const byColumn = useMemo(() => {
     const map = new Map<string, Placed[]>();
     for (const occ of data.timed) {
-      for (const { columnId, isOwner } of placementsFor(occ)) {
+      for (const { columnId, isOwner } of placementsFor(occ, columns)) {
         const start = toMin(occ.travelStart);
         const end = toMin(occ.travelEnd);
         if (end <= start) continue;
@@ -74,7 +74,7 @@ export default function DayTimeline({
     return map;
     // toMin only depends on windowStart / windowMinutes
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data.timed, windowStart, windowMinutes]);
+  }, [data.timed, columns, windowStart, windowMinutes]);
 
   const hours = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
   const nowMin = (now.getTime() - windowStart.getTime()) / 60000;

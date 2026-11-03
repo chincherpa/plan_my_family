@@ -40,7 +40,13 @@ const SAT_SUN = [5, 6];
 function sameDays(a: number[], b: number[]): boolean {
   return a.length === b.length && [...a].sort().join() === [...b].sort().join();
 }
-type EditScope = "single" | "series";
+/** single = this one, following = this and all later ones, series = all */
+type EditScope = "single" | "following" | "series";
+/** "none" only exists for legacy series saved without end; new rules always end */
+type RecurrenceEnd = "count" | "until" | "none";
+
+const DEFAULT_COUNT = 10;
+const MAX_COUNT = 500;
 
 const pad = (n: number) => String(n).padStart(2, "0");
 
@@ -180,8 +186,16 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   // (and user edits survive background data refreshes while it is open).
   const [initial] = useState(() => {
     if (existingAppt) {
-      const s = new Date(existingAppt.start_time);
-      const e = new Date(existingAppt.end_time);
+      let s = new Date(existingAppt.start_time);
+      let e = new Date(existingAppt.end_time);
+      if (existingAppt.recurrence_rule && formOccurrenceStart) {
+        // Show the clicked occurrence, not the first one of the series
+        const durationMs = e.getTime() - s.getTime();
+        const seriesStart = s;
+        s = new Date(formOccurrenceStart);
+        s.setHours(seriesStart.getHours(), seriesStart.getMinutes(), 0, 0);
+        e = new Date(s.getTime() + durationMs);
+      }
       return {
         startTime: combine(toDatePart(s), toTimePart(s)),
         endTime: combine(toDatePart(e), toTimePart(e)),
@@ -220,8 +234,12 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   const [travelBefore, setTravelBefore] = useState(existingAppt?.travel_before_min ?? 0);
   const [travelAfter, setTravelAfter] = useState(existingAppt?.travel_after_min ?? 0);
   const [vehicleId, setVehicleId] = useState<string>(existingAppt?.vehicle_id ?? "none");
-  const [participants, setParticipants] = useState<string[]>(
-    () => existingAppt?.participants.map((p) => p.member_id) ?? []
+  const [participants, setParticipants] = useState<string[]>(() =>
+    existingAppt
+      ? existingAppt.participants.map((p) => p.member_id)
+      : formMemberId === "all"
+      ? members.map((m) => m.id)
+      : []
   );
   const [supervisorIds, setSupervisorIds] = useState<string[]>(
     () => existingAppt?.participants.filter((p) => p.is_supervisor).map((p) => p.member_id) ?? []
@@ -247,7 +265,33 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
       return "none";
     }
   });
+  // End of the recurrence: after N occurrences or on a date
+  const [initialEnd] = useState<{ mode: RecurrenceEnd; count: number; until: string }>(() => {
+    const fallback = { mode: "count" as RecurrenceEnd, count: DEFAULT_COUNT, until: "" };
+    if (!existingAppt?.recurrence_rule) return fallback;
+    try {
+      const { count, until } = RRule.fromString(existingAppt.recurrence_rule).options;
+      if (count) return { ...fallback, count };
+      if (until) return { ...fallback, mode: "until", until: toDatePart(until) };
+      return { ...fallback, mode: "none" };
+    } catch {
+      return fallback;
+    }
+  });
+  const [recurrenceEnd, setRecurrenceEnd] = useState<RecurrenceEnd>(initialEnd.mode);
+  const [recurrenceCount, setRecurrenceCount] = useState(initialEnd.count);
+  const [recurrenceUntil, setRecurrenceUntil] = useState(initialEnd.until);
   const [editScope, setEditScope] = useState<EditScope>("single");
+
+  // Clicked occurrence is the first of its series → "following" equals "series"
+  const isFirstOccurrence = useMemo(() => {
+    if (!existingAppt?.recurrence_rule || !formOccurrenceStart) return true;
+    try {
+      return !RRule.fromString(existingAppt.recurrence_rule).before(formOccurrenceStart, false);
+    } catch {
+      return true;
+    }
+  }, [existingAppt, formOccurrenceStart]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -287,7 +331,13 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   const timesInvalid =
     !isAllDay && !!startTime && !!endTime && new Date(endTime) <= new Date(startTime);
 
-  function buildRRule(freq: RecurrenceFreq, from: Date): string | null {
+  const firstDatePart = isAllDay ? allDayStartDate : startTime.split("T")[0];
+  const recurrenceInvalid =
+    recurrence !== "none" &&
+    recurrenceEnd === "until" &&
+    (!recurrenceUntil || recurrenceUntil < firstDatePart);
+
+  function buildRRule(freq: RecurrenceFreq, from: Date, countOverride?: number): string | null {
     if (freq === "none") return null;
     const freqMap = {
       daily: RRule.DAILY,
@@ -304,6 +354,10 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
       ...(freq === "biweekly" && { interval: 2 }),
       ...(freq === "weekdays" && { byweekday: [RRule.MO, RRule.TU, RRule.WE, RRule.TH, RRule.FR] }),
       ...(freq === "weekend" && { byweekday: [RRule.SA, RRule.SU] }),
+      ...(recurrenceEnd === "count" && {
+        count: Math.min(Math.max(countOverride ?? recurrenceCount, 1), MAX_COUNT),
+      }),
+      ...(recurrenceEnd === "until" && { until: new Date(`${recurrenceUntil}T23:59:59`) }),
     });
     return rule.toString();
   }
@@ -315,10 +369,56 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   const weekdayName =
     formStart && !isNaN(formStart.getTime()) ? WEEKDAYS_DE[formStart.getDay()] : null;
 
+  /**
+   * Cut the series off before the clicked occurrence: the rule gets an UNTIL
+   * on the previous day, later exception rows are dropped. Never called for
+   * the first occurrence (that is a whole-series operation).
+   */
+  async function endSeriesBefore(
+    supabase: ReturnType<typeof createClient>,
+    parent: AppointmentWithParticipants,
+    occStart: Date
+  ): Promise<boolean> {
+    const rule = RRule.fromString(parent.recurrence_rule!);
+    const until = new Date(occStart);
+    until.setDate(until.getDate() - 1);
+    until.setHours(23, 59, 59, 0);
+    const cut = new RRule({ ...rule.origOptions, count: null, until }).toString();
+    const cutKey = occurrenceDateKey(occStart);
+
+    // Exceptions first: modified instances render regardless of the rule, so
+    // leftovers after a successful cut would duplicate the new series.
+    // If the cut fails afterwards, the series simply keeps running.
+    const { error: delError } = await supabase
+      .from("appointments")
+      .delete()
+      .eq("recurrence_parent_id", parent.id)
+      .gte("exception_date", cutKey);
+    if (delError) return false;
+    appointments
+      .filter(
+        (a) =>
+          a.recurrence_parent_id === parent.id && !!a.exception_date && a.exception_date >= cutKey
+      )
+      .forEach((a) => removeAppointment(a.id));
+
+    const { error } = await supabase
+      .from("appointments")
+      .update({ recurrence_rule: cut })
+      .eq("id", parent.id);
+    if (error) return false;
+    updateAppointment(parent.id, { recurrence_rule: cut });
+    return true;
+  }
+
   async function handleSave() {
     if (!family || !title.trim()) return;
     if (isAllDay && !allDayStartDate) return;
     if (!isAllDay && (!startTime || !endTime || timesInvalid)) return;
+    if (recurrenceInvalid) {
+      setFormError("Das Enddatum der Wiederholung muss am oder nach dem ersten Termin liegen.");
+      return;
+    }
     setFormError(null);
 
     let startDate: Date;
@@ -344,6 +444,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
 
     setSaving(true);
     const supabase = createClient();
+    const scope: EditScope =
+      editScope === "following" && isFirstOccurrence ? "series" : editScope;
 
     const apptData = {
       family_id: family.id,
@@ -362,7 +464,43 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     };
 
     try {
-      if (existingAppt && isSeriesInstance && editScope === "single" && formOccurrenceStart) {
+      if (existingAppt && isSeriesInstance && scope === "following" && formOccurrenceStart) {
+        // "This and following": cut the old series off, start a new one here
+        let count: number | undefined;
+        if (
+          recurrenceEnd === "count" &&
+          initialEnd.mode === "count" &&
+          recurrenceCount === initialEnd.count
+        ) {
+          // Count untouched → keep the total, minus what stays in the old series
+          // Compare by local date: rrule works in UTC, so across a DST switch the
+          // clicked occurrence's rrule date can lie an hour before formOccurrenceStart
+          const cutKey = occurrenceDateKey(formOccurrenceStart);
+          const kept = RRule.fromString(existingAppt.recurrence_rule!)
+            .between(new Date(existingAppt.start_time), formOccurrenceStart, true)
+            .filter((d) => occurrenceDateKey(d) < cutKey).length;
+          count = Math.max(recurrenceCount - kept, 1);
+        }
+        const { data, error } = await supabase.rpc("save_appointment_with_participants", {
+          appointment_data: { ...apptData, recurrence_rule: buildRRule(recurrence, startDate, count) },
+          participant_data: participants.map((memberId) => ({
+            member_id: memberId,
+            is_supervisor: supervisorIds.includes(memberId),
+          })),
+        });
+        const appointment = data as AppointmentWithParticipants | null;
+        if (error || !appointment) {
+          setFormError(error?.message ?? "Termin konnte nicht gespeichert werden.");
+          return;
+        }
+        if (!(await endSeriesBefore(supabase, existingAppt, formOccurrenceStart))) {
+          // Roll back the new series so nothing is duplicated
+          await supabase.from("appointments").delete().eq("id", appointment.id);
+          setFormError("Serie konnte nicht geteilt werden.");
+          return;
+        }
+        addAppointment(appointment);
+      } else if (existingAppt && isSeriesInstance && scope === "single" && formOccurrenceStart) {
         // "Only this occurrence": insert an exception row; the parent's
         // expansion skips the original date via exception_date
         const { data, error } = await supabase.rpc("save_appointment_with_participants", {
@@ -384,7 +522,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
         }
         addAppointment(appointment);
       } else if (existingAppt) {
-        if (isSeriesInstance && editScope === "series") {
+        if (isSeriesInstance && scope === "series") {
           // Whole series: keep the series anchored at its original start
           // date, apply only time-of-day + duration from the form
           const seriesStart = new Date(existingAppt.start_time);
@@ -479,6 +617,16 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
       return;
     }
 
+    // This and all following occurrences → end the series the day before
+    if (isSeriesInstance && editScope === "following" && !isFirstOccurrence && formOccurrenceStart) {
+      if (!(await endSeriesBefore(supabase, existingAppt, formOccurrenceStart))) {
+        setFormError("Termine konnten nicht gelöscht werden.");
+        return;
+      }
+      onClose();
+      return;
+    }
+
     // Single appointment or whole series
     if (isSeriesInstance) {
       await supabase.from("appointments").delete().eq("recurrence_parent_id", existingAppt.id);
@@ -495,6 +643,14 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     onClose();
   }
 
+  function handleAllFamilyChange(checked: boolean) {
+    setIsAllFamily(checked);
+    // "Alle" → everyone takes part; back to a single owner → owner is not an extra participant
+    setParticipants(
+      checked ? members.map((m) => m.id) : (prev) => prev.filter((id) => id !== ownerId)
+    );
+  }
+
   function toggleParticipant(memberId: string) {
     setParticipants((prev) =>
       prev.includes(memberId) ? prev.filter((id) => id !== memberId) : [...prev, memberId]
@@ -503,7 +659,9 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
 
   const dependentMembers = members.filter((m) => m.cannot_be_alone);
   const showSupervisorSelect =
-    dependentMembers.length > 0 && participants.some((pid) => dependentMembers.some((d) => d.id === pid));
+    !isAllFamily &&
+    dependentMembers.length > 0 &&
+    participants.some((pid) => dependentMembers.some((d) => d.id === pid));
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -513,37 +671,42 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Scope for recurring series */}
+          {/* Scope for recurring series: applies to saving and deleting */}
           {isSeriesInstance && (
             <div className="space-y-1">
+              <p className="text-xs font-medium text-[var(--muted-foreground)]">
+                Auf welche Termine anwenden?
+              </p>
               <div className="flex rounded-md border border-[var(--border)] overflow-hidden text-sm">
-                <button
-                  type="button"
-                  onClick={() => setEditScope("single")}
-                  className={`flex-1 px-3 py-1.5 font-medium transition-colors ${
-                    editScope === "single"
-                      ? "bg-[var(--primary)] text-white"
-                      : "bg-transparent text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
-                  }`}
-                >
-                  Nur dieser Termin
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setEditScope("series")}
-                  className={`flex-1 px-3 py-1.5 font-medium transition-colors border-l border-[var(--border)] ${
-                    editScope === "series"
-                      ? "bg-[var(--primary)] text-white"
-                      : "bg-transparent text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
-                  }`}
-                >
-                  Ganze Serie
-                </button>
+                {(
+                  [
+                    ["single", "Nur dieser"],
+                    ...(isFirstOccurrence ? [] : [["following", "Dieser & folgende"]]),
+                    ["series", "Alle"],
+                  ] as [EditScope, string][]
+                ).map(([value, label], i) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => setEditScope(value)}
+                    className={`flex-1 px-3 py-1.5 font-medium transition-colors ${
+                      i > 0 ? "border-l border-[var(--border)]" : ""
+                    } ${
+                      editScope === value
+                        ? "bg-[var(--primary)] text-white"
+                        : "bg-transparent text-[var(--muted-foreground)] hover:bg-[var(--muted)]"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
               <p className="text-xs text-[var(--muted-foreground)]">
                 {editScope === "single"
-                  ? "Änderungen und Löschen betreffen nur dieses Vorkommen."
-                  : "Änderungen gelten für alle Termine der Serie (Uhrzeit, Dauer, Details)."}
+                  ? "Ändern und Löschen betrifft nur dieses Vorkommen."
+                  : editScope === "following"
+                  ? "Ändern und Löschen betrifft dieses und alle späteren Vorkommen. Frühere bleiben unverändert."
+                  : "Ändern und Löschen betrifft die ganze Serie. Beim Ändern gelten Uhrzeit, Dauer und Details."}
               </p>
             </div>
           )}
@@ -578,7 +741,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
           {!isEvent && (
             <div className="flex items-center justify-between">
               <Label>Familienausflug / Alle</Label>
-              <Switch checked={isAllFamily} onCheckedChange={setIsAllFamily} />
+              <Switch checked={isAllFamily} onCheckedChange={handleAllFamilyChange} />
             </div>
           )}
 
@@ -727,13 +890,15 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
               </Label>
               <div className="flex flex-wrap gap-2">
                 {members
-                  .filter((m) => m.id !== ownerId)
+                  .filter((m) => isAllFamily || m.id !== ownerId)
                   .map((m) => (
                     <button
                       key={m.id}
                       type="button"
+                      // "Alle" always involves everyone (calendar + guardian check ignore the list)
+                      disabled={isAllFamily}
                       onClick={() => toggleParticipant(m.id)}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium transition-all"
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium transition-all disabled:cursor-default"
                       style={{
                         backgroundColor: participants.includes(m.id)
                           ? hexToRgba(m.color, 0.2)
@@ -793,6 +958,59 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
                 <SelectItem value="yearly">Jährlich</SelectItem>
               </SelectContent>
             </Select>
+
+            {recurrence !== "none" && (
+              <div className="grid grid-cols-2 gap-3 pt-1">
+                <Select
+                  value={recurrenceEnd}
+                  onValueChange={(v) => {
+                    setRecurrenceEnd(v as RecurrenceEnd);
+                    if (v === "until" && !recurrenceUntil && firstDatePart) {
+                      // Prefill: three months after the first occurrence
+                      const d = new Date(`${firstDatePart}T00:00:00`);
+                      d.setMonth(d.getMonth() + 3);
+                      setRecurrenceUntil(toDatePart(d));
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="count">Nach Anzahl</SelectItem>
+                    <SelectItem value="until">Bis Datum</SelectItem>
+                    {initialEnd.mode === "none" && (
+                      <SelectItem value="none">Unbegrenzt (bisher)</SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                {recurrenceEnd === "count" && (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={1}
+                      max={MAX_COUNT}
+                      value={recurrenceCount}
+                      onChange={(e) =>
+                        setRecurrenceCount(
+                          Math.min(Math.max(parseInt(e.target.value) || 1, 1), MAX_COUNT)
+                        )
+                      }
+                    />
+                    <span className="text-sm text-[var(--muted-foreground)]">Termine</span>
+                  </div>
+                )}
+                {recurrenceEnd === "until" && (
+                  <input
+                    type="date"
+                    value={recurrenceUntil}
+                    min={firstDatePart}
+                    onChange={(e) => setRecurrenceUntil(e.target.value)}
+                    className="w-full rounded-md border border-[var(--input)] bg-transparent px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
+                  />
+                )}
+              </div>
+            )}
           </div>
           )}
 
@@ -820,6 +1038,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
               <p className="text-sm font-medium text-[var(--destructive)]">
                 {isSeriesInstance && editScope === "single"
                   ? "Nur diesen Termin der Serie löschen?"
+                  : isSeriesInstance && editScope === "following" && !isFirstOccurrence
+                  ? "Diesen und alle folgenden Termine der Serie löschen?"
                   : isSeriesInstance
                   ? "Ganze Serie inklusive aller Ausnahmen löschen?"
                   : "Termin wirklich löschen?"}
@@ -846,7 +1066,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
               <Button
                 className="flex-1"
                 onClick={handleSave}
-                disabled={saving || !title.trim() || (isAllDay ? !allDayStartDate : (!startTime || !endTime || timesInvalid))}
+                disabled={saving || !title.trim() || (isAllDay ? !allDayStartDate : (!startTime || !endTime || timesInvalid)) || recurrenceInvalid}
               >
                 {saving ? "Speichern..." : "Speichern"}
               </Button>

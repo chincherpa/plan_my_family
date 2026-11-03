@@ -22,10 +22,24 @@ export interface DayData {
   warnings: GuardianWarning[];
 }
 
-/** Columns an occurrence shows up in, and whether it's the owner's copy there. */
-export function placementsFor(occ: AppointmentOccurrence): { columnId: string; isOwner: boolean }[] {
+/**
+ * Columns an occurrence shows up in, and whether it's the owner's copy there.
+ * An all-family appointment owns the "Alle" column and appears in every
+ * member column too (`columns` also holds "Alle" and is filtered here).
+ */
+export function placementsFor(
+  occ: AppointmentOccurrence,
+  columns: Column[]
+): { columnId: string; isOwner: boolean }[] {
   const appt = occ.appointment;
-  if (appt.is_all_family) return [{ columnId: ALL_COLUMN_ID, isOwner: true }];
+  if (appt.is_all_family) {
+    return [
+      { columnId: ALL_COLUMN_ID, isOwner: true },
+      ...columns
+        .filter((c) => c.id !== ALL_COLUMN_ID)
+        .map((c) => ({ columnId: c.id, isOwner: false })),
+    ];
+  }
   const result: { columnId: string; isOwner: boolean }[] = appt.owner_id
     ? [{ columnId: appt.owner_id, isOwner: true }]
     : [];
