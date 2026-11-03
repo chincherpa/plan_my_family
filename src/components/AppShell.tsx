@@ -20,6 +20,8 @@ import type {
   TodoWithItems,
 } from "@/lib/supabase/types";
 
+const REFETCH_DEBOUNCE_MS = 250;
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -44,6 +46,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     const supabase = createClient();
     let isMounted = true;
     let currentFamilyId: string | null = null;
+    let refetchTimer: ReturnType<typeof setTimeout> | undefined;
 
     // showSpinner only on initial load — realtime refetches must not unmount
     // the calendar (spinner remount resets scroll position to today)
@@ -158,11 +161,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       // migrations lag would otherwise lose every deletion — when the column is
       // missing, refetch instead of dropping the event.
       const familyId = record?.family_id;
-      if (familyId === undefined || familyId === currentFamilyId) loadData();
+      if (familyId === undefined || familyId === currentFamilyId) {
+        // Bursts (z. B. ein Termin-Import mit hunderten Zeilen) lösen ein Event
+        // pro Zeile aus — zu einem einzigen Nachladen zusammenfassen.
+        clearTimeout(refetchTimer);
+        refetchTimer = setTimeout(() => loadData(), REFETCH_DEBOUNCE_MS);
+      }
     }
 
     return () => {
       isMounted = false;
+      clearTimeout(refetchTimer);
       supabase.removeChannel(channel);
     };
   }, [

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { CalendarClock, Trash2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -93,6 +93,27 @@ export default function TodoCard({ todo }: { todo: TodoWithItems }) {
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>
+      </div>
+
+      <div className="flex items-center gap-1.5 pl-6 text-xs text-[var(--muted-foreground)]">
+        <CalendarClock className="h-3 w-3 shrink-0" aria-label="Endtermin" />
+        <input
+          type="date"
+          value={todo.due_date ?? ""}
+          onChange={(e) => patch({ due_date: e.target.value || null })}
+          title="Endtermin"
+          className="h-6 rounded-md border border-transparent bg-transparent px-1 text-xs hover:border-[var(--input)] focus-visible:border-[var(--input)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
+        />
+        {todo.due_date && (
+          <button
+            type="button"
+            onClick={() => patch({ due_date: null })}
+            className="shrink-0 text-[var(--muted-foreground)] hover:text-[var(--destructive)]"
+            title="Endtermin entfernen"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
       </div>
 
       {todo.items.length > 0 && (

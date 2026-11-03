@@ -20,7 +20,7 @@ import { Button } from "@/components/ui/button";
 import AppointmentForm from "@/components/appointments/AppointmentForm";
 import MealEditDialog from "./MealEditDialog";
 import DayTimeline, { TIME_GUTTER, snapShiftMin } from "./DayTimeline";
-import { DayBanner, MealsStrip, UpcomingDay } from "./DayParts";
+import { DayBanner, MealsStrip, TodoDueStrip, UpcomingDay } from "./DayParts";
 import {
   ALL_COLUMN_COLOR,
   ALL_COLUMN_ID,
@@ -377,6 +377,7 @@ export default function CalendarView() {
             />
           </div>
           <div className="pt-2">
+            <TodoDueStrip day={heroDay} columns={columns} />
             <DayTimeline
               data={heroData}
               columns={columns}
@@ -410,17 +411,20 @@ export default function CalendarView() {
                 expanded={expanded}
                 timeline={
                   expanded && (
-                    <DayTimeline
-                      data={data}
-                      columns={columns}
-                      startHour={startHour}
-                      endHour={endHour}
-                      hourHeight={hourHeight}
-                      now={now}
-                      conflictKeys={conflictKeys}
-                      onSlotClick={(start, columnId) => openForm({ date: start, memberId: columnId })}
-                      onOpen={openOccurrence}
-                    />
+                    <>
+                      <TodoDueStrip day={data.day} columns={columns} />
+                      <DayTimeline
+                        data={data}
+                        columns={columns}
+                        startHour={startHour}
+                        endHour={endHour}
+                        hourHeight={hourHeight}
+                        now={now}
+                        conflictKeys={conflictKeys}
+                        onSlotClick={(start, columnId) => openForm({ date: start, memberId: columnId })}
+                        onOpen={openOccurrence}
+                      />
+                    </>
                   )
                 }
                 onToggle={() => setExpandedKey(expanded ? null : key)}
