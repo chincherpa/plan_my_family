@@ -141,12 +141,9 @@ function isSlotSupervised(
       return true;
     }
 
-    // Guardian has appointment — does it include the dependent?
-    const dependentIsIncluded = guardianOccs.some(
-      (occ) =>
-        occ.appointment.is_all_family ||
-        occ.appointment.participants.some((p) => p.member_id === dependent.id)
-    );
+    // Guardian has appointment — does it include the dependent (as owner,
+    // participant or via a family appointment)? Then they travel together.
+    const dependentIsIncluded = guardianOccs.some((occ) => involves(occ, dependent.id));
     if (dependentIsIncluded) return true;
   }
 
