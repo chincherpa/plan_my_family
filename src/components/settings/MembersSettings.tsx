@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { Plus, Pencil, Trash2, ChevronLeft, GripVertical } from "lucide-react";
-import { UserPlus } from "lucide-react";
 import Link from "next/link";
 import {
   DndContext,
@@ -32,7 +31,6 @@ import {
 } from "@/components/ui/dialog";
 import type { FamilyMember } from "@/lib/supabase/types";
 import { PRESET_COLORS } from "@/lib/constants";
-import InviteDialog from "./InviteDialog";
 
 function SortableMemberRow({
   member,
@@ -95,7 +93,6 @@ function SortableMemberRow({
 export default function MembersSettings() {
   const { members, family, setMembers, reorderMembers } = useDataStore();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [inviteOpen, setInviteOpen] = useState(false);
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const [editing, setEditing] = useState<FamilyMember | null>(null);
 
@@ -229,16 +226,10 @@ export default function MembersSettings() {
         </SortableContext>
       </DndContext>
 
-      <div className="flex gap-2">
-        <Button onClick={openCreate} className="gap-2" disabled={!family}>
-          <Plus className="w-4 h-4" />
-          Mitglied hinzufügen
-        </Button>
-        <Button onClick={() => setInviteOpen(true)} variant="outline" className="gap-2" disabled={!family}>
-          <UserPlus className="w-4 h-4" />
-          Einladen
-        </Button>
-      </div>
+      <Button onClick={openCreate} className="gap-2" disabled={!family}>
+        <Plus className="w-4 h-4" />
+        Mitglied hinzufügen
+      </Button>
 
       {error && <p className="text-sm text-[var(--destructive)]">{error}</p>}
 
@@ -318,9 +309,6 @@ export default function MembersSettings() {
         </DialogContent>
       </Dialog>
 
-      {family && (
-        <InviteDialog familyId={family.id} open={inviteOpen} onOpenChange={setInviteOpen} />
-      )}
     </div>
     </div>
   );
