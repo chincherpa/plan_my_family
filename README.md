@@ -14,6 +14,8 @@ Familienmitglied, plus die Spalten „Alle" (Familienausflüge) und „Ereigniss
 - **Serientermine** — wiederkehrende Termine (RRULE), einzeln oder als ganze
   Serie bearbeit- und löschbar.
 - **Essensplanung** — Mittag- und Abendessen pro Tag als freier Text.
+- **Termin-Import** — Termine (auch Serien, mit Besitzer und weiteren Teilnehmern) aus einer
+  JSON- oder Textdatei übernehmen, siehe [docs/termin-import.md](docs/termin-import.md).
 
 ## Stack
 

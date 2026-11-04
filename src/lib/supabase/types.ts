@@ -272,47 +272,6 @@ export interface Database {
           },
         ];
       };
-      family_invites: {
-        Row: {
-          id: string;
-          family_id: string;
-          code: string;
-          created_by: string | null;
-          expires_at: string;
-          used_at: string | null;
-          used_by: string | null;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          family_id: string;
-          code: string;
-          created_by?: string | null;
-          expires_at?: string;
-          used_at?: string | null;
-          used_by?: string | null;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          family_id?: string;
-          code?: string;
-          created_by?: string | null;
-          expires_at?: string;
-          used_at?: string | null;
-          used_by?: string | null;
-          created_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "family_invites_family_id_fkey";
-            columns: ["family_id"];
-            isOneToOne: false;
-            referencedRelation: "families";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
       meals: {
         Row: {
           id: string;
@@ -384,14 +343,6 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
-      check_invite_valid: {
-        Args: { invite_code: string };
-        Returns: boolean;
-      };
-      accept_invite: {
-        Args: { invite_code: string; member_name: string; member_color: string };
-        Returns: Database["public"]["Tables"]["family_members"]["Row"];
-      };
       save_appointment_with_participants: {
         Args: {
           appointment_data: Json;
@@ -416,7 +367,6 @@ export type FamilyMember = Database["public"]["Tables"]["family_members"]["Row"]
 export type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 export type Appointment = Database["public"]["Tables"]["appointments"]["Row"];
 export type AppointmentParticipant = Database["public"]["Tables"]["appointment_participants"]["Row"];
-export type FamilyInvite = Database["public"]["Tables"]["family_invites"]["Row"];
 export type Meal = Database["public"]["Tables"]["meals"]["Row"];
 export type MealCatalogItem = Database["public"]["Tables"]["meal_catalog"]["Row"];
 export type Todo = Database["public"]["Tables"]["todos"]["Row"];
