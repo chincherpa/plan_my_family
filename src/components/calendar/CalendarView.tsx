@@ -54,12 +54,27 @@ function useHourHeight(hours: number): number {
   return height;
 }
 
-/** Current time, refreshed every minute (moves the now-line, rolls over at midnight). */
+function currentMinute(): Date {
+  const d = new Date();
+  d.setSeconds(0, 0);
+  return d;
+}
+
+/**
+ * Current time floored to the minute, refreshed on each full minute (moves the
+ * now-line, rolls over at midnight). Flooring keeps the SSR and hydration
+ * renders identical within the same minute.
+ */
 function useNow(): Date {
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(currentMinute);
   useEffect(() => {
-    const id = setInterval(() => setNow(new Date()), 60_000);
-    return () => clearInterval(id);
+    let id: ReturnType<typeof setTimeout>;
+    const tick = () => {
+      setNow(currentMinute());
+      id = setTimeout(tick, 60_000 - (Date.now() % 60_000));
+    };
+    tick();
+    return () => clearTimeout(id);
   }, []);
   return now;
 }
@@ -257,7 +272,10 @@ export default function CalendarView() {
               <h1 className="truncate text-2xl sm:text-3xl font-bold tracking-tight">
                 {heroDay.toLocaleDateString("de-DE", { day: "numeric", month: "long" })}
                 {isHeroToday && (
-                  <span className="ml-3 text-lg sm:text-xl font-medium text-[var(--muted-foreground)] tabular">
+                  <span
+                    suppressHydrationWarning
+                    className="ml-3 text-lg sm:text-xl font-medium text-[var(--muted-foreground)] tabular"
+                  >
                     {formatTime(now)}
                   </span>
                 )}

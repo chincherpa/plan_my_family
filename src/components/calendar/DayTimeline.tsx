@@ -1,5 +1,5 @@
 "use client";
-import { useMemo } from "react";
+import { useMemo, useSyncExternalStore } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { CSS } from "@dnd-kit/utilities";
 import { Car, Repeat } from "lucide-react";
@@ -8,6 +8,13 @@ import { assignLanes } from "@/lib/utils/lanes";
 import { formatTime, hexToRgba, localDateStr, readableTextColor } from "@/lib/utils";
 import type { AppointmentOccurrence } from "@/lib/utils/recurrence";
 import { placementsFor, type Column, type DayData } from "./model";
+
+const noopSubscribe = () => () => {};
+
+/** false during SSR and hydration, true afterwards — without an extra effect render. */
+function useIsClient(): boolean {
+  return useSyncExternalStore(noopSubscribe, () => true, () => false);
+}
 
 export const TIME_GUTTER = "w-11 sm:w-14";
 
@@ -78,7 +85,10 @@ export default function DayTimeline({
 
   const hours = Array.from({ length: endHour - startHour + 1 }, (_, i) => startHour + i);
   const nowMin = (now.getTime() - windowStart.getTime()) / 60000;
-  const showNow = nowMin >= 0 && nowMin <= windowMinutes;
+  // The now-line depends on the wall clock, which differs between server and
+  // client render — only draw it after hydration.
+  const isClient = useIsClient();
+  const showNow = isClient && nowMin >= 0 && nowMin <= windowMinutes;
 
   return (
     <div className="relative flex" style={{ height }}>
