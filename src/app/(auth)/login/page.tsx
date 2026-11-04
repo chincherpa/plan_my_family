@@ -80,10 +80,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-sm text-[var(--muted-foreground)]">
-          Noch kein Konto?{" "}
-          <a href="/register" className="text-[var(--primary)] hover:underline">
-            Registrieren
-          </a>
+          Noch kein Konto? Lass dir von einem Familienmitglied einen Einladungslink schicken.
         </p>
       </div>
     </div>
