@@ -207,7 +207,7 @@ export function UpcomingDay({
 
   const cells = new Map<string, { occ: AppointmentOccurrence; isOwner: boolean }[]>();
   for (const occ of data.timed) {
-    for (const p of placementsFor(occ)) {
+    for (const p of placementsFor(occ, columns)) {
       const list = cells.get(p.columnId) ?? [];
       list.push({ occ, isOwner: p.isOwner });
       cells.set(p.columnId, list);
