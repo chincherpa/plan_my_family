@@ -80,7 +80,7 @@ export default function LoginPage() {
         </form>
 
         <p className="text-center text-sm text-[var(--muted-foreground)]">
-          Noch kein Konto? Lass dir von einem Familienmitglied einen Einladungslink schicken.
+          Noch kein Konto? Frag den Familien-Admin.
         </p>
       </div>
     </div>
