@@ -75,6 +75,22 @@ describe("checkGuardianWarnings — a lone guardian leaving", () => {
     expect(ranges([mama, tim], [withTim])).toEqual([]);
   });
 
+  it("does not warn when the dependent owns the appointment the guardian joins", () => {
+    // Laternenlauf is Tim's appointment, Mama comes along as a participant.
+    // The way back (travel_after) is shared, so Tim is supervised then too.
+    const lantern = occurrence(
+      appointment({
+        owner_id: "tim",
+        start: "2026-06-02 15:30",
+        end: "2026-06-02 17:30",
+        travel_before_min: 15,
+        travel_after_min: 15,
+        participants: [participant("mama")],
+      })
+    );
+    expect(ranges([mama, tim], [lantern])).toEqual([]);
+  });
+
   it("does not warn for a family outing", () => {
     const outing = occurrence(
       appointment({ is_all_family: true, start: "2026-06-02 09:00", end: "2026-06-02 11:00" })
