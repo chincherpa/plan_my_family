@@ -75,6 +75,8 @@ export function appointment(
     exception_date: null,
     is_deleted: false,
     color: null,
+    anniversary_kind: null,
+    anniversary_year_known: true,
     created_at: d("2026-01-01").toISOString(),
     participants: [],
     ...rest,

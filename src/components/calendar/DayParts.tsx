@@ -7,6 +7,7 @@ import { todosDueByColumn } from "@/lib/utils/todoCalendar";
 import type { AppointmentOccurrence } from "@/lib/utils/recurrence";
 import type { Meal, TodoWithItems } from "@/lib/supabase/types";
 import { TIME_GUTTER } from "./DayTimeline";
+import { anniversaryBadge } from "@/lib/anniversaries";
 import { ALL_COLUMN_COLOR, EVENT_COLOR, placementsFor, type Column, type DayData } from "./model";
 
 /** Chips for todos due ("Endtermin") on a day, shown inside one calendar column. */
@@ -92,6 +93,7 @@ export function DayBanner({
       {data.banner.map((occ) => {
         const color = colorOf(occ);
         const appt = occ.appointment;
+        const badge = anniversaryBadge(appt, occ.occurrenceStart);
         return (
           <button
             key={occ.key}
@@ -105,9 +107,10 @@ export function DayBanner({
             }`}
             style={{ backgroundColor: hexToRgba(color, 0.2), color, boxShadow: `inset 0 0 0 1px ${hexToRgba(color, 0.4)}` }}
           >
-            {appt.is_event && <span>{eventEmoji(appt.title)}</span>}
+            {appt.is_event && <span>{badge?.emoji ?? eventEmoji(appt.title)}</span>}
             {!appt.is_all_day && <span className="tabular opacity-80">{formatTime(occ.occurrenceStart)}</span>}
             <span className="truncate max-w-[14rem]">{appt.title}</span>
+            {badge?.count != null && <span className="tabular opacity-80">({badge.count})</span>}
           </button>
         );
       })}

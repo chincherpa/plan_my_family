@@ -79,14 +79,22 @@ function useNow(): Date {
   return now;
 }
 
-export default function CalendarView() {
+/** "YYYY-MM-DD" → lokale Mitternacht, null bei ungültiger Eingabe. */
+function parseDayParam(value: string | undefined): Date | null {
+  const match = value && /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return isNaN(date.getTime()) ? null : date;
+}
+
+export default function CalendarView({ initialDay }: { initialDay?: string } = {}) {
   const { isFormOpen, openForm, closeForm, startHour, endHour } = useCalendarStore();
   const { members, vehicles, appointments, meals, isLoading, updateAppointment } = useDataStore();
 
   const now = useNow();
   const today = useMemo(() => startOfDay(now), [now]);
   // null = follow today, so the wall tablet rolls over at midnight on its own
-  const [pickedDay, setPickedDay] = useState<Date | null>(null);
+  const [pickedDay, setPickedDay] = useState<Date | null>(() => parseDayParam(initialDay));
   const heroDay = pickedDay ?? today;
   const isHeroToday = heroDay.getTime() === today.getTime();
 

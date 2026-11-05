@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { Calendar, Settings, LogOut, UtensilsCrossed, ListTodo } from "lucide-react";
+import { Calendar, Settings, LogOut, UtensilsCrossed, ListTodo, Cake } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useCalendarStore } from "@/lib/store/calendarStore";
@@ -211,6 +211,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const links = [
     { href: "/calendar", label: "Kalender", icon: Calendar },
     { href: "/meals", label: "Essen", icon: UtensilsCrossed },
+    { href: "/anniversaries", label: "Jahrestage", icon: Cake },
     { href: "/settings", label: "Einstellungen", icon: Settings },
   ];
 
@@ -275,7 +276,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Bottom bar — phone */}
         <nav className="md:hidden pb-safe shrink-0 border-t border-[var(--border)] bg-[var(--card)]">
-          <div className="grid grid-cols-5 gap-1 px-2 py-1.5">
+          <div className="grid grid-cols-6 gap-1 px-2 py-1.5">
             {links.map(({ href, label, icon: Icon }) => (
               <Link key={href} href={href} className={cn(navItem(pathname.startsWith(href)), "h-14")}>
                 <Icon className="w-5 h-5" />

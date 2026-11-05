@@ -13,6 +13,10 @@ Familienmitglied, plus die Spalten „Alle" (Familienausflüge) und „Ereigniss
 - **Konflikt-Banner** — beides gebündelt für die nächsten 14 Tage, mit Sprunglinks.
 - **Serientermine** — wiederkehrende Termine (RRULE), einzeln oder als ganze
   Serie bearbeit- und löschbar.
+- **Jahrestage** — Geburtstage, Hochzeits-, Kennenlern- und Gedenktage auf einer
+  Übersichtsseite (demnächst anstehend, nach Monaten gruppiert, mit Alter bzw.
+  Jubiläum). Sie werden als jährliche Ereignis-Serie gespeichert und erscheinen
+  dadurch automatisch im Kalender.
 - **Essensplanung** — Mittag- und Abendessen pro Tag als freier Text.
 - **Termin-Import** — Termine (auch Serien, mit Besitzer und weiteren Teilnehmern) aus einer
   JSON- oder Textdatei übernehmen, siehe [docs/termin-import.md](docs/termin-import.md).
