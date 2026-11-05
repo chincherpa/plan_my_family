@@ -7,13 +7,14 @@ APP_DIR="${APP_DIR:-$HOME/family-planner}"
 APP_DIR="${APP_DIR/#\~/$HOME}"
 SRC_TGZ="${1:-/tmp/family-src.tgz}"
 BUILD_TGZ="${2:-/tmp/family-build.tgz}"   # vorgebautes .next vom Windows-Rechner
+ENV_FILE="${3:-/tmp/family-server.env}"   # Server-Secrets (optional), werden zu .env.production.local
 export APP_PORT="${APP_PORT:-3003}"
 NODE_MIN=22
 STATE_DIR="$APP_DIR/.deploy-state"
 
 cleanup_on_exit() {
   rm -rf "$APP_DIR/.next.new" 2>/dev/null || true
-  rm -f "$SRC_TGZ" "$BUILD_TGZ" 2>/dev/null || true
+  rm -f "$SRC_TGZ" "$BUILD_TGZ" "$ENV_FILE" 2>/dev/null || true
 }
 trap cleanup_on_exit EXIT
 
@@ -112,11 +113,20 @@ fi
 # --- Code entpacken -------------------------------------------------------------
 log "Code nach $APP_DIR"
 mkdir -p "$APP_DIR" "$STATE_DIR"
-# alte Quellen entfernen; node_modules/, .next/ und Deploy-Status bleiben erhalten
+# alte Quellen entfernen; node_modules/, .next/, Deploy-Status und Server-Secrets bleiben erhalten
 find "$APP_DIR" -mindepth 1 -maxdepth 1 \
-  ! -name node_modules ! -name .next ! -name .deploy-state -exec rm -rf {} +
+  ! -name node_modules ! -name .next ! -name .deploy-state ! -name .env.production.local \
+  -exec rm -rf {} +
 tar -xzf "$SRC_TGZ" -C "$APP_DIR"
 cd "$APP_DIR"
+
+# Server-Secrets (nicht im Build eingebettet, z.B. FAMILY_LOGIN_EMAIL, Rezept-DB-Key).
+# Next.js liest .env.production.local beim Start (next start).
+if [ -s "$ENV_FILE" ]; then
+  install -m 600 "$ENV_FILE" .env.production.local
+  rm -f "$ENV_FILE"
+  echo "    Server-Secrets nach .env.production.local übernommen"
+fi
 
 # --- Hashes für Änderungserkennung --------------------------------------------
 DEPS_HASH="$( { echo "$("$FAMILY_NODE" -v) prod"; cat package.json pnpm-lock.yaml pnpm-workspace.yaml 2>/dev/null || true; } | sha256sum | cut -d' ' -f1)"
@@ -154,7 +164,8 @@ pm2 list || true
 status="$(pm2 jlist 2>/dev/null | "$FAMILY_NODE" -e '
   let s="";try{const a=JSON.parse(require("fs").readFileSync(0,"utf8")).find(p=>p.name==="family");
   s=a?a.pm2_env.status:""}catch{}; process.stdout.write(s)')"
-cfg_hash="$( { echo "$APP_PORT $FAMILY_NODE"; cat ecosystem.config.cjs; } | sha256sum | cut -d' ' -f1)"
+# .env.production.local gehört dazu: geänderte Secrets brauchen einen Neustart
+cfg_hash="$( { echo "$APP_PORT $FAMILY_NODE"; cat ecosystem.config.cjs .env.production.local 2>/dev/null; } | sha256sum | cut -d' ' -f1)"
 
 if [ "$status" = "online" ] && [ "$BUILT" -eq 0 ] && [ "$(old cfg-hash)" = "$cfg_hash" ]; then
   skip "läuft bereits mit aktuellem Stand – kein Neustart nötig"
@@ -183,7 +194,7 @@ else
   pm2 save
 fi
 
-rm -f "$SRC_TGZ" "$BUILD_TGZ"
+rm -f "$SRC_TGZ" "$BUILD_TGZ" "$ENV_FILE"
 
 # --- Healthcheck ----------------------------------------------------------------
 log "Healthcheck"
