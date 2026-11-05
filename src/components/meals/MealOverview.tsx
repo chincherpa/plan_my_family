@@ -206,11 +206,8 @@ export default function MealOverview() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-3 py-5 sm:p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight">Essensplan</h1>
-        <p className="text-sm text-[var(--muted-foreground)]">Tippen zum Bearbeiten · Ziehen zum Tauschen</p>
-      </div>
+    <div className="space-y-6">
+      <p className="-mt-2 text-sm text-[var(--muted-foreground)]">Tippen zum Bearbeiten · Ziehen zum Tauschen</p>
 
       {groups.map(({ kw, year, days: groupDays }) => (
         <div key={`${year}-${kw}`}>

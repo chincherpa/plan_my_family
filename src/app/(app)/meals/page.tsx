@@ -1,9 +1,10 @@
-import MealOverview from "@/components/meals/MealOverview";
+import MealsView from "@/components/meals/MealsView";
 
-export default function MealsPage() {
-  return (
-    <div className="h-full overflow-y-auto">
-      <MealOverview />
-    </div>
-  );
+export default async function MealsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const { view } = await searchParams;
+  return <MealsView initialTab={view === "gerichte" ? "gerichte" : "plan"} />;
 }

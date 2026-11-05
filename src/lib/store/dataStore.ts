@@ -20,6 +20,8 @@ interface DataState {
   recipes: Recipe[];
   recipeCategories: RecipeCategory[];
   recipesError: string | null;
+  /** true, sobald listRecipes geantwortet hat (Erfolg oder Fehler) */
+  recipesLoaded: boolean;
   todos: TodoWithItems[];
   isLoading: boolean;
 
@@ -54,6 +56,7 @@ export const useDataStore = create<DataState>((set) => ({
   recipes: [],
   recipeCategories: [],
   recipesError: null,
+  recipesLoaded: false,
   todos: [],
   isLoading: false,
 
@@ -89,8 +92,8 @@ export const useDataStore = create<DataState>((set) => ({
       ],
     })),
   setRecipes: (recipes, recipeCategories) =>
-    set({ recipes, recipeCategories, recipesError: null }),
-  setRecipesError: (recipesError) => set({ recipesError }),
+    set({ recipes, recipeCategories, recipesError: null, recipesLoaded: true }),
+  setRecipesError: (recipesError) => set({ recipesError, recipesLoaded: true }),
   setTodos: (todos) => set({ todos }),
   addTodo: (todo) => set((state) => ({ todos: [...state.todos, todo] })),
   updateTodo: (id, updates) =>

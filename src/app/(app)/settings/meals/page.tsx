@@ -1,5 +1,6 @@
-import RecipeSettings from "@/components/settings/RecipeSettings";
+import { redirect } from "next/navigation";
 
+// Gerichte werden jetzt im Essen-Bereich verwaltet.
 export default function MealsSettingsPage() {
-  return <RecipeSettings />;
+  redirect("/meals?view=gerichte");
 }

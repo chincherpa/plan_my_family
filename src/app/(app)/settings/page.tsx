@@ -46,7 +46,7 @@ export default function SettingsPage() {
       </Link>
 
       <Link
-        href="/settings/meals"
+        href="/meals?view=gerichte"
         className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--accent)] transition-colors"
       >
         <div className="flex items-center gap-3">

@@ -1,4 +1,4 @@
-import type { Recipe, RecipeCategory, RecipeInput } from "./types";
+import type { IngredientInput, Recipe, RecipeCategory, RecipeInput } from "./types";
 
 export function validateRecipeInput(
   input: RecipeInput,
@@ -35,4 +35,31 @@ export function buildCategoryOptions(
 
 export function toMealOptions(recipes: Recipe[]): { value: string; group: string }[] {
   return recipes.map((r) => ({ value: r.name, group: r.category }));
+}
+
+export type NormalizedIngredient = IngredientInput & { sort_order: number };
+
+/**
+ * Trimmt Zutaten-Zeilen, verwirft komplett leere Zeilen und vergibt sort_order
+ * in Listenreihenfolge. Eine Zeile mit Menge/Tätigkeit, aber ohne Zutat ist ein Fehler.
+ */
+export function validateIngredients(
+  rows: IngredientInput[]
+): { ok: true; value: NormalizedIngredient[] } | { ok: false; error: string } {
+  const value: NormalizedIngredient[] = [];
+  for (const [index, row] of rows.entries()) {
+    const zutat = row.zutat.trim();
+    const menge = row.menge.trim();
+    const taetigkeit = row.taetigkeit.trim();
+    if (!zutat && !menge && !taetigkeit) continue;
+    if (!zutat) return { ok: false, error: `Zutat fehlt in Zeile ${index + 1}.` };
+    value.push({
+      ...(row.id !== undefined ? { id: row.id } : {}),
+      zutat,
+      menge,
+      taetigkeit,
+      sort_order: value.length,
+    });
+  }
+  return { ok: true, value };
 }

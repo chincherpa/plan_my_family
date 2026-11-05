@@ -23,3 +23,22 @@ export type RecipeInput = {
 };
 
 export type ActionResult<T> = { data: T } | { error: string };
+
+/** Zutat eines Rezepts (Tabelle ingredients, ON DELETE CASCADE über recipe_id). */
+export type Ingredient = {
+  id: number;
+  recipe_id: number;
+  zutat: string;
+  menge: string;
+  /** z.B. „fein würfeln“ — NOT NULL, leer ist "" */
+  taetigkeit: string;
+  sort_order: number;
+};
+
+/** Zeile aus dem Editor. id fehlt bei neuen Zutaten. */
+export type IngredientInput = {
+  id?: number;
+  zutat: string;
+  menge: string;
+  taetigkeit: string;
+};
