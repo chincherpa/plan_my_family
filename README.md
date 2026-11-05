@@ -44,25 +44,6 @@ supabase db reset
 `docs/live-schema-reference.sql` ist ein Abzug des Live-Schemas zum Nachschlagen
 und **keine** Migration — die Datei wird nicht ausgeführt.
 
-### Rezepte-App-Anbindung
-
-Die Mahlzeiten-Liste (Auswahl im Essensplan, Einstellungen → Mahlzeiten) kommt aus der
-separaten Rezepte-App, einem eigenen Supabase-Projekt (Tabellen `recipes`, `ingredients`,
-`categories`). Zugriff nur serverseitig über Server Actions (`src/lib/recipes/`), nach Prüfung
-der Familienplaner-Session. In `.env.local` eintragen:
-
-```
-RECIPES_NEXT_PUBLIC_SUPABASE_URL=https://<rezepte-ref>.supabase.co
-RECIPES_NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
-```
-
-Der Service-Role-Key umgeht RLS — nie mit `NEXT_PUBLIC_` beginnen lassen. Die Rezept-DB erlaubt
-dem Anon-Key nur Lesen, deshalb wird der Service-Role-Key gebraucht. Ist die Rezept-DB nicht
-erreichbar, läuft der Planer weiter; im Essensplan ist dann nur Freitext möglich.
-
-`deploy-pi.ps1` überträgt `FAMILY_LOGIN_EMAIL` und die `RECIPES_*`-Werte aus `.env.local` als
-`.env.production.local` (chmod 600) auf den Pi; der Build selbst enthält sie nicht.
-
 Nach Schemaänderungen die Typen neu generieren, statt `src/lib/supabase/types.ts`
 von Hand zu pflegen:
 
