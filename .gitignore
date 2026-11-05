@@ -52,3 +52,5 @@ next-env.d.ts
 
 # brainstorming mockups
 .superpowers/
+familily_planner__postgres_dump_2026-11-05.sql
+supabase/restore_after_move.sql

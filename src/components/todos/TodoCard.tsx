@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
 import InlineEditText from "./InlineEditText";
 import AssigneeSelect from "./AssigneeSelect";
 import TodoItemRow from "./TodoItemRow";
@@ -14,6 +15,7 @@ import { cn } from "@/lib/utils";
 export default function TodoCard({ todo }: { todo: TodoWithItems }) {
   const { family, updateTodo, removeTodo, addTodoItem } = useDataStore();
   const [newItemTitle, setNewItemTitle] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   async function patch(updates: Partial<Todo>) {
     const supabase = createClient();
@@ -30,10 +32,12 @@ export default function TodoCard({ todo }: { todo: TodoWithItems }) {
     updateTodo(todo.id, data as Todo);
   }
 
+  function requestRemove() {
+    if (todo.items.length > 0) setConfirmOpen(true);
+    else void handleRemove();
+  }
+
   async function handleRemove() {
-    if (todo.items.length > 0 && !confirm(`"${todo.title}" mit ${todo.items.length} Unterpunkt(en) löschen?`)) {
-      return;
-    }
     const supabase = createClient();
     const { error } = await supabase.from("todos").delete().eq("id", todo.id);
     if (error) {
@@ -87,7 +91,7 @@ export default function TodoCard({ todo }: { todo: TodoWithItems }) {
         />
         <button
           type="button"
-          onClick={handleRemove}
+          onClick={requestRemove}
           className="shrink-0 opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] hover:text-[var(--destructive)] transition-opacity"
           title="Todo löschen"
         >
@@ -134,6 +138,14 @@ export default function TodoCard({ todo }: { todo: TodoWithItems }) {
           className="h-6 px-1.5 py-0 text-xs border-none shadow-none bg-transparent placeholder:text-[var(--muted-foreground)]/60"
         />
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={`„${todo.title}“ löschen?`}
+        description={`Das Todo und ${todo.items.length === 1 ? "sein Unterpunkt" : `seine ${todo.items.length} Unterpunkte`} werden dauerhaft gelöscht.`}
+        onConfirm={handleRemove}
+      />
     </div>
   );
 }

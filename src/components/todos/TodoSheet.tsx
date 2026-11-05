@@ -72,41 +72,39 @@ export default function TodoSheet() {
           </Button>
         </div>
 
-        <div className="space-y-2 px-5 pb-3 shrink-0">
-          <div className="flex items-center gap-2">
-            <Input
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleAddTodo()}
-              placeholder="Neues Todo …"
-              className="flex-1 min-w-0"
-            />
-            <AssigneeSelect value={newAssigneeId} onChange={setNewAssigneeId} />
+        <div className="mx-5 mb-3 shrink-0 space-y-2.5 rounded-lg border border-[var(--border)] p-3">
+          <Input
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleAddTodo()}
+            placeholder="Neues Todo …"
+            className="w-full"
+          />
+          <div className="grid grid-cols-2 gap-2">
+            <div className="min-w-0 [&>button]:w-full">
+              <AssigneeSelect value={newAssigneeId} onChange={setNewAssigneeId} />
+            </div>
+            <div className="relative min-w-0">
+              <CalendarClock className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[var(--muted-foreground)]" />
+              <input
+                type="date"
+                value={newDueDate}
+                onChange={(e) => setNewDueDate(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddTodo()}
+                aria-label="Endtermin"
+                title="Endtermin"
+                className="h-8 w-full min-w-0 rounded-md border border-[var(--input)] bg-transparent pl-7 pr-2 text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
+              />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-1.5 text-xs text-[var(--muted-foreground)]">
-              <CalendarClock className="h-3.5 w-3.5" />
-              Endtermin
-            </label>
-            <input
-              type="date"
-              value={newDueDate}
-              onChange={(e) => setNewDueDate(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleAddTodo()}
-              className="h-8 flex-1 min-w-0 rounded-md border border-[var(--input)] bg-transparent px-2 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
-            />
-            {newDueDate && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0"
-                title="Endtermin entfernen"
-                onClick={() => setNewDueDate("")}
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
+          <Button
+            size="sm"
+            className="w-full"
+            onClick={handleAddTodo}
+            disabled={!newTitle.trim()}
+          >
+            Todo hinzufügen
+          </Button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 pb-6 space-y-2">

@@ -17,15 +17,19 @@ const Checkbox = React.forwardRef<HTMLButtonElement, CheckboxProps>(
       ref={ref}
       onClick={() => onCheckedChange(!checked)}
       className={cn(
-        "shrink-0 h-4 w-4 rounded border border-[var(--input)] flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-50",
+        "group shrink-0 h-5 w-5 rounded-md border-2 flex items-center justify-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] disabled:cursor-not-allowed disabled:opacity-50",
         checked
-          ? "bg-[var(--primary)] border-[var(--primary)] text-[var(--primary-foreground)]"
-          : "bg-transparent",
+          ? "border-[var(--muted-foreground)] bg-[var(--muted-foreground)]/20 text-[var(--muted-foreground)]"
+          : "border-[var(--muted-foreground)]/60 bg-transparent hover:border-[var(--muted-foreground)] hover:bg-[var(--muted-foreground)]/10",
         className
       )}
       {...props}
     >
-      {checked && <Check className="h-3 w-3" strokeWidth={3} />}
+      {checked ? (
+        <Check className="h-3.5 w-3.5" strokeWidth={3.5} />
+      ) : (
+        <Check className="h-3.5 w-3.5 text-[var(--muted-foreground)] opacity-0 transition-opacity group-hover:opacity-40" strokeWidth={3.5} />
+      )}
     </button>
   )
 );
