@@ -1,3 +1,5 @@
+export type AnniversaryKind = "birthday" | "wedding" | "relationship" | "memorial" | "other";
+
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
 
 export interface Database {
@@ -107,6 +109,8 @@ export interface Database {
           is_deleted: boolean;
           is_all_day: boolean;
           color: string | null;
+          anniversary_kind: AnniversaryKind | null;
+          anniversary_year_known: boolean;
           created_at: string;
         };
         Insert: {
@@ -128,6 +132,8 @@ export interface Database {
           exception_date?: string | null;
           is_deleted?: boolean;
           color?: string | null;
+          anniversary_kind?: AnniversaryKind | null;
+          anniversary_year_known?: boolean;
           created_at?: string;
         };
         Update: {
@@ -149,6 +155,8 @@ export interface Database {
           exception_date?: string | null;
           is_deleted?: boolean;
           color?: string | null;
+          anniversary_kind?: AnniversaryKind | null;
+          anniversary_year_known?: boolean;
           created_at?: string;
         };
         Relationships: [];
