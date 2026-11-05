@@ -318,7 +318,7 @@ function TimelineBlock({
           className="travel-block-pattern rounded-t-md text-[9px] leading-3 px-1 overflow-hidden"
           style={{ height: travelBefore, backgroundColor: hexToRgba(color, 0.15), color }}
         >
-          {travelBefore >= 12 && `↑ ${appt.travel_before_min}′`}
+          {travelBefore >= 12 && `↓ ${appt.travel_before_min}′`}
         </div>
       )}
       <div
