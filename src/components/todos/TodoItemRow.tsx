@@ -1,5 +1,7 @@
 "use client";
+import { useState } from "react";
 import { X } from "lucide-react";
+import ConfirmDialog from "@/components/ui/confirm-dialog";
 import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -9,6 +11,7 @@ import type { TodoItem } from "@/lib/supabase/types";
 
 export default function TodoItemRow({ todoId, item }: { todoId: string; item: TodoItem }) {
   const { updateTodoItem, removeTodoItem } = useDataStore();
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   async function patch(updates: Partial<TodoItem>) {
     const supabase = createClient();
@@ -51,12 +54,19 @@ export default function TodoItemRow({ todoId, item }: { todoId: string; item: To
       />
       <button
         type="button"
-        onClick={handleRemove}
+        onClick={() => setConfirmOpen(true)}
         className="shrink-0 opacity-0 group-hover:opacity-100 text-[var(--muted-foreground)] hover:text-[var(--destructive)] transition-opacity"
         title="Unterpunkt entfernen"
       >
         <X className="h-3.5 w-3.5" />
       </button>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={`„${item.title}“ löschen?`}
+        description="Der Unterpunkt wird dauerhaft gelöscht."
+        onConfirm={handleRemove}
+      />
     </div>
   );
 }

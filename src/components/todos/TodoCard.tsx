@@ -33,8 +33,7 @@ export default function TodoCard({ todo }: { todo: TodoWithItems }) {
   }
 
   function requestRemove() {
-    if (todo.items.length > 0) setConfirmOpen(true);
-    else void handleRemove();
+    setConfirmOpen(true);
   }
 
   async function handleRemove() {
@@ -143,7 +142,11 @@ export default function TodoCard({ todo }: { todo: TodoWithItems }) {
         open={confirmOpen}
         onOpenChange={setConfirmOpen}
         title={`„${todo.title}“ löschen?`}
-        description={`Das Todo und ${todo.items.length === 1 ? "sein Unterpunkt" : `seine ${todo.items.length} Unterpunkte`} werden dauerhaft gelöscht.`}
+        description={
+          todo.items.length === 0
+            ? "Das Todo wird dauerhaft gelöscht."
+            : `Das Todo und ${todo.items.length === 1 ? "sein Unterpunkt" : `seine ${todo.items.length} Unterpunkte`} werden dauerhaft gelöscht.`
+        }
         onConfirm={handleRemove}
       />
     </div>

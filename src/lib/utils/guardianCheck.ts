@@ -104,9 +104,12 @@ export function checkGuardianWarnings(
 }
 
 function involves(occ: AppointmentOccurrence, memberId: string): boolean {
+  const { appointment } = occ;
+  // All-family: everyone, unless participants were narrowed down
+  // (legacy rows without participants = everyone)
+  if (appointment.is_all_family && appointment.participants.length === 0) return true;
   return (
-    occ.appointment.is_all_family ||
-    occ.appointment.owner_id === memberId ||
+    appointment.owner_id === memberId ||
     occ.appointment.participants.some((p) => p.member_id === memberId)
   );
 }

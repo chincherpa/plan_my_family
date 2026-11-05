@@ -37,6 +37,12 @@ export function placementsFor(
       { columnId: ALL_COLUMN_ID, isOwner: true },
       ...columns
         .filter((c) => c.id !== ALL_COLUMN_ID)
+        // Legacy all-family rows have no participants → everyone takes part
+        .filter(
+          (c) =>
+            appt.participants.length === 0 ||
+            appt.participants.some((p) => p.member_id === c.id)
+        )
         .map((c) => ({ columnId: c.id, isOwner: false })),
     ];
   }

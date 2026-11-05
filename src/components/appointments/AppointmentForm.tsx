@@ -236,7 +236,9 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   const [vehicleId, setVehicleId] = useState<string>(existingAppt?.vehicle_id ?? "none");
   const [participants, setParticipants] = useState<string[]>(() =>
     existingAppt
-      ? existingAppt.participants.map((p) => p.member_id)
+      ? existingAppt.is_all_family && existingAppt.participants.length === 0
+        ? members.map((m) => m.id) // legacy all-family row: everyone
+        : existingAppt.participants.map((p) => p.member_id)
       : formMemberId === "all"
       ? members.map((m) => m.id)
       : []
@@ -315,6 +317,68 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     return conflicts;
   }, [startTime, endTime, travelBefore, travelAfter, appointments, existingAppt, vehicles]);
   const vehicleConflict = vehicleId !== "none" ? vehicleConflicts[vehicleId] ?? null : null;
+
+  // Title suggestions from known appointments (new appointments only).
+  // One entry per title, newest occurrence wins as the template.
+  const [titleFocused, setTitleFocused] = useState(false);
+  const [suggestionIdx, setSuggestionIdx] = useState(-1);
+  const knownTitles = useMemo(() => {
+    const byTitle = new Map<string, AppointmentWithParticipants>();
+    for (const a of appointments) {
+      if (a.is_deleted || !a.title.trim()) continue;
+      const key = a.title.trim().toLowerCase();
+      const prev = byTitle.get(key);
+      if (!prev || a.start_time > prev.start_time) byTitle.set(key, a);
+    }
+    return [...byTitle.values()];
+  }, [appointments]);
+  const suggestions = useMemo(() => {
+    const q = title.trim().toLowerCase();
+    if (existingAppt || !titleFocused || !q) return [];
+    return knownTitles
+      .filter((a) => {
+        const t = a.title.trim().toLowerCase();
+        return t.includes(q) && t !== q;
+      })
+      .sort((a, b) => {
+        const as = a.title.trim().toLowerCase().startsWith(q) ? 0 : 1;
+        const bs = b.title.trim().toLowerCase().startsWith(q) ? 0 : 1;
+        return as - bs || a.title.localeCompare(b.title, "de");
+      })
+      .slice(0, 6);
+  }, [title, titleFocused, knownTitles, existingAppt]);
+
+  /** Take title + details of a known appointment; date/time of the new one stay */
+  function applySuggestion(tpl: AppointmentWithParticipants) {
+    setTitle(tpl.title);
+    setNotes(tpl.notes ?? "");
+    setIsEvent(tpl.is_event ?? false);
+    setIsAllFamily(tpl.is_all_family);
+    if (tpl.owner_id && members.some((m) => m.id === tpl.owner_id)) setOwnerId(tpl.owner_id);
+    setParticipants(
+      tpl.is_all_family
+        ? members.map((m) => m.id)
+        : tpl.participants.map((p) => p.member_id).filter((id) => members.some((m) => m.id === id))
+    );
+    setSupervisorIds(tpl.participants.filter((p) => p.is_supervisor).map((p) => p.member_id));
+    setTravelBefore(tpl.travel_before_min ?? 0);
+    setTravelAfter(tpl.travel_after_min ?? 0);
+    setVehicleId(tpl.vehicle_id && vehicles.some((v) => v.id === tpl.vehicle_id) ? tpl.vehicle_id : "none");
+
+    const durationMs = new Date(tpl.end_time).getTime() - new Date(tpl.start_time).getTime();
+    setIsAllDay(tpl.is_all_day);
+    if (tpl.is_all_day) {
+      const days = Math.max(Math.floor(durationMs / 86400000), 0);
+      const end = new Date(`${allDayStartDate}T00:00:00`);
+      end.setDate(end.getDate() + days);
+      setAllDayEndDate(toDatePart(end));
+    } else if (durationMs > 0) {
+      const end = new Date(new Date(startTime).getTime() + durationMs);
+      setEndTime(combine(toDatePart(end), toTimePart(end)));
+    }
+    setSuggestionIdx(-1);
+    setTitleFocused(false);
+  }
 
   // Keep end after start: shifting the start moves the end along, preserving duration
   function handleStartChange(v: string) {
@@ -665,7 +729,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-lg sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{existingAppt ? "Termin bearbeiten" : "Neuer Termin"}</DialogTitle>
         </DialogHeader>
@@ -714,36 +778,84 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
           {/* Title */}
           <div className="space-y-1.5">
             <Label>Titel *</Label>
-            <Input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Termintitel"
-              autoFocus
-            />
-          </div>
-
-          {/* All-day toggle */}
-          <div className="flex items-center justify-between">
-            <Label>Ganztägig</Label>
-            <Switch checked={isAllDay} onCheckedChange={setIsAllDay} />
-          </div>
-
-          {/* Event toggle */}
-          <div className="flex items-center justify-between">
-            <Label className="flex items-center gap-1.5">
-              <span>🎉</span>
-              Ereignis (Geburtstag, Feiertag …)
-            </Label>
-            <Switch checked={isEvent} onCheckedChange={setIsEvent} />
-          </div>
-
-          {/* All family toggle */}
-          {!isEvent && (
-            <div className="flex items-center justify-between">
-              <Label>Familienausflug / Alle</Label>
-              <Switch checked={isAllFamily} onCheckedChange={handleAllFamilyChange} />
+            <div className="relative">
+              <Input
+                value={title}
+                onChange={(e) => {
+                  setTitle(e.target.value);
+                  setSuggestionIdx(-1);
+                }}
+                onFocus={() => setTitleFocused(true)}
+                onBlur={() => setTitleFocused(false)}
+                onKeyDown={(e) => {
+                  if (!suggestions.length) return;
+                  if (e.key === "ArrowDown") {
+                    e.preventDefault();
+                    setSuggestionIdx((i) => (i + 1) % suggestions.length);
+                  } else if (e.key === "ArrowUp") {
+                    e.preventDefault();
+                    setSuggestionIdx((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
+                  } else if (e.key === "Enter" && suggestionIdx >= 0) {
+                    e.preventDefault();
+                    applySuggestion(suggestions[suggestionIdx]);
+                  } else if (e.key === "Escape") {
+                    e.stopPropagation();
+                    setTitleFocused(false);
+                  }
+                }}
+                placeholder="Termintitel"
+                autoComplete="off"
+                autoFocus
+              />
+              {suggestions.length > 0 && (
+                <ul
+                  role="listbox"
+                  className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-md border border-[var(--border)] bg-[var(--popover)] p-1 shadow-md"
+                >
+                  {suggestions.map((s, i) => (
+                    <li
+                      key={s.id}
+                      role="option"
+                      aria-selected={i === suggestionIdx}
+                      // mousedown fires before the input's blur closes the list
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        applySuggestion(s);
+                      }}
+                      className={`cursor-pointer rounded-sm px-2 py-1.5 text-sm hover:bg-[var(--accent)] ${
+                        i === suggestionIdx ? "bg-[var(--accent)]" : ""
+                      }`}
+                    >
+                      {s.title}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-          )}
+          </div>
+
+          {/* Toggles: all-day, event, all family — one row */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+            <div className="flex items-center gap-2">
+              <Label>Ganztägig</Label>
+              <Switch checked={isAllDay} onCheckedChange={setIsAllDay} />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Label className="flex items-center gap-1.5" title="Geburtstag, Feiertag …">
+                <span>🎉</span>
+                Ereignis
+              </Label>
+              <Switch checked={isEvent} onCheckedChange={setIsEvent} />
+            </div>
+
+            {!isEvent && (
+              <div className="flex items-center gap-2">
+                <Label>Familienausflug / Alle</Label>
+                <Switch checked={isAllFamily} onCheckedChange={handleAllFamilyChange} />
+              </div>
+            )}
+          </div>
 
           {/* Owner selection */}
           {!isEvent && !isAllFamily && (
@@ -886,7 +998,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
             <div className="space-y-1.5">
               <Label className="flex items-center gap-1">
                 <Users className="w-3.5 h-3.5" />
-                Weitere Teilnehmer
+                {isAllFamily ? "Teilnehmer (zum Abwählen anklicken)" : "Weitere Teilnehmer"}
               </Label>
               <div className="flex flex-wrap gap-2">
                 {members
@@ -895,8 +1007,6 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
                     <button
                       key={m.id}
                       type="button"
-                      // "Alle" always involves everyone (calendar + guardian check ignore the list)
-                      disabled={isAllFamily}
                       onClick={() => toggleParticipant(m.id)}
                       className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium transition-all disabled:cursor-default"
                       style={{
@@ -920,13 +1030,19 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
 
           {/* Supervision for dependent members */}
           {showSupervisorSelect && (() => {
-            const ownerMember = members.find((m) => m.id === ownerId);
+            // Only guardians (owner or participants) can supervise
+            const supervisors = members.filter(
+              (m) => m.is_guardian && (m.id === ownerId || participants.includes(m.id))
+            );
             return (
               <div className="p-3 bg-orange-50 dark:bg-orange-950/20 rounded-md border border-orange-200 dark:border-orange-900">
                 <p className="text-sm flex items-center gap-1.5 text-orange-700 dark:text-orange-400">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                  Aufsicht für {dependentMembers.filter((d) => participants.includes(d.id)).map((d) => d.name).join(", ")}:{" "}
-                  <span className="font-semibold">{ownerMember?.name ?? "–"}</span>
+                  {supervisors.length > 0 ? "Aufsicht" : "Keine Aufsicht"} für{" "}
+                  {dependentMembers.filter((d) => participants.includes(d.id)).map((d) => d.name).join(", ")}:{" "}
+                  <span className="font-semibold">
+                    {supervisors.length > 0 ? supervisors.map((s) => s.name).join(", ") : "kein Erziehungsberechtigter dabei"}
+                  </span>
                 </p>
               </div>
             );
