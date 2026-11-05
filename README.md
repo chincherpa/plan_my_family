@@ -51,6 +51,23 @@ von Hand zu pflegen:
 npx supabase gen types typescript --project-id <project-ref> > src/lib/supabase/types.ts
 ```
 
+### Rezepte-App-Anbindung
+
+Die Mahlzeiten-Liste (Auswahl im Essensplan, Einstellungen → Mahlzeiten) kommt aus der
+separaten Rezepte-App, einem eigenen Supabase-Projekt (Tabellen `recipes`, `ingredients`,
+`categories`). Zugriff nur serverseitig über Server Actions (`src/lib/recipes/`), nach Prüfung,
+dass der angemeldete Nutzer Familienmitglied ist. In `.env.local` bzw. als Server-Env-Variablen
+des Hostings eintragen:
+
+```
+RECIPES_NEXT_PUBLIC_SUPABASE_URL=https://<rezepte-ref>.supabase.co
+RECIPES_NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+```
+
+Der Service-Role-Key umgeht RLS — nie mit `NEXT_PUBLIC_` beginnen lassen. Die Rezept-DB erlaubt
+dem Anon-Key nur Lesen, deshalb wird der Service-Role-Key gebraucht. Ist die Rezept-DB nicht
+erreichbar, läuft der Planer weiter; im Essensplan ist dann nur Freitext möglich.
+
 ## Prüfen
 
 ```bash

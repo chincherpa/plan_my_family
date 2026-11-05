@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { Label } from "@/components/ui/label";
 import type { Meal } from "@/lib/supabase/types";
+import { toMealOptions } from "@/lib/recipes/logic";
 
 interface MealEditDialogProps {
   /** Local date "YYYY-MM-DD" */
@@ -22,13 +23,13 @@ interface MealEditDialogProps {
 }
 
 export default function MealEditDialog({ date, meal, onClose }: MealEditDialogProps) {
-  const { family, upsertMeal, mealCatalog } = useDataStore();
+  const { family, upsertMeal, recipes, recipesError } = useDataStore();
   const [lunch, setLunch] = useState(meal?.lunch ?? "");
   const [dinner, setDinner] = useState(meal?.dinner ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const mealOptions = mealCatalog.map((item) => ({ value: item.name, group: item.category }));
+  const mealOptions = toMealOptions(recipes);
 
   const dateLabel = new Date(`${date}T12:00:00`).toLocaleDateString("de-DE", {
     weekday: "long",
@@ -95,6 +96,12 @@ export default function MealEditDialog({ date, meal, onClose }: MealEditDialogPr
               onKeyDown={(e) => e.key === "Enter" && handleSave()}
             />
           </div>
+
+          {recipesError && (
+            <p className="text-xs text-[var(--muted-foreground)]">
+              Rezeptliste nicht verfügbar – Freitext möglich.
+            </p>
+          )}
 
           {error && (
             <p className="text-sm text-[var(--destructive)] bg-[var(--destructive)]/10 rounded-md px-3 py-2">

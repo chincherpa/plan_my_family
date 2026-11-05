@@ -10,13 +10,13 @@ import { useTodoStore } from "@/lib/store/todoStore";
 import { cn } from "@/lib/utils";
 import ThemeToggle from "@/components/ThemeToggle";
 import TodoSheet from "@/components/todos/TodoSheet";
+import { listRecipes } from "@/lib/recipes/actions";
 import type {
   AppointmentWithParticipants,
   FamilyMember,
   Family,
   Vehicle,
   Meal,
-  MealCatalogItem,
   TodoWithItems,
 } from "@/lib/supabase/types";
 
@@ -31,7 +31,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setVehicles,
     setAppointments,
     setMeals,
-    setMealCatalog,
+    setRecipes,
+    setRecipesError,
     setTodos,
     setLoading,
   } = useDataStore();
@@ -80,7 +81,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           vehiclesRes,
           apptRes,
           mealsRes,
-          mealCatalogRes,
           todosRes,
         ] = await Promise.all([
           supabase.from("families").select("*").eq("id", familyId).single(),
@@ -95,7 +95,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             .select("*, participants:appointment_participants(*)")
             .eq("family_id", familyId),
           supabase.from("meals").select("*").eq("family_id", familyId),
-          supabase.from("meal_catalog").select("*").eq("family_id", familyId),
           supabase
             .from("todos")
             .select("*, items:todo_items(*)")
@@ -110,7 +109,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           vehiclesRes,
           apptRes,
           mealsRes,
-          mealCatalogRes,
           todosRes,
         ]
           .map((result) => result.error)
@@ -127,7 +125,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         setVehicles((vehiclesRes.data ?? []) as Vehicle[]);
         setAppointments((apptRes.data ?? []) as AppointmentWithParticipants[]);
         setMeals((mealsRes.data ?? []) as Meal[]);
-        setMealCatalog((mealCatalogRes.data ?? []) as MealCatalogItem[]);
         setTodos((todosRes.data ?? []) as TodoWithItems[]);
         setLoadError(null);
       } catch (error) {
@@ -149,7 +146,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "family_members" }, handleChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "vehicles" }, handleChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "meals" }, handleChange)
-      .on("postgres_changes", { event: "*", schema: "public", table: "meal_catalog" }, handleChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "todos" }, handleChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "todo_items" }, handleChange)
       .subscribe();
@@ -180,11 +176,31 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setVehicles,
     setAppointments,
     setMeals,
-    setMealCatalog,
     setTodos,
     setLoading,
     setTimeRange,
   ]);
+
+  // Rezepte kommen aus der separaten Rezepte-App (Server Action, eigenes Supabase-Projekt).
+  // Getrennt vom Familien-Laden: Ist die Rezept-DB nicht erreichbar, bleibt der Planer nutzbar —
+  // nur die Auswahlliste fehlt. Kein Realtime über Projektgrenzen; Änderungen aus der
+  // Rezepte-App erscheinen nach dem nächsten Seitenaufruf.
+  useEffect(() => {
+    let isMounted = true;
+    listRecipes()
+      .then((result) => {
+        if (!isMounted) return;
+        if ("error" in result) setRecipesError(result.error);
+        else setRecipes(result.data.recipes, result.data.categories);
+      })
+      .catch((error) => {
+        console.error("listRecipes failed", error);
+        if (isMounted) setRecipesError("Mahlzeiten konnten nicht geladen werden.");
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [setRecipes, setRecipesError]);
 
   async function handleLogout() {
     const supabase = createClient();

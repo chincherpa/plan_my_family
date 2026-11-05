@@ -308,38 +308,6 @@ export interface Database {
           },
         ];
       };
-      meal_catalog: {
-        Row: {
-          id: string;
-          family_id: string;
-          name: string;
-          category: string;
-          created_at: string;
-        };
-        Insert: {
-          id?: string;
-          family_id: string;
-          name: string;
-          category: string;
-          created_at?: string;
-        };
-        Update: {
-          id?: string;
-          family_id?: string;
-          name?: string;
-          category?: string;
-          created_at?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "meal_catalog_family_id_fkey";
-            columns: ["family_id"];
-            isOneToOne: false;
-            referencedRelation: "families";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -368,7 +336,6 @@ export type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 export type Appointment = Database["public"]["Tables"]["appointments"]["Row"];
 export type AppointmentParticipant = Database["public"]["Tables"]["appointment_participants"]["Row"];
 export type Meal = Database["public"]["Tables"]["meals"]["Row"];
-export type MealCatalogItem = Database["public"]["Tables"]["meal_catalog"]["Row"];
 export type Todo = Database["public"]["Tables"]["todos"]["Row"];
 export type TodoItem = Database["public"]["Tables"]["todo_items"]["Row"];
 

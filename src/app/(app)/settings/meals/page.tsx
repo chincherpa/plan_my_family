@@ -1,5 +1,5 @@
-import MealCatalogSettings from "@/components/settings/MealCatalogSettings";
+import RecipeSettings from "@/components/settings/RecipeSettings";
 
-export default function MealCatalogPage() {
-  return <MealCatalogSettings />;
+export default function MealsSettingsPage() {
+  return <RecipeSettings />;
 }
