@@ -4,11 +4,11 @@ import type {
   FamilyMember,
   Vehicle,
   Meal,
-  MealCatalogItem,
   AppointmentWithParticipants,
   TodoWithItems,
   TodoItem,
 } from "@/lib/supabase/types";
+import type { Recipe, RecipeCategory } from "@/lib/recipes/types";
 
 interface DataState {
   family: Family | null;
@@ -16,7 +16,10 @@ interface DataState {
   vehicles: Vehicle[];
   appointments: AppointmentWithParticipants[];
   meals: Meal[];
-  mealCatalog: MealCatalogItem[];
+  /** Rezepte aus der geteilten Rezepte-App (eigenes Supabase-Projekt) */
+  recipes: Recipe[];
+  recipeCategories: RecipeCategory[];
+  recipesError: string | null;
   todos: TodoWithItems[];
   isLoading: boolean;
 
@@ -30,7 +33,8 @@ interface DataState {
   removeAppointment: (id: string) => void;
   setMeals: (meals: Meal[]) => void;
   upsertMeal: (meal: Meal) => void;
-  setMealCatalog: (mealCatalog: MealCatalogItem[]) => void;
+  setRecipes: (recipes: Recipe[], categories: RecipeCategory[]) => void;
+  setRecipesError: (recipesError: string | null) => void;
   setTodos: (todos: TodoWithItems[]) => void;
   addTodo: (todo: TodoWithItems) => void;
   updateTodo: (id: string, updates: Partial<TodoWithItems>) => void;
@@ -47,7 +51,9 @@ export const useDataStore = create<DataState>((set) => ({
   vehicles: [],
   appointments: [],
   meals: [],
-  mealCatalog: [],
+  recipes: [],
+  recipeCategories: [],
+  recipesError: null,
   todos: [],
   isLoading: false,
 
@@ -82,7 +88,9 @@ export const useDataStore = create<DataState>((set) => ({
         meal,
       ],
     })),
-  setMealCatalog: (mealCatalog) => set({ mealCatalog }),
+  setRecipes: (recipes, recipeCategories) =>
+    set({ recipes, recipeCategories, recipesError: null }),
+  setRecipesError: (recipesError) => set({ recipesError }),
   setTodos: (todos) => set({ todos }),
   addTodo: (todo) => set((state) => ({ todos: [...state.todos, todo] })),
   updateTodo: (id, updates) =>

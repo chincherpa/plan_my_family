@@ -2,9 +2,10 @@
 import { useState } from "react";
 import { Plus, Pencil, Trash2, ChevronLeft } from "lucide-react";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
-import type { MealCatalogItem } from "@/lib/supabase/types";
+import { createRecipe, deleteRecipe, updateRecipe } from "@/lib/recipes/actions";
+import { buildCategoryOptions } from "@/lib/recipes/logic";
+import type { Recipe } from "@/lib/recipes/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Combobox } from "@/components/ui/combobox";
@@ -16,22 +17,26 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-export default function MealCatalogSettings() {
-  const { mealCatalog, family, setMealCatalog } = useDataStore();
+// Verwaltung der Mahlzeiten-Liste. Die Daten liegen in der Rezepte-App (eigenes
+// Supabase-Projekt) und werden über Server Actions gelesen und geschrieben.
+export default function RecipeSettings() {
+  const { recipes, recipeCategories, recipesError, setRecipes } = useDataStore();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<MealCatalogItem | null>(null);
+  const [editing, setEditing] = useState<Recipe | null>(null);
 
   const [name, setName] = useState("");
   const [category, setCategory] = useState("");
+  const [bemerkung, setBemerkung] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const categoryOptions = [...new Set(mealCatalog.map((item) => item.category))]
-    .sort((a, b) => a.localeCompare(b, "de"))
-    .map((c) => ({ value: c }));
+  const categoryOptions = buildCategoryOptions(recipeCategories, recipes);
+  const colorByCategory = new Map(recipeCategories.map((c) => [c.name, c.color]));
+  const isNewCategory =
+    category.trim() !== "" && !recipeCategories.some((c) => c.name === category.trim());
 
-  const groups = new Map<string, MealCatalogItem[]>();
-  for (const item of mealCatalog) {
+  const groups = new Map<string, Recipe[]>();
+  for (const item of recipes) {
     if (!groups.has(item.category)) groups.set(item.category, []);
     groups.get(item.category)!.push(item);
   }
@@ -42,64 +47,55 @@ export default function MealCatalogSettings() {
     setEditing(null);
     setName("");
     setCategory("");
+    setBemerkung("");
     setDialogOpen(true);
   }
 
-  function openEdit(item: MealCatalogItem) {
+  function openEdit(item: Recipe) {
     setError(null);
     setEditing(item);
     setName(item.name);
     setCategory(item.category);
+    setBemerkung(item.bemerkung);
     setDialogOpen(true);
   }
 
   async function handleSave() {
-    if (!family || !name.trim() || !category.trim()) return;
+    if (!name.trim() || !category.trim()) return;
     setSaving(true);
     setError(null);
-    const supabase = createClient();
-
-    if (editing) {
-      const { data, error: saveError } = await supabase
-        .from("meal_catalog")
-        .update({ name: name.trim(), category: category.trim() })
-        .eq("id", editing.id)
-        .select();
-      const rows = data as MealCatalogItem[] | null;
-      if (saveError || !rows?.[0]) {
-        setError(saveError?.message ?? "Mahlzeit konnte nicht gespeichert werden.");
-        setSaving(false);
-        return;
-      }
-      setMealCatalog(mealCatalog.map((m) => (m.id === editing.id ? rows[0] : m)));
-    } else {
-      const { data, error: saveError } = await supabase
-        .from("meal_catalog")
-        .insert({ family_id: family.id, name: name.trim(), category: category.trim() })
-        .select();
-      const rows = data as MealCatalogItem[] | null;
-      if (saveError || !rows?.[0]) {
-        setError(saveError?.message ?? "Mahlzeit konnte nicht erstellt werden.");
-        setSaving(false);
-        return;
-      }
-      setMealCatalog([...mealCatalog, rows[0]]);
-    }
-
+    const input = { name, category, bemerkung };
+    const result = editing ? await updateRecipe(editing.id, input) : await createRecipe(input);
     setSaving(false);
+    if ("error" in result) {
+      setError(result.error);
+      return;
+    }
+    const saved = result.data;
+    setRecipes(
+      editing ? recipes.map((r) => (r.id === editing.id ? saved : r)) : [...recipes, saved],
+      recipeCategories
+    );
     setDialogOpen(false);
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm("Mahlzeit wirklich löschen?")) return;
+  async function handleDelete(item: Recipe) {
+    if (
+      !confirm(
+        `„${item.name}“ wirklich löschen? Die Mahlzeit wird auch in der Rezepte-App inkl. Zutaten gelöscht.`
+      )
+    )
+      return;
     setError(null);
-    const supabase = createClient();
-    const { error: deleteError } = await supabase.from("meal_catalog").delete().eq("id", id);
-    if (deleteError) {
-      setError(deleteError.message);
+    const result = await deleteRecipe(item.id);
+    if ("error" in result) {
+      setError(result.error);
       return;
     }
-    setMealCatalog(mealCatalog.filter((m) => m.id !== id));
+    setRecipes(
+      recipes.filter((r) => r.id !== item.id),
+      recipeCategories
+    );
   }
 
   return (
@@ -111,13 +107,29 @@ export default function MealCatalogSettings() {
             <ChevronLeft className="w-4 h-4" />
           </Button>
         </Link>
-        <h1 className="text-3xl font-bold tracking-tight">Mahlzeiten</h1>
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Mahlzeiten</h1>
+          <p className="text-sm text-[var(--muted-foreground)]">
+            Diese Liste wird mit der Rezepte-App geteilt.
+          </p>
+        </div>
       </div>
+
+      {recipesError && <p className="text-sm text-[var(--destructive)]">{recipesError}</p>}
 
       <div className="space-y-4">
         {groupNames.map((groupName) => (
           <div key={groupName} className="space-y-2">
-            <h2 className="text-sm font-medium text-[var(--muted-foreground)]">{groupName}</h2>
+            <h2 className="flex items-center gap-2 text-sm font-medium text-[var(--muted-foreground)]">
+              {colorByCategory.has(groupName) && (
+                <span
+                  aria-hidden
+                  className="inline-block w-2.5 h-2.5 rounded-full"
+                  style={{ backgroundColor: colorByCategory.get(groupName) }}
+                />
+              )}
+              {groupName}
+            </h2>
             {groups
               .get(groupName)!
               .sort((a, b) => a.name.localeCompare(b.name, "de"))
@@ -126,8 +138,13 @@ export default function MealCatalogSettings() {
                   key={item.id}
                   className="flex items-center gap-3 p-3 rounded-xl border border-[var(--border)] bg-[var(--card)]"
                 >
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <p className="font-medium">{item.name}</p>
+                    {item.bemerkung && (
+                      <p className="text-sm text-[var(--muted-foreground)] truncate">
+                        {item.bemerkung}
+                      </p>
+                    )}
                   </div>
                   <Button variant="ghost" size="icon" onClick={() => openEdit(item)}>
                     <Pencil className="w-4 h-4" />
@@ -135,7 +152,7 @@ export default function MealCatalogSettings() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => handleDelete(item.id)}
+                    onClick={() => handleDelete(item)}
                     className="text-[var(--destructive)] hover:text-[var(--destructive)]"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -144,19 +161,19 @@ export default function MealCatalogSettings() {
               ))}
           </div>
         ))}
-        {mealCatalog.length === 0 && (
+        {recipes.length === 0 && !recipesError && (
           <p className="text-[var(--muted-foreground)] text-sm py-4 text-center">
             Noch keine Mahlzeiten eingetragen.
           </p>
         )}
       </div>
 
-      <Button onClick={openCreate} className="gap-2">
+      <Button onClick={openCreate} className="gap-2" disabled={!!recipesError}>
         <Plus className="w-4 h-4" />
         Mahlzeit hinzufügen
       </Button>
 
-      {error && <p className="text-sm text-[var(--destructive)]">{error}</p>}
+      {error && !dialogOpen && <p className="text-sm text-[var(--destructive)]">{error}</p>}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
@@ -182,7 +199,23 @@ export default function MealCatalogSettings() {
                 value={category}
                 onChange={setCategory}
                 options={categoryOptions}
-                placeholder="z.B. Currys — oder neue Kategorie eingeben"
+                placeholder="z.B. Suppen — oder neue Kategorie eingeben"
+              />
+              {isNewCategory && (
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Neue Kategorie – erscheint in der Rezepte-App ohne Icon/Farbe.
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Bemerkung</Label>
+              <textarea
+                value={bemerkung}
+                onChange={(e) => setBemerkung(e.target.value)}
+                placeholder="Optional, z.B. „alle lieben es“"
+                rows={2}
+                className="w-full rounded-md border border-[var(--input)] bg-transparent px-3 py-2 text-sm resize-none focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--ring)]"
               />
             </div>
 
