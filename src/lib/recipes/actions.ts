@@ -11,11 +11,20 @@ import type { ActionResult, Recipe, RecipeCategory, RecipeInput } from "./types"
 const NOT_SIGNED_IN = "Nicht angemeldet.";
 const RECIPE_COLUMNS = "id,name,category,bemerkung";
 
+// Angemeldet reicht nicht: Ein beliebiges Supabase-Konto (z.B. über offene Registrierung) darf
+// die Rezept-DB nicht über den Service-Role-Key erreichen. Nur Familienmitglieder.
 async function requireFamilyUser(): Promise<boolean> {
   try {
     const supabase = await createClient();
     const { data, error } = await supabase.auth.getUser();
-    return !error && !!data.user;
+    if (error || !data.user) return false;
+    const member = await supabase
+      .from("family_members")
+      .select("id")
+      .eq("user_id", data.user.id)
+      .limit(1)
+      .maybeSingle();
+    return !member.error && !!member.data;
   } catch {
     return false;
   }
@@ -80,11 +89,9 @@ export async function updateRecipe(id: number, input: RecipeInput): Promise<Acti
 export async function deleteRecipe(id: number): Promise<ActionResult<null>> {
   if (!(await requireFamilyUser())) return { error: NOT_SIGNED_IN };
   try {
-    const admin = getRecipesAdminClient();
-    // Zutaten zuerst — ob der FK kaskadiert, ist in der Rezept-DB nicht garantiert.
-    const ingredientsRes = await admin.from("ingredients").delete().eq("recipe_id", id);
-    if (ingredientsRes.error) throw ingredientsRes.error;
-    const recipeRes = await admin.from("recipes").delete().eq("id", id);
+    // Ein einziger Löschvorgang: ingredients.recipe_id ist ON DELETE CASCADE, die Zutaten
+    // verschwinden atomar mit. Kein Teil-Löschen, falls ein zweiter Aufruf scheitern würde.
+    const recipeRes = await getRecipesAdminClient().from("recipes").delete().eq("id", id);
     if (recipeRes.error) throw recipeRes.error;
     return { data: null };
   } catch (error) {

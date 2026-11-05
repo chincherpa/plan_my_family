@@ -4,9 +4,22 @@ vi.mock("server-only", () => ({}));
 
 // --- Auth-Mock (Familienplaner-Session) ---
 let currentUser: { id: string } | null = null;
+let isFamilyMember = true;
 vi.mock("@/lib/supabase/server", () => ({
   createClient: async () => ({
     auth: { getUser: async () => ({ data: { user: currentUser }, error: null }) },
+    from: (table: string) => {
+      const q = {
+        select: () => q,
+        eq: () => q,
+        limit: () => q,
+        maybeSingle: async () => ({
+          data: table === "family_members" && isFamilyMember ? { id: "m" } : null,
+          error: null,
+        }),
+      };
+      return q;
+    },
   }),
 }));
 
@@ -75,6 +88,7 @@ function mockRecipes(rows: Row[]) {
 
 beforeEach(() => {
   currentUser = null;
+  isFamilyMember = true;
   tables = { recipes: [], categories: [] };
   selectError = null;
   deleteCalls.length = 0;
@@ -89,6 +103,14 @@ describe("recipe actions", () => {
     expect(await createRecipe({ name: "Dal", category: "Suppen", bemerkung: "" })).toEqual({
       error: "Nicht angemeldet.",
     });
+    expect(await deleteRecipe(1)).toEqual({ error: "Nicht angemeldet." });
+    expect(adminFrom).not.toHaveBeenCalled();
+  });
+
+  it("angemeldet, aber kein Familienmitglied: Fehler, keine DB-Abfrage", async () => {
+    mockUser({ id: "fremd" });
+    isFamilyMember = false;
+    expect(await listRecipes()).toEqual({ error: "Nicht angemeldet." });
     expect(await deleteRecipe(1)).toEqual({ error: "Nicht angemeldet." });
     expect(adminFrom).not.toHaveBeenCalled();
   });
@@ -129,13 +151,10 @@ describe("recipe actions", () => {
     });
   });
 
-  it("deleteRecipe löscht erst ingredients, dann recipes", async () => {
+  it("deleteRecipe löscht nur das Rezept (Zutaten per FK-Cascade)", async () => {
     mockUser({ id: "u" });
-    await deleteRecipe(7);
-    expect(deleteCalls).toEqual([
-      ["ingredients", "recipe_id", 7],
-      ["recipes", "id", 7],
-    ]);
+    expect(await deleteRecipe(7)).toEqual({ data: null });
+    expect(deleteCalls).toEqual([["recipes", "id", 7]]);
   });
 
   it("DB-Fehler wird als { error } zurückgegeben, nicht geworfen", async () => {
