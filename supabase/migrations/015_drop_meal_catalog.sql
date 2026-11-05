@@ -5,11 +5,11 @@
 -- nicht mehr gelesen. meals.lunch/dinner bleiben Freitext und sind nicht betroffen.
 --
 -- REIHENFOLGE: erst anwenden, wenn
---   1. die Einträge in die Rezept-DB übernommen sind (siehe unten) und
+--   1. die Einträge in die Rezept-DB übernommen sind (erledigt 2026-11-05, siehe unten) und
 --   2. die neue App-Version deployt ist — ältere Versionen fragen meal_catalog beim
 --      Laden ab und zeigen ohne die Tabelle nur noch einen Ladefehler.
 --
--- Übernahme (im Rezepte-Projekt ausführen, Stand 2026-11-05: zwei Einträge,
+-- Übernahme (am 2026-11-05 im Rezepte-Projekt ausgeführt: zwei Einträge,
 -- Kategorie "einfach" → auf bestehende Kategorie "Kartoffel" gemappt):
 --   insert into recipes (name, category, bemerkung) values
 --     ('Pommes', 'Kartoffel', 'aus Familienplaner übernommen'),
