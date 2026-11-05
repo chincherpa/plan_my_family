@@ -1,5 +1,5 @@
 import RecipeSettings from "@/components/settings/RecipeSettings";
 
-export default function MealCatalogPage() {
+export default function MealsSettingsPage() {
   return <RecipeSettings />;
 }
