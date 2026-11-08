@@ -12,8 +12,14 @@ import {
 import { Button } from "@/components/ui/button";
 import { Combobox } from "@/components/ui/combobox";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import type { Meal } from "@/lib/supabase/types";
 import { toMealOptions } from "@/lib/recipes/logic";
+import {
+  categoryForDate,
+  filterByCategory,
+  parseWeekdayCategories,
+} from "@/lib/meals/weekdayCategories";
 
 interface MealEditDialogProps {
   /** Local date "YYYY-MM-DD" */
@@ -28,8 +34,14 @@ export default function MealEditDialog({ date, meal, onClose }: MealEditDialogPr
   const [dinner, setDinner] = useState(meal?.dinner ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAll, setShowAll] = useState(false);
 
-  const mealOptions = toMealOptions(recipes);
+  const allOptions = toMealOptions(recipes);
+  // Vorauswahl aus dem Wochenplan (Einstellungen): nur Gerichte der Kategorie des Wochentags.
+  const dayCategory = categoryForDate(parseWeekdayCategories(family?.meal_weekday_categories), date);
+  const categoryOptions = dayCategory ? filterByCategory(allOptions, dayCategory) : allOptions;
+  const filtering = !!dayCategory && !showAll;
+  const mealOptions = filtering ? categoryOptions : allOptions;
 
   const dateLabel = new Date(`${date}T12:00:00`).toLocaleDateString("de-DE", {
     weekday: "long",
@@ -76,6 +88,24 @@ export default function MealEditDialog({ date, meal, onClose }: MealEditDialogPr
         </DialogHeader>
 
         <div className="space-y-4">
+          {dayCategory && (
+            <div className="flex items-center justify-between gap-3 rounded-lg bg-[var(--accent)] px-3 py-2 text-sm">
+              <span className="min-w-0">
+                <span className="text-[var(--muted-foreground)]">Wochenplan: </span>
+                <span className="font-medium">{dayCategory}</span>
+                {filtering && recipes.length > 0 && categoryOptions.length === 0 && (
+                  <span className="block text-xs text-[var(--muted-foreground)]">
+                    Keine Gerichte in dieser Kategorie.
+                  </span>
+                )}
+              </span>
+              <label className="flex shrink-0 items-center gap-2 text-xs text-[var(--muted-foreground)]">
+                Alle Gerichte
+                <Switch checked={showAll} onCheckedChange={setShowAll} />
+              </label>
+            </div>
+          )}
+
           <div className="space-y-1.5">
             <Label>🥗 Mittag</Label>
             <Combobox
