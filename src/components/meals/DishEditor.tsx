@@ -230,7 +230,7 @@ export default function DishEditor({
 
   return (
     <Dialog open onOpenChange={(open) => !open && !saving && onClose()}>
-      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-xl sm:p-0">
+      <DialogContent className="gap-0 overflow-x-hidden overflow-y-auto overscroll-contain p-0 sm:max-w-xl sm:p-0">
         {/* Kopf mit Kategoriefarbe */}
         <div
           className="flex items-center gap-3 px-5 pb-4 pt-5 sm:px-6"
