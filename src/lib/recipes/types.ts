@@ -16,6 +16,8 @@ export type RecipeCategory = {
   color: string;
 };
 
+export type RecipeCategoryInput = Omit<RecipeCategory, "id">;
+
 export type RecipeInput = {
   name: string;
   category: string;
@@ -42,3 +44,6 @@ export type IngredientInput = {
   menge: string;
   taetigkeit: string;
 };
+
+/** Rezept samt Zutaten, z.B. für den PDF-Export. */
+export type RecipeWithIngredients = Recipe & { ingredients: Ingredient[] };

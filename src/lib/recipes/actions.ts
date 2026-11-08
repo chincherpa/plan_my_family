@@ -2,13 +2,14 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { getRecipesAdminClient } from "./admin";
-import { validateIngredients, validateRecipeInput } from "./logic";
+import { validateCategoryInput, validateIngredients, validateRecipeInput } from "./logic";
 import type {
   ActionResult,
   Ingredient,
   IngredientInput,
   Recipe,
   RecipeCategory,
+  RecipeCategoryInput,
   RecipeInput,
 } from "./types";
 
@@ -18,6 +19,7 @@ import type {
 const NOT_SIGNED_IN = "Nicht angemeldet.";
 const RECIPE_COLUMNS = "id,name,category,bemerkung";
 const INGREDIENT_COLUMNS = "id,recipe_id,zutat,menge,taetigkeit,sort_order";
+const CATEGORY_COLUMNS = "id,name,icon,color";
 
 // Angemeldet reicht nicht: Ein beliebiges Supabase-Konto (z.B. über offene Registrierung) darf
 // die Rezept-DB nicht über den Service-Role-Key erreichen. Nur Familienmitglieder.
@@ -47,19 +49,26 @@ async function fetchAllRecipes(): Promise<Recipe[]> {
   return (data ?? []) as Recipe[];
 }
 
-export async function listRecipes(): Promise<
-  ActionResult<{ recipes: Recipe[]; categories: RecipeCategory[] }>
-> {
+type RecipesPayload = { recipes: Recipe[]; categories: RecipeCategory[] };
+
+async function fetchAllCategories(): Promise<RecipeCategory[]> {
+  const { data, error } = await getRecipesAdminClient()
+    .from("categories")
+    .select(CATEGORY_COLUMNS)
+    .order("name");
+  if (error) throw error;
+  return (data ?? []) as RecipeCategory[];
+}
+
+async function fetchPayload(): Promise<RecipesPayload> {
+  const [recipes, categories] = await Promise.all([fetchAllRecipes(), fetchAllCategories()]);
+  return { recipes, categories };
+}
+
+export async function listRecipes(): Promise<ActionResult<RecipesPayload>> {
   if (!(await requireFamilyUser())) return { error: NOT_SIGNED_IN };
   try {
-    const [recipes, categoriesRes] = await Promise.all([
-      fetchAllRecipes(),
-      getRecipesAdminClient().from("categories").select("*").order("name"),
-    ]);
-    if (categoriesRes.error) throw categoriesRes.error;
-    return {
-      data: { recipes, categories: (categoriesRes.data ?? []) as RecipeCategory[] },
-    };
+    return { data: await fetchPayload() };
   } catch (error) {
     console.error("listRecipes failed", error);
     return { error: "Mahlzeiten konnten nicht geladen werden." };
@@ -172,5 +181,100 @@ export async function saveIngredients(
   } catch (error) {
     console.error("saveIngredients failed", error);
     return { error: "Zutaten konnten nicht gespeichert werden." };
+  }
+}
+
+/** Obergrenze für den PDF-Export in einem Aufruf (schützt vor riesigen IN-Listen). */
+const MAX_EXPORT_RECIPES = 500;
+
+/** Zutaten mehrerer Rezepte auf einmal, gruppiert nach recipe_id (für den PDF-Export). */
+export async function listIngredientsFor(
+  recipeIds: number[]
+): Promise<ActionResult<Record<number, Ingredient[]>>> {
+  if (!(await requireFamilyUser())) return { error: NOT_SIGNED_IN };
+  const ids = [...new Set(recipeIds)].filter((id) => Number.isSafeInteger(id));
+  if (ids.length > MAX_EXPORT_RECIPES) {
+    return { error: `Höchstens ${MAX_EXPORT_RECIPES} Gerichte auf einmal.` };
+  }
+  const grouped: Record<number, Ingredient[]> = Object.fromEntries(ids.map((id) => [id, []]));
+  if (ids.length === 0) return { data: grouped };
+  try {
+    const { data, error } = await getRecipesAdminClient()
+      .from("ingredients")
+      .select(INGREDIENT_COLUMNS)
+      .in("recipe_id", ids)
+      .order("sort_order");
+    if (error) throw error;
+    for (const row of (data ?? []) as Ingredient[]) grouped[row.recipe_id]?.push(row);
+    return { data: grouped };
+  } catch (error) {
+    console.error("listIngredientsFor failed", error);
+    return { error: "Zutaten konnten nicht geladen werden." };
+  }
+}
+
+// --- Kategorien -------------------------------------------------------------------------------
+// recipes.category enthält den Kategorie-NAMEN (kein FK). Umbenennen und Löschen ziehen die
+// Rezepte deshalb wie in der Rezepte-App von Hand nach. Rückgabe ist jeweils der frische Stand.
+
+export async function createCategory(
+  input: RecipeCategoryInput
+): Promise<ActionResult<RecipesPayload>> {
+  if (!(await requireFamilyUser())) return { error: NOT_SIGNED_IN };
+  try {
+    const checked = validateCategoryInput(input, await fetchAllCategories());
+    if (!checked.ok) return { error: checked.error };
+    const { error } = await getRecipesAdminClient().from("categories").insert(checked.value);
+    if (error) throw error;
+    return { data: await fetchPayload() };
+  } catch (error) {
+    console.error("createCategory failed", error);
+    return { error: "Kategorie konnte nicht gespeichert werden." };
+  }
+}
+
+export async function updateCategory(
+  id: string,
+  input: RecipeCategoryInput
+): Promise<ActionResult<RecipesPayload>> {
+  if (!(await requireFamilyUser())) return { error: NOT_SIGNED_IN };
+  try {
+    const all = await fetchAllCategories();
+    const old = all.find((c) => c.id === id);
+    if (!old) return { error: "Kategorie nicht gefunden." };
+    const checked = validateCategoryInput(input, all, id);
+    if (!checked.ok) return { error: checked.error };
+
+    const db = getRecipesAdminClient();
+    const { name, icon, color } = checked.value;
+    const fields = { name, icon, color };
+    const res = await db.from("categories").update(fields).eq("id", id);
+    if (res.error) throw res.error;
+    if (old.name !== fields.name) {
+      const moved = await db.from("recipes").update({ category: fields.name }).eq("category", old.name);
+      if (moved.error) throw moved.error;
+    }
+    return { data: await fetchPayload() };
+  } catch (error) {
+    console.error("updateCategory failed", error);
+    return { error: "Kategorie konnte nicht gespeichert werden." };
+  }
+}
+
+export async function deleteCategory(id: string): Promise<ActionResult<RecipesPayload>> {
+  if (!(await requireFamilyUser())) return { error: NOT_SIGNED_IN };
+  try {
+    const old = (await fetchAllCategories()).find((c) => c.id === id);
+    if (!old) return { error: "Kategorie nicht gefunden." };
+    const db = getRecipesAdminClient();
+    const res = await db.from("categories").delete().eq("id", id);
+    if (res.error) throw res.error;
+    // Rezepte bleiben erhalten und landen unter „Ohne Kategorie“ (wie in der Rezepte-App)
+    const moved = await db.from("recipes").update({ category: "" }).eq("category", old.name);
+    if (moved.error) throw moved.error;
+    return { data: await fetchPayload() };
+  } catch (error) {
+    console.error("deleteCategory failed", error);
+    return { error: "Kategorie konnte nicht gelöscht werden." };
   }
 }
