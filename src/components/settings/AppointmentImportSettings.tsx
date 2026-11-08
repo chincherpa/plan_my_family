@@ -22,8 +22,6 @@ import { saveResolvedEntries, type ImportOutcome } from "@/lib/import/saveImport
 import type { FamilyMember } from "@/lib/supabase/types";
 import { formatDate, formatTime, localDateStr } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 
 type Phase = "pick" | "review" | "importing" | "done";
 
@@ -116,7 +114,7 @@ export default function AppointmentImportSettings() {
   const [fileErrors, setFileErrors] = useState<string[]>([]);
   const [personMap, setPersonMap] = useState<NameMap>({});
   const [vehicleMap, setVehicleMap] = useState<NameMap>({});
-  const [skipDuplicates, setSkipDuplicates] = useState(true);
+  const [importDuplicates, setImportDuplicates] = useState<ReadonlySet<number>>(new Set());
   const [onlyProblems, setOnlyProblems] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [outcome, setOutcome] = useState<ImportOutcome | null>(null);
@@ -133,17 +131,20 @@ export default function AppointmentImportSettings() {
             existing: appointments,
             personMap,
             vehicleMap,
-            skipDuplicates,
+            importDuplicates,
           })
         : [],
-    [family, entries, members, vehicles, appointments, personMap, vehicleMap, skipDuplicates]
+    [family, entries, members, vehicles, appointments, personMap, vehicleMap, importDuplicates]
   );
   const openPersons = useMemo(() => unmatchedNames(personNamesIn(entries), members), [entries, members]);
   const openVehicles = useMemo(() => unmatchedNames(vehicleNamesIn(entries), vehicles), [entries, vehicles]);
 
   const counts = useMemo(() => {
-    const c = { ok: 0, duplicate: 0, error: 0 };
-    for (const r of resolved) c[r.status] += 1;
+    const c = { ok: 0, duplicate: 0, error: 0, duplicateTotal: 0 };
+    for (const r of resolved) {
+      c[r.status] += 1;
+      if (r.duplicate) c.duplicateTotal += 1;
+    }
     return c;
   }, [resolved]);
 
@@ -158,6 +159,7 @@ export default function AppointmentImportSettings() {
     setVehicleMap({});
     setOutcome(null);
     setOnlyProblems(false);
+    setImportDuplicates(new Set());
   }
 
   async function handleFile(file: File) {
@@ -183,6 +185,19 @@ export default function AppointmentImportSettings() {
     setVehicleMap({});
     setFileName(file.name);
     setPhase("review");
+  }
+
+  function toggleDuplicate(index: number, allow: boolean) {
+    setImportDuplicates((prev) => {
+      const next = new Set(prev);
+      if (allow) next.add(index);
+      else next.delete(index);
+      return next;
+    });
+  }
+
+  function setAllDuplicates(allow: boolean) {
+    setImportDuplicates(allow ? new Set(resolved.filter((r) => r.duplicate).map((r) => r.entry.index)) : new Set());
   }
 
   function setMapping(
@@ -228,7 +243,7 @@ export default function AppointmentImportSettings() {
     URL.revokeObjectURL(url);
   }
 
-  const visibleRows = (onlyProblems ? resolved.filter((r) => r.status !== "ok" || r.warnings.length > 0) : resolved);
+  const visibleRows = (onlyProblems ? resolved.filter((r) => r.status !== "ok" || r.duplicate || r.warnings.length > 0) : resolved);
 
   return (
     <div className="h-full overflow-y-auto">
@@ -313,7 +328,7 @@ export default function AppointmentImportSettings() {
               <p className="text-sm text-[var(--muted-foreground)]">
                 {entries.length} Termine gefunden —{" "}
                 <span className="font-medium text-[var(--foreground)]">{counts.ok} importierbar</span>
-                {counts.duplicate > 0 && `, ${counts.duplicate} bereits vorhanden`}
+                {counts.duplicate > 0 && `, ${counts.duplicate} Duplikate werden übersprungen`}
                 {counts.error > 0 && (
                   <>
                     , <span className="font-medium text-[var(--destructive)]">{counts.error} mit Fehlern</span>
@@ -355,15 +370,28 @@ export default function AppointmentImportSettings() {
               </div>
             )}
 
-            <div className="flex flex-wrap items-center justify-between gap-3 p-4 rounded-xl border border-[var(--border)] bg-[var(--card)]">
-              <Label className="flex flex-col gap-0.5">
-                Bereits vorhandene Termine überspringen
-                <span className="text-xs font-normal text-[var(--muted-foreground)]">
-                  gleicher Titel und gleiche Zeit — so lässt sich dieselbe Datei gefahrlos erneut importieren
-                </span>
-              </Label>
-              <Switch checked={skipDuplicates} onCheckedChange={setSkipDuplicates} />
-            </div>
+{counts.duplicateTotal > 0 && (
+              <div className="p-4 rounded-xl border border-[var(--warning)]/50 bg-[var(--warning)]/10 space-y-3">
+                <p className="flex items-center gap-2 text-sm font-medium">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-[var(--warning)]" />
+                  {counts.duplicateTotal === 1
+                    ? "1 Termin ist bereits vorhanden oder kommt in der Datei doppelt vor"
+                    : `${counts.duplicateTotal} Termine sind bereits vorhanden oder kommen in der Datei doppelt vor`}
+                </p>
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  Gleicher Titel und gleiche Zeit. Standardmäßig werden sie übersprungen — in der Vorschau
+                  kannst du einzelne Duplikate trotzdem anlegen lassen.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setAllDuplicates(false)}>
+                    Alle überspringen
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setAllDuplicates(true)}>
+                    Alle trotzdem importieren
+                  </Button>
+                </div>
+              </div>
+            )}
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -421,6 +449,16 @@ export default function AppointmentImportSettings() {
                       </p>
                     )}
                   </div>
+                  {row.duplicate && (
+                    <label className="flex shrink-0 items-center gap-1.5 text-xs">
+                      <input
+                        type="checkbox"
+                        checked={importDuplicates.has(row.entry.index)}
+                        onChange={(e) => toggleDuplicate(row.entry.index, e.target.checked)}
+                      />
+                      trotzdem anlegen
+                    </label>
+                  )}
                   <span className="shrink-0 text-xs text-[var(--muted-foreground)] tabular">#{row.entry.index}</span>
                 </div>
               ))}
@@ -465,7 +503,7 @@ export default function AppointmentImportSettings() {
                 {importedCount === 1 ? "1 Termin importiert" : `${importedCount} Termine importiert`}
               </p>
               {counts.duplicate > 0 && (
-                <p className="text-sm text-[var(--muted-foreground)]">{counts.duplicate} bereits vorhanden, übersprungen.</p>
+                <p className="text-sm text-[var(--muted-foreground)]">{counts.duplicate} Duplikate übersprungen.</p>
               )}
               {counts.error > 0 && (
                 <p className="text-sm text-[var(--muted-foreground)]">{counts.error} wegen Fehlern nicht importiert.</p>

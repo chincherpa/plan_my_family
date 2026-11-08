@@ -89,10 +89,11 @@ Serie gar keinen Termin hat, werden ignoriert (ebenfalls mit Hinweis).
    Akzente mit den Familienmitgliedern bzw. Fahrzeugen abgeglichen. Was sich nicht eindeutig
    findet („Mama“ statt „Anna“), wird in der Vorschau zur Auswahl angeboten: einem Mitglied
    zuordnen oder ignorieren. Termine mit ungeklärten Namen werden nicht importiert.
-2. **Duplikate.** Standardmäßig werden Termine übersprungen, die es schon gibt (gleicher Titel,
-   gleicher Beginn und gleiches Ende, Einzeltermin/Serie gleich) oder die in der Datei doppelt
-   stehen. Dieselbe Datei lässt sich so gefahrlos mehrfach importieren, etwa nach einem
-   erneuten Export. Der Schalter in der Vorschau schaltet das ab.
+2. **Duplikate.** Termine, die es schon gibt (gleicher Titel, gleicher Beginn und gleiches Ende,
+   Einzeltermin/Serie gleich) oder die in der Datei doppelt stehen, werden in der Vorschau mit
+   einer Warnung gemeldet. Standardmäßig werden sie übersprungen; pro Termin („trotzdem
+   anlegen“) oder für alle zusammen lässt sich das umstellen. Dieselbe Datei lässt sich so
+   gefahrlos mehrfach importieren.
 3. **Fehler pro Termin, nicht pro Datei.** Fehlerhafte Einträge werden in der Vorschau mit
    Position (`#7`) und Grund angezeigt und übersprungen, der Rest wird importiert. Scheitert
    beim Speichern ein einzelner Termin, wird er am Ende aufgelistet.

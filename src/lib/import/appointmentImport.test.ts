@@ -26,7 +26,7 @@ function ctx(overrides: Partial<ImportContext> = {}): ImportContext {
     existing: [],
     personMap: {},
     vehicleMap: {},
-    skipDuplicates: true,
+    importDuplicates: new Set<number>(),
     ...overrides,
   };
 }
@@ -477,11 +477,13 @@ describe("Duplikate", () => {
   it("überspringt bereits vorhandene Termine", () => {
     const r = resolveOne(raw, { existing: [stored] });
     expect(r.status).toBe("duplicate");
+    expect(r.duplicate).toBe(true);
   });
 
   it("legt sie auf Wunsch trotzdem an", () => {
-    const r = resolveOne(raw, { existing: [stored], skipDuplicates: false });
+    const r = resolveOne(raw, { existing: [stored], importDuplicates: new Set([1]) });
     expect(r.status).toBe("ok");
+    expect(r.duplicate).toBe(true);
     expect(r.warnings.join(" ")).toContain("existiert bereits");
   });
 

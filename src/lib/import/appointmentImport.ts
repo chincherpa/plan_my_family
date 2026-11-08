@@ -732,7 +732,8 @@ export interface ImportContext {
   existing: AppointmentWithParticipants[];
   personMap: NameMap;
   vehicleMap: NameMap;
-  skipDuplicates: boolean;
+  /** Positionen (`entry.index`) von Duplikaten, die der Nutzer trotzdem anlegen will. */
+  importDuplicates: ReadonlySet<number>;
 }
 
 export type AppointmentPayload = {
@@ -762,6 +763,8 @@ export interface ResolvedEntry {
   participants?: { member_id: string; is_supervisor: boolean }[];
   /** Zahl der Terminmarker für ausgefallene Serientermine. */
   skipCount: number;
+  /** Duplikat (schon gespeichert oder mehrfach in der Datei) — egal ob übersprungen oder trotzdem angelegt. */
+  duplicate: boolean;
 }
 
 function duplicateKey(title: string, start: Date, end: Date, recurring: boolean): string {
@@ -799,7 +802,7 @@ export function resolveEntries(entries: ImportEntry[], ctx: ImportContext): Reso
   return entries.map((entry): ResolvedEntry => {
     const errors = [...entry.errors];
     const warnings = [...entry.warnings];
-    const result: ResolvedEntry = { entry, status: "ok", errors, warnings, skipCount: 0 };
+    const result: ResolvedEntry = { entry, status: "ok", errors, warnings, skipCount: 0, duplicate: false };
     if (errors.length > 0) return { ...result, status: "error" };
 
     // Personen
@@ -853,7 +856,8 @@ export function resolveEntries(entries: ImportEntry[], ctx: ImportContext): Reso
     seenInFile.add(dupKey);
     if (inFile || inApp) {
       const where = inFile ? "kommt in der Datei mehrfach vor" : "existiert bereits";
-      if (ctx.skipDuplicates) {
+      result.duplicate = true;
+      if (!ctx.importDuplicates.has(entry.index)) {
         return { ...result, status: "duplicate", warnings: [...warnings, `Termin ${where} und wird übersprungen.`] };
       }
       warnings.push(`Termin ${where} und wird trotzdem angelegt.`);
