@@ -19,6 +19,7 @@ import {
   Tags,
   SquareCheckBig,
   Square,
+  ChevronRight,
 } from "lucide-react";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useRecipeSelection } from "@/lib/store/recipeSelectionStore";
@@ -84,6 +85,15 @@ export default function DishManager() {
   const [selectMode, setSelectMode] = useState(false);
   const [selectionOpen, setSelectionOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // Aufgeklappte Kategorien (Default: alle eingeklappt)
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+  function toggleGroup(name: string) {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(name)) next.add(name);
+      return next;
+    });
+  }
   const selection = useRecipeSelection();
 
   useEffect(() => () => clearTimeout(toastTimer.current), []);
@@ -166,6 +176,8 @@ export default function DishManager() {
       .sort(([a], [b]) => a.localeCompare(b, "de"))
       .map(([name, items]) => ({ name: name as string | null, items }));
   }, [grouped, visible]);
+
+  const allGroupsOpen = sections.every((sec) => sec.name === null || openGroups.has(sec.name));
 
   const dayNumber = Math.floor(Date.parse(`${todayStr}T00:00:00Z`) / 86_400_000);
   const suggestion = useMemo(
@@ -474,40 +486,76 @@ export default function DishManager() {
           )}
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className={grouped ? "space-y-2" : "space-y-5"}>
+          {grouped && sections.length > 1 && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenGroups(allGroupsOpen ? new Set() : new Set(sections.map((sec) => sec.name ?? "")))
+                }
+                className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              >
+                {allGroupsOpen ? "Alle zuklappen" : "Alle aufklappen"}
+              </button>
+            </div>
+          )}
           {sections.map(({ name, items }) => {
             const cat = name !== null ? catByName.get(name) : undefined;
+            const isOpen = name === null || openGroups.has(name);
+            const selectedCount = items.filter((r) => selection.selected.has(r.id)).length;
             return (
               <section key={name ?? "_all"} className="space-y-2">
                 {name !== null && (
-                  <h2 className="flex items-center gap-2 text-sm font-semibold">
-                    <span
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: cat?.color ?? FALLBACK_CATEGORY_COLOR }}
-                    />
-                    {categoryLabel(name)}
-                    <span className="tabular text-xs font-normal text-[var(--muted-foreground)]">
-                      {items.length}
-                    </span>
+                  <h2>
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(name)}
+                      aria-expanded={isOpen}
+                      className="flex w-full items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-left text-sm font-semibold transition-colors hover:bg-[var(--accent)]"
+                    >
+                      <ChevronRight
+                        className={cn(
+                          "h-4 w-4 shrink-0 text-[var(--muted-foreground)] transition-transform",
+                          isOpen && "rotate-90"
+                        )}
+                      />
+                      <span className="text-base leading-none">{categoryEmoji(cat)}</span>
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: cat?.color ?? FALLBACK_CATEGORY_COLOR }}
+                      />
+                      <span className="min-w-0 flex-1 truncate">{categoryLabel(name)}</span>
+                      {selectedCount > 0 && (
+                        <span className="tabular text-xs font-medium text-[var(--primary)]">
+                          {selectedCount} ausgewählt
+                        </span>
+                      )}
+                      <span className="tabular text-xs font-normal text-[var(--muted-foreground)]">
+                        {items.length}
+                      </span>
+                    </button>
                   </h2>
                 )}
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {items.map((r) => (
-                    <DishCard
-                      key={r.id}
-                      recipe={r}
-                      cat={catByName.get(r.category)}
-                      todayStr={todayStr}
-                      stats={statsFor(stats, r.name)}
-                      showCategory={!grouped}
-                      selectMode={selectMode}
-                      selected={selection.selected.has(r.id)}
-                      onToggleSelect={() => selection.toggle(r.id)}
-                      onOpen={() => (selectMode ? selection.toggle(r.id) : setEditor({ recipe: r }))}
-                      onPlan={() => setPlanDish(r.name)}
-                    />
-                  ))}
-                </div>
+                {isOpen && (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {items.map((r) => (
+                      <DishCard
+                        key={r.id}
+                        recipe={r}
+                        cat={catByName.get(r.category)}
+                        todayStr={todayStr}
+                        stats={statsFor(stats, r.name)}
+                        showCategory={!grouped}
+                        selectMode={selectMode}
+                        selected={selection.selected.has(r.id)}
+                        onToggleSelect={() => selection.toggle(r.id)}
+                        onOpen={() => (selectMode ? selection.toggle(r.id) : setEditor({ recipe: r }))}
+                        onPlan={() => setPlanDish(r.name)}
+                      />
+                    ))}
+                  </div>
+                )}
               </section>
             );
           })}
