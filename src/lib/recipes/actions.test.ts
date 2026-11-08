@@ -28,6 +28,8 @@ type Row = Record<string, unknown>;
 let tables: Record<string, Row[]> = {};
 let selectError: string | null = null;
 const deleteCalls: [string, string, unknown][] = [];
+const updateCalls: [string, Row, [string, unknown][]][] = [];
+const inCalls: [string, string, unknown[]][] = [];
 const insertSpy = vi.fn();
 const adminFrom = vi.fn((table: string) => makeBuilder(table));
 
@@ -48,6 +50,11 @@ function makeBuilder(table: string) {
     update: (row: Row) => {
       op = "update";
       payload = row;
+      updateCalls.push([table, row, filters]);
+      return builder;
+    },
+    in: (col: string, vals: unknown[]) => {
+      inCalls.push([table, col, vals]);
       return builder;
     },
     delete: () => {
@@ -77,7 +84,16 @@ vi.mock("@/lib/recipes/admin", () => ({
   getRecipesAdminClient: () => ({ from: adminFrom }),
 }));
 
-import { createRecipe, deleteRecipe, listRecipes, updateRecipe } from "./actions";
+import {
+  createCategory,
+  createRecipe,
+  deleteCategory,
+  deleteRecipe,
+  listIngredientsFor,
+  listRecipes,
+  updateCategory,
+  updateRecipe,
+} from "./actions";
 
 function mockUser(u: { id: string } | null) {
   currentUser = u;
@@ -92,6 +108,8 @@ beforeEach(() => {
   tables = { recipes: [], categories: [] };
   selectError = null;
   deleteCalls.length = 0;
+  updateCalls.length = 0;
+  inCalls.length = 0;
   insertSpy.mockClear();
   adminFrom.mockClear();
 });
@@ -163,5 +181,90 @@ describe("recipe actions", () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     expect(await listRecipes()).toEqual({ error: "Mahlzeiten konnten nicht geladen werden." });
     spy.mockRestore();
+  });
+});
+
+describe("category actions", () => {
+  const suppen = { id: "suppen", name: "Suppen", icon: "soup", color: "#0891B2" };
+
+  it("ohne Familienmitglied: Fehler, keine DB-Abfrage", async () => {
+    mockUser(null);
+    const input = { name: "Pasta", icon: "pasta", color: "#DC2626" };
+    expect(await createCategory(input)).toEqual({ error: "Nicht angemeldet." });
+    expect(await updateCategory("suppen", input)).toEqual({ error: "Nicht angemeldet." });
+    expect(await deleteCategory("suppen")).toEqual({ error: "Nicht angemeldet." });
+    expect(await listIngredientsFor([1])).toEqual({ error: "Nicht angemeldet." });
+    expect(adminFrom).not.toHaveBeenCalled();
+  });
+
+  it("createCategory legt mit Slug-id an und liefert frischen Stand", async () => {
+    mockUser({ id: "u" });
+    tables.categories = [suppen];
+    const res = await createCategory({ name: " Pasta ", icon: "pasta", color: "#DC2626" });
+    expect(insertSpy).toHaveBeenCalledWith("categories", {
+      id: "pasta",
+      name: "Pasta",
+      icon: "pasta",
+      color: "#DC2626",
+    });
+    expect(res).toEqual({ data: { recipes: [], categories: [suppen] } });
+  });
+
+  it("createCategory lehnt Duplikat ab", async () => {
+    mockUser({ id: "u" });
+    tables.categories = [suppen];
+    expect(await createCategory({ name: "suppen", icon: "soup", color: "#000000" })).toEqual({
+      error: "Kategorie existiert bereits.",
+    });
+    expect(insertSpy).not.toHaveBeenCalled();
+  });
+
+  it("updateCategory benennt um und zieht die Gerichte nach", async () => {
+    mockUser({ id: "u" });
+    tables.categories = [suppen];
+    await updateCategory("suppen", { name: "Eintöpfe", icon: "soup", color: "#0891B2" });
+    expect(updateCalls).toEqual([
+      ["categories", { name: "Eintöpfe", icon: "soup", color: "#0891B2" }, [["id", "suppen"]]],
+      ["recipes", { category: "Eintöpfe" }, [["category", "Suppen"]]],
+    ]);
+  });
+
+  it("updateCategory ohne Namensänderung fasst Gerichte nicht an", async () => {
+    mockUser({ id: "u" });
+    tables.categories = [suppen];
+    await updateCategory("suppen", { name: "Suppen", icon: "soup", color: "#DC2626" });
+    expect(updateCalls.map(([t]) => t)).toEqual(["categories"]);
+  });
+
+  it("updateCategory: unbekannte id", async () => {
+    mockUser({ id: "u" });
+    expect(await updateCategory("gibtsnicht", { name: "X", icon: "", color: "" })).toEqual({
+      error: "Kategorie nicht gefunden.",
+    });
+  });
+
+  it("deleteCategory löscht und setzt die Gerichte auf „Ohne Kategorie“", async () => {
+    mockUser({ id: "u" });
+    tables.categories = [suppen];
+    await deleteCategory("suppen");
+    expect(deleteCalls).toEqual([["categories", "id", "suppen"]]);
+    expect(updateCalls).toEqual([["recipes", { category: "" }, [["category", "Suppen"]]]]);
+  });
+
+  it("listIngredientsFor gruppiert nach recipe_id, auch für Rezepte ohne Zutaten", async () => {
+    mockUser({ id: "u" });
+    tables.ingredients = [
+      { id: 10, recipe_id: 1, zutat: "Linsen", menge: "200 g", taetigkeit: "", sort_order: 0 },
+      { id: 11, recipe_id: 1, zutat: "Zwiebel", menge: "1", taetigkeit: "würfeln", sort_order: 1 },
+    ];
+    const res = await listIngredientsFor([1, 2, 1]);
+    expect(inCalls).toEqual([["ingredients", "recipe_id", [1, 2]]]);
+    expect(res).toEqual({ data: { 1: tables.ingredients, 2: [] } });
+  });
+
+  it("listIngredientsFor mit leerer Liste fragt die DB nicht", async () => {
+    mockUser({ id: "u" });
+    expect(await listIngredientsFor([])).toEqual({ data: {} });
+    expect(adminFrom).not.toHaveBeenCalled();
   });
 });

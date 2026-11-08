@@ -46,6 +46,7 @@ export default function DishEditor({
   stats,
   onClose,
   onToast,
+  onCreated,
 }: {
   /** null = neues Gericht */
   recipe: Recipe | null;
@@ -53,6 +54,8 @@ export default function DishEditor({
   stats: DishStats;
   onClose: () => void;
   onToast: (message: string) => void;
+  /** Neu angelegtes Gericht (für „Neue auswählen“ beim PDF-Export) */
+  onCreated?: (recipe: Recipe) => void;
 }) {
   const { family, upsertMeal, recipes, recipeCategories, setRecipes } = useDataStore();
   const todayStr = localDateStr(new Date());
@@ -166,6 +169,7 @@ export default function DishEditor({
       latest.recipeCategories
     );
     const oldName = current?.name;
+    if (!current) onCreated?.(saved);
     setCurrent(saved);
 
     if (ingredientsDirty && !ingredientsError) {
@@ -226,7 +230,7 @@ export default function DishEditor({
 
   return (
     <Dialog open onOpenChange={(open) => !open && !saving && onClose()}>
-      <DialogContent className="gap-0 overflow-hidden p-0 sm:max-w-xl sm:p-0">
+      <DialogContent className="gap-0 overflow-x-hidden overflow-y-auto overscroll-contain p-0 sm:max-w-xl sm:p-0">
         {/* Kopf mit Kategoriefarbe */}
         <div
           className="flex items-center gap-3 px-5 pb-4 pt-5 sm:px-6"

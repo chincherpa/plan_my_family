@@ -72,6 +72,11 @@ Der Service-Role-Key umgeht RLS — nie mit `NEXT_PUBLIC_` beginnen lassen. Die 
 dem Anon-Key nur Lesen, deshalb wird der Service-Role-Key gebraucht. Ist die Rezept-DB nicht
 erreichbar, läuft der Planer weiter; im Essensplan ist dann nur Freitext möglich.
 
+Der Tab **Essen → Gerichte** übernimmt den Funktionsumfang der Rezepte-App: Gerichte mit Zutaten
+anlegen, bearbeiten, löschen; Kategorien (Icon, Farbe) verwalten – Umbenennen/Löschen zieht die
+Gerichte mit; Gerichte auswählen und als PDF-Rezeptkärtchen exportieren (A4 quer, 4 Karten à
+120×90 mm, Layout identisch zur Rezepte-App, `src/lib/recipes/pdf.ts`).
+
 ## Prüfen
 
 ```bash

@@ -13,8 +13,19 @@ import {
   Sparkles,
   ChefHat,
   Check,
+  CircleAlert,
+  FileDown,
+  ListChecks,
+  Tags,
+  SquareCheckBig,
+  Square,
+  ChevronRight,
 } from "lucide-react";
 import { useDataStore } from "@/lib/store/dataStore";
+import { useRecipeSelection } from "@/lib/store/recipeSelectionStore";
+import { listIngredientsFor } from "@/lib/recipes/actions";
+import { categoryLabel } from "@/lib/recipes/logic";
+import { createRecipeCardsPdf, PDF_FILE_NAME } from "@/lib/recipes/pdf";
 import { Button } from "@/components/ui/button";
 import {
   categoryEmoji,
@@ -33,6 +44,8 @@ import type { Recipe, RecipeCategory } from "@/lib/recipes/types";
 import { cn, hexToRgba, localDateStr } from "@/lib/utils";
 import DishEditor from "./DishEditor";
 import PlanDishDialog from "./PlanDishDialog";
+import CategoryManager from "./CategoryManager";
+import SelectionDialog from "./SelectionDialog";
 
 const SORTS: { mode: SortMode; label: string; icon: typeof Flame }[] = [
   { mode: "name", label: "A–Z", icon: ArrowDownAZ },
@@ -53,6 +66,7 @@ function seededRandom(seed: number): () => number {
 }
 
 type EditorState = { recipe: Recipe | null; prefillName?: string } | null;
+type Toast = { message: string; tone: "success" | "error" };
 
 export default function DishManager() {
   const { meals, recipes, recipeCategories, recipesError, recipesLoaded } = useDataStore();
@@ -65,14 +79,60 @@ export default function DishManager() {
   const [planDish, setPlanDish] = useState<string | null>(null);
   const [roll, setRoll] = useState(0);
   const [prevSuggestionId, setPrevSuggestionId] = useState<number | undefined>();
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectionOpen, setSelectionOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  // Aufgeklappte Kategorien (Default: alle eingeklappt)
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
+  function toggleGroup(name: string) {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(name)) next.add(name);
+      return next;
+    });
+  }
+  const selection = useRecipeSelection();
 
   useEffect(() => () => clearTimeout(toastTimer.current), []);
-  function showToast(message: string) {
+  function showToast(message: string, tone: Toast["tone"] = "success") {
     clearTimeout(toastTimer.current);
-    setToast(message);
+    setToast({ message, tone });
     toastTimer.current = setTimeout(() => setToast(null), 3200);
+  }
+
+  // Nur noch existierende Gerichte (gelöschte fallen automatisch heraus), in Listenreihenfolge
+  const selectedRecipes = useMemo(
+    () => recipes.filter((r) => selection.selected.has(r.id)),
+    [recipes, selection.selected]
+  );
+  const addedThisSession = useMemo(
+    () => recipes.filter((r) => selection.addedThisSession.has(r.id)).map((r) => r.id),
+    [recipes, selection.addedThisSession]
+  );
+
+  async function exportPdf() {
+    if (selectedRecipes.length === 0 || exporting) return;
+    setExporting(true);
+    try {
+      const res = await listIngredientsFor(selectedRecipes.map((r) => r.id));
+      if ("error" in res) {
+        showToast(res.error, "error");
+        return;
+      }
+      const doc = await createRecipeCardsPdf(
+        selectedRecipes.map((r) => ({ ...r, ingredients: res.data[r.id] ?? [] }))
+      );
+      doc.save(PDF_FILE_NAME);
+      showToast(`PDF mit ${selectedRecipes.length} Kärtchen erstellt`);
+    } catch (error) {
+      console.error("PDF export failed", error);
+      showToast("PDF konnte nicht erstellt werden.", "error");
+    } finally {
+      setExporting(false);
+    }
   }
 
   const stats = useMemo(() => computeDishStats(meals, todayStr), [meals, todayStr]);
@@ -94,7 +154,7 @@ export default function DishManager() {
     const q = query.trim().toLocaleLowerCase("de");
     const filtered = recipes.filter(
       (r) =>
-        (!activeCategory || r.category === activeCategory) &&
+        (activeCategory === null || r.category === activeCategory) &&
         (!q ||
           r.name.toLocaleLowerCase("de").includes(q) ||
           r.bemerkung.toLocaleLowerCase("de").includes(q) ||
@@ -104,7 +164,7 @@ export default function DishManager() {
   }, [recipes, activeCategory, query, sort, stats]);
 
   // A–Z ohne Filter: nach Kategorie gruppiert, sonst flache Liste
-  const grouped = sort === "name" && !activeCategory && !query.trim();
+  const grouped = sort === "name" && activeCategory === null && !query.trim();
   const sections = useMemo(() => {
     if (!grouped) return [{ name: null as string | null, items: visible }];
     const map = new Map<string, Recipe[]>();
@@ -116,6 +176,8 @@ export default function DishManager() {
       .sort(([a], [b]) => a.localeCompare(b, "de"))
       .map(([name, items]) => ({ name: name as string | null, items }));
   }, [grouped, visible]);
+
+  const allGroupsOpen = sections.every((sec) => sec.name === null || openGroups.has(sec.name));
 
   const dayNumber = Math.floor(Date.parse(`${todayStr}T00:00:00Z`) / 86_400_000);
   const suggestion = useMemo(
@@ -275,15 +337,93 @@ export default function DishManager() {
               </button>
             )}
           </div>
+          <Button
+            variant="outline"
+            onClick={() => setCategoryManagerOpen(true)}
+            title="Kategorien verwalten"
+            className="h-10 gap-1.5 rounded-xl bg-[var(--card)]"
+          >
+            <Tags className="h-4 w-4" />
+            <span className="hidden lg:inline">Kategorien</span>
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setSelectMode((m) => !m)}
+            title="Gerichte für PDF-Kärtchen auswählen"
+            aria-pressed={selectMode}
+            className={cn(
+              "h-10 gap-1.5 rounded-xl bg-[var(--card)]",
+              selectMode && "border-[var(--primary)] bg-[var(--primary)]/15 text-[var(--primary)]"
+            )}
+          >
+            <ListChecks className="h-4 w-4" />
+            <span className="hidden lg:inline">Auswählen</span>
+          </Button>
           <Button onClick={() => setEditor({ recipe: null })} className="h-10 gap-1.5 rounded-xl">
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Neues Gericht</span>
           </Button>
         </div>
 
+        {(selectMode || selectedRecipes.length > 0) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-[var(--primary)]/30 bg-[var(--primary)]/10 px-3 py-1.5 text-sm">
+            <button
+              type="button"
+              onClick={() => setSelectionOpen(true)}
+              className="tabular font-medium hover:underline"
+            >
+              {selectedRecipes.length} ausgewählt
+            </button>
+            {selectMode && visible.length > 0 && (
+              <button
+                type="button"
+                onClick={() => selection.toggleAll(visible.map((r) => r.id))}
+                className="text-[var(--primary)] hover:underline"
+              >
+                {visible.every((r) => selection.selected.has(r.id))
+                  ? query.trim() || activeCategory !== null
+                    ? "Gefilterte abwählen"
+                    : "Alle abwählen"
+                  : query.trim() || activeCategory !== null
+                  ? `Gefilterte auswählen (${visible.length})`
+                  : "Alle auswählen"}
+              </button>
+            )}
+            {selectMode && addedThisSession.length > 0 && (
+              <button
+                type="button"
+                onClick={() => selection.selectMany(addedThisSession)}
+                title="In dieser Sitzung neu angelegte Gerichte auswählen"
+                className="text-emerald-600 hover:underline dark:text-emerald-400"
+              >
+                Neue auswählen ({addedThisSession.length})
+              </button>
+            )}
+            <span className="flex-1" />
+            {!selectMode && (
+              <button
+                type="button"
+                onClick={() => selection.clear()}
+                className="text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              >
+                Leeren
+              </button>
+            )}
+            <Button
+              size="sm"
+              onClick={exportPdf}
+              disabled={selectedRecipes.length === 0 || exporting}
+              className="h-7 gap-1.5"
+            >
+              <FileDown className="h-3.5 w-3.5" />
+              {exporting ? "Erstellt…" : "PDF"}
+            </Button>
+          </div>
+        )}
+
         <div className="flex items-center gap-2">
           <div className="no-scrollbar -my-1 flex flex-1 gap-1.5 overflow-x-auto py-1">
-            <Chip active={!activeCategory} onClick={() => setActiveCategory(null)}>
+            <Chip active={activeCategory === null} onClick={() => setActiveCategory(null)}>
               Alle <span className="tabular opacity-60">{recipes.length}</span>
             </Chip>
             {categoryChips.map(({ name, count, cat }) => (
@@ -294,7 +434,7 @@ export default function DishManager() {
                 onClick={() => setActiveCategory(activeCategory === name ? null : name)}
               >
                 <span className="text-xs">{categoryEmoji(cat)}</span>
-                {name}
+                {categoryLabel(name)}
                 <span className="tabular opacity-60">{count}</span>
               </Chip>
             ))}
@@ -346,37 +486,76 @@ export default function DishManager() {
           )}
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className={grouped ? "space-y-2" : "space-y-5"}>
+          {grouped && sections.length > 1 && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() =>
+                  setOpenGroups(allGroupsOpen ? new Set() : new Set(sections.map((sec) => sec.name ?? "")))
+                }
+                className="text-xs text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+              >
+                {allGroupsOpen ? "Alle zuklappen" : "Alle aufklappen"}
+              </button>
+            </div>
+          )}
           {sections.map(({ name, items }) => {
-            const cat = name ? catByName.get(name) : undefined;
+            const cat = name !== null ? catByName.get(name) : undefined;
+            const isOpen = name === null || openGroups.has(name);
+            const selectedCount = items.filter((r) => selection.selected.has(r.id)).length;
             return (
               <section key={name ?? "_all"} className="space-y-2">
-                {name && (
-                  <h2 className="flex items-center gap-2 text-sm font-semibold">
-                    <span
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: cat?.color ?? FALLBACK_CATEGORY_COLOR }}
-                    />
-                    {name}
-                    <span className="tabular text-xs font-normal text-[var(--muted-foreground)]">
-                      {items.length}
-                    </span>
+                {name !== null && (
+                  <h2>
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(name)}
+                      aria-expanded={isOpen}
+                      className="flex w-full items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--card)] px-3 py-2.5 text-left text-sm font-semibold transition-colors hover:bg-[var(--accent)]"
+                    >
+                      <ChevronRight
+                        className={cn(
+                          "h-4 w-4 shrink-0 text-[var(--muted-foreground)] transition-transform",
+                          isOpen && "rotate-90"
+                        )}
+                      />
+                      <span className="text-base leading-none">{categoryEmoji(cat)}</span>
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: cat?.color ?? FALLBACK_CATEGORY_COLOR }}
+                      />
+                      <span className="min-w-0 flex-1 truncate">{categoryLabel(name)}</span>
+                      {selectedCount > 0 && (
+                        <span className="tabular text-xs font-medium text-[var(--primary)]">
+                          {selectedCount} ausgewählt
+                        </span>
+                      )}
+                      <span className="tabular text-xs font-normal text-[var(--muted-foreground)]">
+                        {items.length}
+                      </span>
+                    </button>
                   </h2>
                 )}
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {items.map((r) => (
-                    <DishCard
-                      key={r.id}
-                      recipe={r}
-                      cat={catByName.get(r.category)}
-                      todayStr={todayStr}
-                      stats={statsFor(stats, r.name)}
-                      showCategory={!grouped}
-                      onOpen={() => setEditor({ recipe: r })}
-                      onPlan={() => setPlanDish(r.name)}
-                    />
-                  ))}
-                </div>
+                {isOpen && (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {items.map((r) => (
+                      <DishCard
+                        key={r.id}
+                        recipe={r}
+                        cat={catByName.get(r.category)}
+                        todayStr={todayStr}
+                        stats={statsFor(stats, r.name)}
+                        showCategory={!grouped}
+                        selectMode={selectMode}
+                        selected={selection.selected.has(r.id)}
+                        onToggleSelect={() => selection.toggle(r.id)}
+                        onOpen={() => (selectMode ? selection.toggle(r.id) : setEditor({ recipe: r }))}
+                        onPlan={() => setPlanDish(r.name)}
+                      />
+                    ))}
+                  </div>
+                )}
               </section>
             );
           })}
@@ -416,6 +595,25 @@ export default function DishManager() {
           stats={editorStats}
           onClose={() => setEditor(null)}
           onToast={showToast}
+          onCreated={(r) => selection.markAdded(r.id)}
+        />
+      )}
+      {categoryManagerOpen && (
+        <CategoryManager
+          onClose={() => setCategoryManagerOpen(false)}
+          onToast={showToast}
+          onDeleted={(name) => setActiveCategory((cur) => (cur === name ? null : cur))}
+        />
+      )}
+      {selectionOpen && (
+        <SelectionDialog
+          recipes={selectedRecipes}
+          catByName={catByName}
+          exporting={exporting}
+          onRemove={selection.toggle}
+          onClearAll={selection.clear}
+          onExport={exportPdf}
+          onClose={() => setSelectionOpen(false)}
         />
       )}
       {planDish && (
@@ -427,8 +625,12 @@ export default function DishManager() {
           role="status"
           className="dish-pop fixed bottom-24 left-1/2 z-50 flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-[var(--border)] bg-[var(--popover)] px-4 py-2.5 text-sm shadow-2xl md:bottom-8"
         >
-          <Check className="h-4 w-4 shrink-0 text-emerald-500" />
-          <span className="truncate">{toast}</span>
+          {toast.tone === "error" ? (
+            <CircleAlert className="h-4 w-4 shrink-0 text-[var(--destructive)]" />
+          ) : (
+            <Check className="h-4 w-4 shrink-0 text-emerald-500" />
+          )}
+          <span className="truncate">{toast.message}</span>
         </div>
       )}
     </div>
@@ -511,6 +713,9 @@ function DishCard({
   stats,
   todayStr,
   showCategory,
+  selectMode,
+  selected,
+  onToggleSelect,
   onOpen,
   onPlan,
 }: {
@@ -519,6 +724,9 @@ function DishCard({
   stats: ReturnType<typeof statsFor>;
   todayStr: string;
   showCategory: boolean;
+  selectMode: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
   onOpen: () => void;
   onPlan: () => void;
 }) {
@@ -526,9 +734,30 @@ function DishCard({
   const next = stats.nextDate;
   return (
     <div
-      className="group relative flex items-stretch overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)] transition-all hover:-translate-y-px hover:border-[var(--input)] hover:shadow-lg"
+      className={cn(
+        "group relative flex items-stretch overflow-hidden rounded-xl border bg-[var(--card)] transition-all hover:-translate-y-px hover:shadow-lg",
+        selected
+          ? "border-[var(--primary)] ring-1 ring-[var(--primary)]"
+          : "border-[var(--border)] hover:border-[var(--input)]"
+      )}
     >
       <span className="w-1 shrink-0" style={{ backgroundColor: color }} />
+      {(selectMode || selected) && (
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={selected}
+          aria-label={`„${recipe.name}“ für PDF auswählen`}
+          onClick={onToggleSelect}
+          className="flex w-10 shrink-0 items-center justify-center text-[var(--muted-foreground)] hover:text-[var(--primary)]"
+        >
+          {selected ? (
+            <SquareCheckBig className="h-5 w-5 text-[var(--primary)]" />
+          ) : (
+            <Square className="h-5 w-5" />
+          )}
+        </button>
+      )}
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 p-3 text-left">
         <span
           className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xl"
@@ -541,7 +770,7 @@ function DishCard({
           {recipe.bemerkung ? (
             <span className="block truncate text-xs text-[var(--muted-foreground)]">{recipe.bemerkung}</span>
           ) : showCategory ? (
-            <span className="block truncate text-xs text-[var(--muted-foreground)]">{recipe.category}</span>
+            <span className="block truncate text-xs text-[var(--muted-foreground)]">{categoryLabel(recipe.category)}</span>
           ) : null}
           <span className="mt-1.5 flex flex-wrap items-center gap-1">
             {next && (

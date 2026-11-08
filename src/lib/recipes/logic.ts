@@ -1,4 +1,10 @@
-import type { IngredientInput, Recipe, RecipeCategory, RecipeInput } from "./types";
+import type {
+  IngredientInput,
+  Recipe,
+  RecipeCategory,
+  RecipeCategoryInput,
+  RecipeInput,
+} from "./types";
 
 export function validateRecipeInput(
   input: RecipeInput,
@@ -62,4 +68,45 @@ export function validateIngredients(
     });
   }
   return { ok: true, value };
+}
+
+/** Anzeigename für Rezepte ohne Kategorie (recipes.category = ""). */
+export const NO_CATEGORY_LABEL = "Ohne Kategorie";
+
+export function categoryLabel(name: string): string {
+  return name.trim() || NO_CATEGORY_LABEL;
+}
+
+/** Slug wie in der Rezepte-App: nur a–z/0–9, max. 20 Zeichen. */
+export function categoryIdFromName(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .substring(0, 20);
+}
+
+/**
+ * Prüft eine Kategorie gegen die vorhandenen. Neue Kategorien bekommen die id aus dem Namen
+ * (wie in der Rezepte-App); bestehende behalten ihre id (ownId), auch bei Umbenennung.
+ */
+export function validateCategoryInput(
+  input: RecipeCategoryInput,
+  existing: RecipeCategory[],
+  ownId?: string
+): { ok: true; value: RecipeCategory } | { ok: false; error: string } {
+  const name = input.name.trim();
+  if (!name) return { ok: false, error: "Bitte gib einen Namen ein." };
+  if (name.toLocaleLowerCase("de") === NO_CATEGORY_LABEL.toLocaleLowerCase("de")) {
+    return { ok: false, error: `„${NO_CATEGORY_LABEL}“ ist reserviert.` };
+  }
+
+  // Umlaute etc. fallen beim Slug weg – Fallback, damit die id nie leer ist
+  const id = ownId ?? (categoryIdFromName(name) || `kat${Date.now().toString(36)}`);
+  const key = name.toLocaleLowerCase("de");
+  const clash = existing.some(
+    (c) => c.id !== ownId && (c.id === id || c.name.trim().toLocaleLowerCase("de") === key)
+  );
+  if (clash) return { ok: false, error: "Kategorie existiert bereits." };
+
+  return { ok: true, value: { id, name, icon: input.icon.trim(), color: input.color.trim() } };
 }
