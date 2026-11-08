@@ -178,6 +178,23 @@ const ICON_EMOJI: Record<string, string> = {
   dessert: "🍮",
 };
 
+/** Wählbare Kategorie-Icons (id wie in der Rezepte-App) mit Emoji-Darstellung. */
+export const CATEGORY_ICONS = Object.entries(ICON_EMOJI).map(([id, emoji]) => ({ id, emoji }));
+
+/** Farbpalette der Rezepte-App für Kategorien. */
+export const CATEGORY_COLORS = [
+  "#D97706",
+  "#DC2626",
+  "#7C3AED",
+  "#059669",
+  "#0891B2",
+  "#65A30D",
+  "#DB2777",
+  "#2563EB",
+  "#EA580C",
+  "#4F46E5",
+];
+
 export function categoryEmoji(category: RecipeCategory | undefined): string {
   return (category && ICON_EMOJI[category.icon]) ?? "🍽️";
 }

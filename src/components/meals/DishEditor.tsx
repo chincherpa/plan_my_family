@@ -46,6 +46,7 @@ export default function DishEditor({
   stats,
   onClose,
   onToast,
+  onCreated,
 }: {
   /** null = neues Gericht */
   recipe: Recipe | null;
@@ -53,6 +54,8 @@ export default function DishEditor({
   stats: DishStats;
   onClose: () => void;
   onToast: (message: string) => void;
+  /** Neu angelegtes Gericht (für „Neue auswählen“ beim PDF-Export) */
+  onCreated?: (recipe: Recipe) => void;
 }) {
   const { family, upsertMeal, recipes, recipeCategories, setRecipes } = useDataStore();
   const todayStr = localDateStr(new Date());
@@ -166,6 +169,7 @@ export default function DishEditor({
       latest.recipeCategories
     );
     const oldName = current?.name;
+    if (!current) onCreated?.(saved);
     setCurrent(saved);
 
     if (ingredientsDirty && !ingredientsError) {

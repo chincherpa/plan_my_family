@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildCategoryOptions, toMealOptions, validateRecipeInput } from "./logic";
+import {
+  buildCategoryOptions,
+  categoryIdFromName,
+  categoryLabel,
+  toMealOptions,
+  validateCategoryInput,
+  validateRecipeInput,
+} from "./logic";
 
 describe("validateRecipeInput", () => {
   const existing = [{ id: 1, name: "Kartoffelsalat", category: "Kartoffel", bemerkung: "" }];
@@ -43,4 +50,50 @@ describe("toMealOptions", () => {
   it("mappt name/category", () =>
     expect(toMealOptions([{ id: 1, name: "Dal", category: "Suppen", bemerkung: "" }]))
       .toEqual([{ value: "Dal", group: "Suppen" }]));
+});
+
+describe("Kategorien", () => {
+  const existing = [{ id: "suppe", name: "Suppe", icon: "soup", color: "#0891B2" }];
+
+  it("id wie in der Rezepte-App", () => {
+    expect(categoryIdFromName("Aufläufe & Gratins")).toBe("auflufegratins");
+    expect(categoryIdFromName("Ein sehr langer Kategoriename")).toHaveLength(20);
+  });
+
+  it("leere Kategorie heißt „Ohne Kategorie“", () => {
+    expect(categoryLabel("")).toBe("Ohne Kategorie");
+    expect(categoryLabel("Pasta")).toBe("Pasta");
+  });
+
+  it("neue Kategorie: getrimmt, id aus Name", () =>
+    expect(validateCategoryInput({ name: " Pasta ", icon: "pasta", color: "#DC2626" }, existing)).toEqual({
+      ok: true,
+      value: { id: "pasta", name: "Pasta", icon: "pasta", color: "#DC2626" },
+    }));
+
+  it("Name ohne a–z bekommt trotzdem eine id", () => {
+    const res = validateCategoryInput({ name: "Ü", icon: "", color: "" }, existing);
+    expect(res.ok && res.value.id).toMatch(/^kat/);
+  });
+
+  it("leerer Name", () =>
+    expect(validateCategoryInput({ name: " ", icon: "", color: "" }, existing)).toEqual({
+      ok: false,
+      error: "Bitte gib einen Namen ein.",
+    }));
+
+  it("Duplikat (Name case-insensitiv)", () =>
+    expect(validateCategoryInput({ name: "SUPPE", icon: "", color: "" }, existing)).toEqual({
+      ok: false,
+      error: "Kategorie existiert bereits.",
+    }));
+
+  it("Umbenennen behält die id und darf den eigenen Namen tragen", () =>
+    expect(validateCategoryInput({ name: "Suppen", icon: "soup", color: "#000" }, existing, "suppe")).toEqual({
+      ok: true,
+      value: { id: "suppe", name: "Suppen", icon: "soup", color: "#000" },
+    }));
+
+  it("„Ohne Kategorie“ ist reserviert", () =>
+    expect(validateCategoryInput({ name: "ohne kategorie", icon: "", color: "" }, existing).ok).toBe(false));
 });
