@@ -3,7 +3,7 @@ import { RRule } from "rrule";
 import {
   normalizeAll,
   normalizeEntry,
-  parseImportText,
+  parseImportCsv,
   personNamesIn,
   resolveEntries,
   skippedOccurrence,
@@ -41,40 +41,82 @@ function expand(rule: string, start: string, end: string, from: string, to: stri
   return expandAppointments([parent], d(from), d(to)).map((o) => o.occurrenceStart);
 }
 
-describe("parseImportText", () => {
-  it("liest das Objektformat", () => {
-    const parsed = parseImportText(
-      JSON.stringify({ format: "plan-my-family/appointments", version: 1, appointments: [{ title: "A" }] })
+describe("parseImportCsv", () => {
+  const rowsOf = (text: string) => {
+    const parsed = parseImportCsv(text);
+    expect(parsed.fileErrors).toEqual([]);
+    return parsed.items as Record<string, unknown>[];
+  };
+
+  it("liest Semikolon, Komma und Tabulator als Trennzeichen sowie BOM und CRLF", () => {
+    for (const sep of [";", ",", "\t"]) {
+      const text = `\uFEFFtitle${sep}start${sep}owner\r\nZahnarzt${sep}2026-11-10T09:00${sep}Anna\r\n`;
+      expect(rowsOf(text)).toEqual([{ title: "Zahnarzt", start: "2026-11-10T09:00", owner: "Anna" }]);
+    }
+  });
+
+  it("versteht Anführungszeichen mit Trennzeichen, Zeilenumbruch und \"\"", () => {
+    const items = rowsOf('title;start;notes\n"A; B";2026-11-10;"Zeile 1\nZeile ""2"""\n');
+    expect(items[0]).toMatchObject({ title: "A; B", notes: 'Zeile 1\nZeile "2"' });
+  });
+
+  it("erkennt Spaltennamen ohne Beachtung von Groß-/Kleinschreibung und Unterstrichen", () => {
+    const items = rowsOf("Title;START;travel_before;All Day\nA;2026-11-10T09:00;15;ja\n");
+    expect(items[0]).toEqual({ title: "A", start: "2026-11-10T09:00", travelBefore: 15, allDay: true });
+  });
+
+  it("überspringt Leerzeilen und leere Zellen", () => {
+    const items = rowsOf("title;start;owner\nA;2026-11-10;\n;;\n\nB;2026-11-11;Anna\n");
+    expect(items).toEqual([
+      { title: "A", start: "2026-11-10" },
+      { title: "B", start: "2026-11-11", owner: "Anna" },
+    ]);
+  });
+
+  it("wandelt Wahrheitswerte, Zahlen und Listen um", () => {
+    const [item] = rowsOf(
+      "title;start;everyone;event;duration;participants;repeat;repeatDays;repeatSkip\n" +
+        "A;2026-11-10T09:00;Nein;x;90;Ben|Clara*;weekly;mo|we;2026-11-11|2026-11-18\n"
     );
-    expect(parsed.fileErrors).toEqual([]);
-    expect(parsed.items).toHaveLength(1);
+    expect(item).toMatchObject({
+      everyone: false,
+      event: true,
+      duration: 90,
+      participants: ["Ben", { name: "Clara", supervisor: true }],
+      repeat: { freq: "weekly", days: ["mo", "we"], skip: ["2026-11-11", "2026-11-18"] },
+    });
   });
 
-  it("liest ein nacktes Array, einen Einzeltermin und BOM", () => {
-    expect(parseImportText('﻿[{"title":"A"},{"title":"B"}]').items).toHaveLength(2);
-    expect(parseImportText('{"title":"A","start":"2026-01-01"}').items).toHaveLength(1);
+  it("lässt kaputte Werte als Text stehen, damit normalizeEntry sie meldet", () => {
+    const [item] = rowsOf("title;start;event;travelBefore\nA;2026-11-10;vielleicht;viel\n");
+    const e = normalizeEntry(item, 1);
+    expect(e.errors.join(" ")).toContain('"event"');
+    expect(e.errors.join(" ")).toContain("travelBefore");
   });
 
-  it("liest JSON Lines und überspringt Kommentare und Leerzeilen", () => {
-    const text = '# Export\n{"title":"A"}\n\n// noch einer\n{"title":"B"}\n';
-    const parsed = parseImportText(text);
-    expect(parsed.fileErrors).toEqual([]);
-    expect(parsed.items).toHaveLength(2);
+  it("kombiniert repeat-Spalten mit einem RRULE-Text nur mit repeatSkip", () => {
+    const [ok] = rowsOf("title;start;repeat;repeatSkip\nA;2026-11-10T17:00;FREQ=WEEKLY;2026-11-17\n");
+    expect(normalizeEntry(ok, 1).errors).toEqual([]);
+    const [bad] = rowsOf("title;start;repeat;repeatCount\nA;2026-11-10T17:00;FREQ=WEEKLY;3\n");
+    expect(normalizeEntry(bad, 1).errors[0]).toContain("RRULE");
   });
 
-  it("meldet kaputte JSON-Lines-Zeilen mit Zeilennummer", () => {
-    const parsed = parseImportText('{"title":"A"}\n{kaputt}\n');
-    expect(parsed.items).toEqual([]);
-    expect(parsed.fileErrors.join(" ")).toContain("Zeile 2");
+  it("meldet Wiederholungs-Zusatzspalten ohne repeat", () => {
+    const [item] = rowsOf("title;start;repeatCount\nA;2026-11-10T17:00;3\n");
+    expect(normalizeEntry(item, 1).errors[0]).toContain('"repeat"');
   });
 
-  it("lehnt leere, unbekannte und zu neue Dateien ab", () => {
-    expect(parseImportText("  ").fileErrors).not.toEqual([]);
-    expect(parseImportText("nur text").fileErrors[0]).toContain("kein gültiges JSON");
-    expect(parseImportText('{"foo": 1}').fileErrors).not.toEqual([]);
-    expect(parseImportText('{"format":"anderes","appointments":[{}]}').fileErrors[0]).toContain("Unbekanntes Format");
-    expect(parseImportText('{"version":99,"appointments":[{}]}').fileErrors[0]).toContain("Version 99");
-    expect(parseImportText('{"appointments":[]}').fileErrors[0]).toContain("keine Termine");
+  it("warnt bei unbekannten Spalten", () => {
+    const [item] = rowsOf("title;start;ownr\nA;2026-11-10;Anna\n");
+    expect(normalizeEntry(item, 1).warnings[0]).toContain('"ownr"');
+  });
+
+  it("lehnt leere, unvollständige und kaputte Dateien ab", () => {
+    expect(parseImportCsv("  ").fileErrors).not.toEqual([]);
+    expect(parseImportCsv("title;owner\nA;Anna\n").fileErrors[0]).toContain('"start"');
+    expect(parseImportCsv("title;start;title\nA;2026-11-10;B\n").fileErrors[0]).toContain("mehrfach");
+    expect(parseImportCsv("title;start\n").fileErrors[0]).toContain("keine Termine");
+    expect(parseImportCsv('title;start\n"offen;2026-11-10\n').fileErrors[0]).toContain("Anführungszeichen");
   });
 });
 
@@ -100,6 +142,15 @@ describe("normalizeEntry — Zeiten", () => {
     expect(e.end.toISOString()).toBe("2026-11-10T17:00:00.000Z");
   });
 
+  it("versteht das deutsche Datumsformat, das Excel beim Speichern erzeugt", () => {
+    const e = normalizeEntry({ title: "A", start: "10.11.2026 9:00", end: "10.11.2026 10:30" }, 1);
+    expect(e.errors).toEqual([]);
+    expect(e.start).toEqual(d("2026-11-10 09:00"));
+    expect(e.end).toEqual(d("2026-11-10 10:30"));
+    expect(normalizeEntry({ title: "A", start: "24.12.2026" }, 1).allDay).toBe(true);
+    expect(normalizeEntry({ title: "A", start: "31.02.2026" }, 1).errors[0]).toContain('"start"');
+  });
+
   it("behandelt ein Datum ohne Uhrzeit als ganztägig; end ist inklusive", () => {
     const e = normalizeEntry({ title: "Urlaub", start: "2026-12-24", end: "2026-12-26" }, 1);
     expect(e.allDay).toBe(true);
@@ -120,7 +171,7 @@ describe("normalizeEntry — Zeiten", () => {
   it("weist ungültige Zeitangaben ab", () => {
     const bad = (raw: Record<string, unknown>) => normalizeEntry({ title: "A", ...raw }, 1).errors;
     expect(bad({})).toEqual(expect.arrayContaining([expect.stringContaining('"start"')]));
-    expect(bad({ start: "10.11.2026 17:00" })[0]).toContain('"start"');
+    expect(bad({ start: "11/10/2026 17:00" })[0]).toContain('"start"');
     expect(bad({ start: "2026-02-30T10:00" })[0]).toContain('"start"');
     expect(bad({ start: "2026-11-10T25:00" })[0]).toContain('"start"');
     expect(bad({ start: "2026-11-10" , allDay: false })[0]).toContain("Uhrzeit fehlt");
@@ -298,11 +349,11 @@ describe("Wiederholung", () => {
     const err = (repeat: unknown) =>
       normalizeEntry({ title: "A", start: "2026-11-10T17:00", repeat }, 1).errors[0];
     expect(err("manchmal")).toContain("Unbekannte Wiederholung");
-    expect(err({ freq: "weekly", until: "x" })).toContain("repeat.until");
+    expect(err({ freq: "weekly", until: "x" })).toContain("repeatUntil");
     expect(err({ freq: "weekly", until: "2026-12-01", count: 3 })).toContain("gleichzeitig");
-    expect(err({ freq: "daily", days: ["MO"] })).toContain("repeat.days");
+    expect(err({ freq: "daily", days: ["MO"] })).toContain("repeatDays");
     expect(err({ freq: "weekly", days: ["XX"] })).toContain("Unbekannter Wochentag");
-    expect(err({ freq: "weekly", interval: 0 })).toContain("repeat.interval");
+    expect(err({ freq: "weekly", interval: 0 })).toContain("repeatInterval");
     expect(err({ freq: "weekly", until: "2026-11-01" })).toContain("keinen einzigen Termin");
     expect(err("FREQ=HOURLY")).toContain("täglich, wöchentlich");
     expect(err("FREQ=WEEKLY;DTSTART=20261110")).toContain("DTSTART");
@@ -453,14 +504,18 @@ describe("Duplikate", () => {
   });
 });
 
-describe("Beispieldatei aus der Dokumentation", () => {
+describe("CSV-Vorlage", () => {
   it("ist gültig und lässt sich komplett importieren", async () => {
-    const { buildExampleFile } = await import("@/lib/import/exampleFile");
-    const text = buildExampleFile([anna, ben], [car]);
-    const parsed = parseImportText(text);
+    const { buildTemplateCsv } = await import("@/lib/import/exampleFile");
+    const text = buildTemplateCsv([anna, ben], [car]);
+    expect(text.startsWith("\uFEFFtitle;start;")).toBe(true);
+    const parsed = parseImportCsv(text);
     expect(parsed.fileErrors).toEqual([]);
-    const rows = resolveEntries(normalizeAll(parsed.items), ctx());
+    const entries = normalizeAll(parsed.items);
+    expect(entries.flatMap((e) => e.warnings)).toEqual([]);
+    const rows = resolveEntries(entries, ctx());
     expect(rows.filter((r) => r.status !== "ok").map((r) => [r.entry.title, r.errors])).toEqual([]);
     expect(rows.length).toBeGreaterThanOrEqual(5);
+    expect(rows.filter((r) => r.entry.recurrence).length).toBeGreaterThanOrEqual(3);
   });
 });

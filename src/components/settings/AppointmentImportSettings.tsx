@@ -7,7 +7,7 @@ import { useDataStore } from "@/lib/store/dataStore";
 import {
   MAX_IMPORT_BYTES,
   normalizeAll,
-  parseImportText,
+  parseImportCsv,
   personNamesIn,
   resolveEntries,
   unmatchedNames,
@@ -17,7 +17,7 @@ import {
   type NameUsage,
   type ResolvedEntry,
 } from "@/lib/import/appointmentImport";
-import { buildExampleFile } from "@/lib/import/exampleFile";
+import { buildTemplateCsv } from "@/lib/import/exampleFile";
 import { saveResolvedEntries, type ImportOutcome } from "@/lib/import/saveImport";
 import type { FamilyMember } from "@/lib/supabase/types";
 import { formatDate, formatTime, localDateStr } from "@/lib/utils";
@@ -147,7 +147,7 @@ export default function AppointmentImportSettings() {
     return c;
   }, [resolved]);
 
-  const exampleText = useMemo(() => buildExampleFile(members, vehicles), [members, vehicles]);
+  const templateText = useMemo(() => buildTemplateCsv(members, vehicles), [members, vehicles]);
 
   function reset() {
     setPhase("pick");
@@ -173,7 +173,7 @@ export default function AppointmentImportSettings() {
       setFileErrors(["Die Datei konnte nicht gelesen werden."]);
       return;
     }
-    const parsed = parseImportText(text);
+    const parsed = parseImportCsv(text);
     if (parsed.fileErrors.length > 0) {
       setFileErrors(parsed.fileErrors);
       return;
@@ -219,11 +219,11 @@ export default function AppointmentImportSettings() {
     setPhase("done");
   }
 
-  function downloadExample() {
-    const url = URL.createObjectURL(new Blob([exampleText], { type: "application/json" }));
+  function downloadTemplate() {
+    const url = URL.createObjectURL(new Blob([templateText], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
-    link.download = "termine-beispiel.json";
+    link.download = "termine-vorlage.csv";
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -246,24 +246,25 @@ export default function AppointmentImportSettings() {
           <>
             <div className="p-4 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-3">
               <p className="text-sm text-[var(--muted-foreground)]">
-                Termine aus einem anderen Programm übernehmen: eine JSON- oder Textdatei auswählen, die
-                Vorschau prüfen, importieren. Einzeltermine, ganztägige Termine, Ereignisse und
-                Serientermine werden unterstützt, ebenso ein Besitzer plus weitere Teilnehmer.
+                Mehrere Termine auf einmal anlegen: die CSV-Vorlage laden, in Excel oder einem Editor
+                ausfüllen (eine Zeile pro Termin), hier auswählen, Vorschau prüfen, importieren.
+                Einzeltermine, ganztägige Termine, Ereignisse und Serientermine werden unterstützt,
+                ebenso ein Besitzer plus weitere Teilnehmer.
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button onClick={() => inputRef.current?.click()} disabled={!family}>
                   <FileUp className="w-4 h-4" />
                   Datei auswählen
                 </Button>
-                <Button variant="outline" onClick={downloadExample}>
+                <Button variant="outline" onClick={downloadTemplate}>
                   <Download className="w-4 h-4" />
-                  Beispieldatei laden
+                  CSV-Vorlage herunterladen
                 </Button>
               </div>
               <input
                 ref={inputRef}
                 type="file"
-                accept=".json,.jsonl,.txt,application/json,text/plain"
+                accept=".csv,text/csv"
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
@@ -281,23 +282,24 @@ export default function AppointmentImportSettings() {
             </div>
 
             <details className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 text-sm">
-              <summary className="cursor-pointer font-medium">Dateiformat</summary>
+              <summary className="cursor-pointer font-medium">Spalten der Vorlage</summary>
               <div className="mt-3 space-y-3 text-[var(--muted-foreground)]">
                 <p>
-                  Eine Datei mit einer Liste <code>appointments</code>. Jeder Termin ist ein Objekt;
-                  Pflicht sind nur <code>title</code> und <code>start</code>. Zeiten sind lokale Zeiten
-                  (<code>2026-11-10T17:00</code>), ein reines Datum (<code>2026-12-24</code>) ist ganztägig.
+                  Eine Zeile pro Termin, die Kopfzeile bleibt stehen. Pflicht sind nur <code>title</code> und{" "}
+                  <code>start</code>. Zeiten sind lokale Zeiten (<code>2026-11-10T17:00</code> oder{" "}
+                  <code>10.11.2026 17:00</code>), ein reines Datum (<code>2026-12-24</code>) ist ganztägig.
+                  Trennzeichen sind Semikolon, Komma oder Tabulator.
                 </p>
                 <ul className="list-disc space-y-1 pl-5">
                   <li><code>end</code> oder <code>duration</code> (Minuten) — sonst 60 Minuten; bei ganztägigen Terminen ist <code>end</code> der letzte Tag</li>
-                  <li><code>owner</code> — Name des Familienmitglieds; <code>participants</code> — weitere Teilnehmer (Name oder <code>{`{"name": …, "supervisor": true}`}</code>)</li>
-                  <li><code>everyone: true</code> — Familientermin (Spalte „Alle“); <code>event: true</code> — Ereignis (Geburtstag, Feiertag)</li>
-                  <li><code>repeat</code> — <code>&quot;weekly&quot;</code>, <code>&quot;biweekly&quot;</code>, <code>&quot;weekdays&quot;</code>, <code>&quot;daily&quot;</code>, <code>&quot;monthly&quot;</code>, <code>&quot;yearly&quot;</code>, oder ein Objekt mit <code>freq</code>, <code>interval</code>, <code>days</code>, <code>until</code>/<code>count</code>, <code>skip</code> (ausgefallene Tage) — oder ein RRULE-Text aus einem iCal-Export</li>
+                  <li><code>allDay</code>, <code>event</code>, <code>everyone</code> — <code>ja</code> oder <code>nein</code>; „event“ = Ereignis (Geburtstag, Feiertag), „everyone“ = Familientermin (Spalte „Alle“)</li>
+                  <li><code>owner</code> — Name des Familienmitglieds; <code>participants</code> — weitere Teilnehmer, mit <code>|</code> getrennt, ein <code>*</code> dahinter markiert die Aufsichtsperson (<code>Ben|Clara*</code>)</li>
+                  <li><code>repeat</code> — <code>daily</code>, <code>weekdays</code>, <code>weekend</code>, <code>weekly</code>, <code>biweekly</code>, <code>monthly</code>, <code>yearly</code> oder ein RRULE-Text aus einem iCal-Export</li>
+                  <li><code>repeatInterval</code>, <code>repeatDays</code> (<code>MO|WE</code>), <code>repeatUntil</code> / <code>repeatCount</code>, <code>repeatSkip</code> (ausgefallene Tage, mit <code>|</code> getrennt)</li>
                   <li><code>notes</code>, <code>vehicle</code>, <code>travelBefore</code>, <code>travelAfter</code> (Minuten)</li>
-                  <li>Statt einer Liste in einem Objekt geht auch JSON Lines: ein Termin pro Zeile.</li>
                 </ul>
                 <pre className="max-h-72 overflow-auto rounded-md bg-[var(--muted)] p-3 text-xs text-[var(--foreground)]">
-                  {exampleText}
+                  {templateText}
                 </pre>
               </div>
             </details>

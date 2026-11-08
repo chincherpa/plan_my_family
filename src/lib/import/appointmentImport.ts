@@ -1,7 +1,7 @@
 /**
  * Termin-Import: Datei lesen → prüfen → Namen zuordnen → speicherfertige Daten.
  *
- * Das Dateiformat ist in docs/termin-import.md beschrieben. Alles hier ist rein
+ * Das Dateiformat (CSV) ist in docs/termin-import.md beschrieben. Alles hier ist rein
  * funktional (kein Supabase, kein React), damit es sich gut testen lässt.
  *
  * Zeiten arbeiten wie der Rest der App in lokaler Zeit (startOfDay, setHours,
@@ -16,8 +16,6 @@ import type {
   Vehicle,
 } from "@/lib/supabase/types";
 
-export const IMPORT_FORMAT = "plan-my-family/appointments";
-export const IMPORT_VERSION = 1;
 export const MAX_IMPORT_ENTRIES = 2000;
 export const MAX_IMPORT_BYTES = 2 * 1024 * 1024;
 
@@ -28,92 +26,130 @@ const MAX_DURATION_MIN = 14 * 24 * 60;
 
 // ───────────────────────────── Datei lesen ─────────────────────────────
 
+/** Spalten der CSV-Datei, in der Reihenfolge der Vorlage. */
+export const CSV_COLUMNS = [
+  "title", "start", "end", "duration", "allDay", "event", "everyone", "owner",
+  "participants", "notes", "vehicle", "travelBefore", "travelAfter",
+  "repeat", "repeatInterval", "repeatDays", "repeatUntil", "repeatCount", "repeatSkip",
+] as const;
+
+/** Spaltenname ohne Groß-/Kleinschreibung, Leerzeichen und Unterstriche → kanonischer Name. */
+const COLUMN_LOOKUP = new Map<string, string>(
+  CSV_COLUMNS.map((c) => [c.toLowerCase(), c] as [string, string])
+);
+const columnKey = (header: string) => header.toLowerCase().replace(/[\s_\-]+/g, "");
+
+const BOOLEAN_COLUMNS = new Set(["allDay", "event", "everyone"]);
+const INTEGER_COLUMNS = new Set(["duration", "travelBefore", "travelAfter", "repeatInterval", "repeatCount"]);
+const REPEAT_EXTRAS = ["repeatInterval", "repeatDays", "repeatUntil", "repeatCount", "repeatSkip"] as const;
+
 export interface ParsedFile {
   items: unknown[];
   /** Fehler, die die ganze Datei betreffen (dann ist `items` leer). */
   fileErrors: string[];
 }
 
-/**
- * Akzeptiert drei Schreibweisen desselben Inhalts:
- *  1. `{ "format": …, "appointments": [ … ] }`  (empfohlen)
- *  2. ein nacktes Array `[ { … }, { … } ]`
- *  3. JSON Lines: ein Termin-Objekt pro Zeile (Zeilen mit # oder // werden übersprungen)
- */
-export function parseImportText(raw: string): ParsedFile {
-  const text = raw.replace(/^﻿/, "").trim();
-  if (!text) return { items: [], fileErrors: ["Die Datei ist leer."] };
-
-  let whole: unknown;
-  let wholeError: string | null = null;
-  try {
-    whole = JSON.parse(text);
-  } catch (e) {
-    wholeError = e instanceof Error ? e.message : String(e);
+/** Trennzeichen der Kopfzeile: Semikolon (deutsches Excel), Komma oder Tabulator. */
+function detectDelimiter(text: string): string {
+  const firstLine = text.split(/\r?\n/, 1)[0];
+  let inQuotes = false;
+  const counts: Record<string, number> = { ";": 0, ",": 0, "\t": 0 };
+  for (const ch of firstLine) {
+    if (ch === '"') inQuotes = !inQuotes;
+    else if (!inQuotes && ch in counts) counts[ch] += 1;
   }
+  let best = ";";
+  for (const d of [";", ",", "\t"]) if (counts[d] > counts[best]) best = d;
+  return best;
+}
 
-  if (wholeError === null) return fromJsonValue(whole);
-
-  // Kein gültiges JSON als Ganzes → vielleicht JSON Lines.
-  const lines = text.split(/\r?\n/);
-  const content = lines
-    .map((line, i) => ({ line: line.trim(), no: i + 1 }))
-    .filter(({ line }) => line && !line.startsWith("#") && !line.startsWith("//"));
-  if (content.length > 1) {
-    const items: unknown[] = [];
-    const errors: string[] = [];
-    for (const { line, no } of content) {
-      try {
-        items.push(JSON.parse(line));
-      } catch {
-        errors.push(`Zeile ${no}: kein gültiges JSON.`);
+/** CSV nach RFC 4180: Felder in Anführungszeichen dürfen Trennzeichen, Zeilenumbrüche und "" enthalten. */
+function splitCsv(text: string, delimiter: string): string[][] | null {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
       }
+    } else if (ch === '"') {
+      inQuotes = true;
+    } else if (ch === delimiter) {
+      row.push(field);
+      field = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i += 1;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += ch;
     }
-    if (errors.length === 0) return fromJsonValue(items);
-    return {
-      items: [],
-      fileErrors: [
-        "Die Datei ist weder gültiges JSON noch gültiges JSON Lines.",
-        ...errors.slice(0, 5),
-        ...(errors.length > 5 ? [`… und ${errors.length - 5} weitere Zeilen.`] : []),
-      ],
-    };
   }
-  return { items: [], fileErrors: [`Die Datei ist kein gültiges JSON (${wholeError}).`] };
+  if (inQuotes) return null; // Anführungszeichen nicht geschlossen
+  if (field !== "" || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
-  return typeof v === "object" && v !== null && !Array.isArray(v);
+function parseBoolean(value: string): boolean | string {
+  const v = value.toLowerCase();
+  if (["ja", "j", "yes", "y", "true", "wahr", "x", "1"].includes(v)) return true;
+  if (["nein", "n", "no", "false", "falsch", "0"].includes(v)) return false;
+  return value; // bleibt Text → normalizeEntry meldet den Fehler
 }
 
-function fromJsonValue(value: unknown): ParsedFile {
-  let items: unknown[];
-  if (Array.isArray(value)) {
-    items = value;
-  } else if (isRecord(value) && Array.isArray(value.appointments)) {
-    if (value.format !== undefined && value.format !== IMPORT_FORMAT) {
-      return {
-        items: [],
-        fileErrors: [`Unbekanntes Format "${String(value.format)}" (erwartet: "${IMPORT_FORMAT}").`],
-      };
-    }
-    if (typeof value.version === "number" && value.version > IMPORT_VERSION) {
-      return {
-        items: [],
-        fileErrors: [
-          `Die Datei hat Version ${value.version}, diese App versteht höchstens Version ${IMPORT_VERSION}.`,
-        ],
-      };
-    }
-    items = value.appointments;
-  } else if (isRecord(value) && "title" in value) {
-    items = [value]; // ein einzelner Termin
-  } else {
-    return {
-      items: [],
-      fileErrors: ['Erwartet wird ein Objekt mit dem Feld "appointments" (Liste) oder eine Liste von Terminen.'],
-    };
+const splitList = (value: string, separators: RegExp) => value.split(separators).map((s) => s.trim()).filter(Boolean);
+
+/**
+ * Liest eine CSV-Datei (Kopfzeile + eine Zeile pro Termin) und macht aus jeder Zeile
+ * das Objekt, das `normalizeEntry` prüft. Trennzeichen wird erkannt (; , oder Tab).
+ */
+export function parseImportCsv(raw: string): ParsedFile {
+  const text = raw.replace(/^﻿/, "");
+  if (!text.trim()) return { items: [], fileErrors: ["Die Datei ist leer."] };
+
+  const rows = splitCsv(text, detectDelimiter(text));
+  if (!rows) return { items: [], fileErrors: ["Die CSV-Datei ist fehlerhaft: ein Anführungszeichen wird nicht geschlossen."] };
+
+  const [headerRow, ...dataRows] = rows;
+  const fields = headerRow.map((h) => {
+    const name = h.trim();
+    return COLUMN_LOOKUP.get(columnKey(name)) ?? name;
+  });
+
+  const fileErrors: string[] = [];
+  for (const required of ["title", "start"]) {
+    if (!fields.includes(required)) fileErrors.push(`In der Kopfzeile fehlt die Spalte "${required}".`);
   }
+  const duplicate = fields.find((f, i) => f && fields.indexOf(f) !== i);
+  if (duplicate) fileErrors.push(`Die Spalte "${duplicate}" kommt mehrfach vor.`);
+  if (fileErrors.length > 0) return { items: [], fileErrors };
+
+  const items: Record<string, unknown>[] = [];
+  for (const cells of dataRows) {
+    if (cells.every((c) => !c.trim())) continue; // Leerzeile (Excel hängt gern welche an)
+    const item: Record<string, string> = {};
+    fields.forEach((field, i) => {
+      const value = (cells[i] ?? "").trim();
+      if (field && value) item[field] = value;
+    });
+    items.push(convertRow(item));
+  }
+
   if (items.length === 0) return { items: [], fileErrors: ["Die Datei enthält keine Termine."] };
   if (items.length > MAX_IMPORT_ENTRIES) {
     return {
@@ -122,6 +158,38 @@ function fromJsonValue(value: unknown): ParsedFile {
     };
   }
   return { items, fileErrors: [] };
+}
+
+/** Texte aus den Zellen in die Typen bringen, die `normalizeEntry` erwartet. */
+function convertRow(cells: Record<string, string>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(cells)) {
+    if (BOOLEAN_COLUMNS.has(key)) out[key] = parseBoolean(value);
+    else if (INTEGER_COLUMNS.has(key)) out[key] = /^-?\d+$/.test(value) ? Number(value) : value;
+    else if (key === "participants") {
+      // "Ben|Clara*" — ein Stern markiert die Aufsichtsperson
+      out.participants = splitList(value, /\|/).map((name) =>
+        name.endsWith("*") ? { name: name.slice(0, -1).trim(), supervisor: true } : name
+      );
+    } else if (key === "repeatDays" || key === "repeatSkip") out[key] = splitList(value, /[|,\s]+/);
+    else out[key] = value;
+  }
+
+  // repeat* → ein repeat-Wert in der Form, die buildRecurrence versteht
+  const extras: Record<string, unknown> = {};
+  for (const extra of REPEAT_EXTRAS) {
+    if (out[extra] !== undefined) extras[extra.slice("repeat".length).toLowerCase()] = out[extra];
+    delete out[extra];
+  }
+  const rule = typeof out.repeat === "string" ? out.repeat : undefined;
+  if (Object.keys(extras).length > 0) {
+    out.repeat = rule?.includes("=") ? { rrule: rule, ...extras } : { freq: rule, ...extras };
+  }
+  return out;
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 // ───────────────────────────── Termin prüfen ─────────────────────────────
@@ -177,10 +245,18 @@ interface Moment {
   dateOnly: boolean;
 }
 
-/** "2026-11-10" oder "2026-11-10T17:00" (lokal) bzw. mit Z / +01:00 (absolut). */
+/** "2026-11-10" oder "2026-11-10T17:00" (lokal) bzw. mit Z / +01:00 (absolut); auch "10.11.2026 17:00". */
 function parseMoment(value: unknown): Moment | null {
   if (typeof value !== "string") return null;
-  const s = value.trim();
+  let s = value.trim();
+
+  // Excel schreibt Daten gern als "10.11.2026" bzw. "10.11.2026 09:00" zurück
+  const german = /^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[ T](\d{1,2}):(\d{2}))?$/.exec(s);
+  if (german) {
+    const [, dd, mm, yyyy, hh, min] = german;
+    const date = `${yyyy}-${mm.padStart(2, "0")}-${dd.padStart(2, "0")}`;
+    s = hh === undefined ? date : `${date}T${hh.padStart(2, "0")}:${min}`;
+  }
 
   const dateMatch = DATE_RE.exec(s);
   if (dateMatch) {
@@ -248,7 +324,7 @@ export function normalizeEntry(raw: unknown, index: number): ImportEntry {
   }
 
   for (const key of Object.keys(raw)) {
-    if (!KNOWN_KEYS.has(key)) entry.warnings.push(`Unbekanntes Feld "${key}" wird ignoriert.`);
+    if (!KNOWN_KEYS.has(key)) entry.warnings.push(`Unbekannte Spalte "${key}" wird ignoriert.`);
   }
 
   // Titel
@@ -261,7 +337,7 @@ export function normalizeEntry(raw: unknown, index: number): ImportEntry {
   // Schalter
   for (const key of ["allDay", "event", "everyone"] as const) {
     if (raw[key] !== undefined && typeof raw[key] !== "boolean") {
-      entry.errors.push(`"${key}" muss true oder false sein.`);
+      entry.errors.push(`"${key}" muss ja oder nein sein.`);
     }
   }
   entry.event = raw.event === true;
@@ -288,7 +364,7 @@ export function normalizeEntry(raw: unknown, index: number): ImportEntry {
       }
       if (entry.end < entry.start) entry.errors.push('"end" liegt vor "start".');
     } else if (startMoment.dateOnly) {
-      entry.errors.push('Uhrzeit fehlt in "start" (oder "allDay": true setzen).');
+      entry.errors.push('Uhrzeit fehlt in "start" (oder "allDay" auf ja setzen).');
     } else {
       entry.start = startMoment.date;
       if (endMoment) {
@@ -490,20 +566,20 @@ function buildRecurrence(repeat: unknown, start: Date, end: Date): RecurrenceRes
       if (typeof repeat.rrule !== "string") return { error: '"repeat.rrule" muss Text sein.' };
       if (repeat.freq !== undefined || repeat.interval !== undefined || repeat.days !== undefined ||
           repeat.until !== undefined || repeat.count !== undefined) {
-        return { error: '"repeat.rrule" kann nicht mit freq/interval/days/until/count kombiniert werden.' };
+        return { error: 'Ein RRULE-Text in "repeat" kann nicht mit repeatInterval/repeatDays/repeatUntil/repeatCount kombiniert werden (nur repeatSkip).' };
       }
       const err = fromRruleString(repeat.rrule);
       if (err) return { error: err };
     } else {
       if (typeof repeat.freq !== "string" || !PRESETS[repeat.freq.trim().toLowerCase()]) {
-        return { error: `"repeat.freq" fehlt oder ist unbekannt. Erlaubt: ${Object.keys(PRESETS).join(", ")}.` };
+        return { error: `"repeat" fehlt oder ist unbekannt. Erlaubt: ${Object.keys(PRESETS).join(", ")}.` };
       }
       const freqName = repeat.freq.trim().toLowerCase();
       base = { ...PRESETS[freqName] };
 
       if (repeat.interval !== undefined) {
         const interval = readInt(repeat.interval, 1, 99);
-        if (interval === null) return { error: '"repeat.interval" muss eine ganze Zahl von 1 bis 99 sein.' };
+        if (interval === null) return { error: '"repeatInterval" muss eine ganze Zahl von 1 bis 99 sein.' };
         if (freqName === "biweekly" && interval !== 2) {
           return { error: '"biweekly" bedeutet alle 2 Wochen — für andere Abstände "weekly" mit "interval" verwenden.' };
         }
@@ -511,32 +587,32 @@ function buildRecurrence(repeat: unknown, start: Date, end: Date): RecurrenceRes
       }
       if (repeat.days !== undefined) {
         if (freqName !== "weekly" && freqName !== "biweekly") {
-          return { error: '"repeat.days" ist nur bei freq "weekly" oder "biweekly" möglich.' };
+          return { error: '"repeatDays" ist nur bei freq "weekly" oder "biweekly" möglich.' };
         }
         if (!Array.isArray(repeat.days) || repeat.days.length === 0) {
-          return { error: '"repeat.days" muss eine Liste von Wochentagen sein (MO, TU, WE, TH, FR, SA, SU).' };
+          return { error: '"repeatDays" muss eine Liste von Wochentagen sein (MO, TU, WE, TH, FR, SA, SU).' };
         }
         const picked = [];
         for (const day of repeat.days) {
           const key = typeof day === "string" ? day.trim().toUpperCase() : "";
           if (!(key in WEEKDAYS)) {
-            return { error: `Unbekannter Wochentag "${String(day)}" in "repeat.days" (MO, TU, WE, TH, FR, SA, SU).` };
+            return { error: `Unbekannter Wochentag "${String(day)}" in "repeatDays" (MO, TU, WE, TH, FR, SA, SU).` };
           }
           picked.push(WEEKDAYS[key as keyof typeof WEEKDAYS]);
         }
         base.byweekday = picked;
       }
       if (repeat.until !== undefined && repeat.count !== undefined) {
-        return { error: '"repeat.until" und "repeat.count" können nicht gleichzeitig angegeben werden.' };
+        return { error: '"repeatUntil" und "repeatCount" können nicht gleichzeitig angegeben werden.' };
       }
       if (repeat.until !== undefined) {
         const until = parseMoment(repeat.until);
-        if (!until) return { error: '"repeat.until" hat kein gültiges Datum (JJJJ-MM-TT).' };
+        if (!until) return { error: '"repeatUntil" hat kein gültiges Datum (JJJJ-MM-TT).' };
         base.until = until.dateOnly ? endOfLocalDay(until.date) : until.date;
       }
       if (repeat.count !== undefined) {
         const count = readInt(repeat.count, 1, 1000);
-        if (count === null) return { error: '"repeat.count" muss eine ganze Zahl von 1 bis 1000 sein.' };
+        if (count === null) return { error: '"repeatCount" muss eine ganze Zahl von 1 bis 1000 sein.' };
         base.count = count;
       }
     }
@@ -565,10 +641,10 @@ function buildRecurrence(repeat: unknown, start: Date, end: Date): RecurrenceRes
   // Ausnahmen: nur Tage, an denen die Serie wirklich einen Termin hat
   const skipDates: string[] = [];
   if (skipRaw !== undefined && skipRaw !== null) {
-    if (!Array.isArray(skipRaw)) return { error: '"repeat.skip" muss eine Liste von Daten sein.' };
+    if (!Array.isArray(skipRaw)) return { error: '"repeatSkip" muss eine Liste von Daten sein.' };
     for (const value of skipRaw) {
       const moment = parseMoment(value);
-      if (!moment) return { error: `"repeat.skip": "${String(value)}" ist kein gültiges Datum (JJJJ-MM-TT).` };
+      if (!moment) return { error: `"repeatSkip": "${String(value)}" ist kein gültiges Datum (JJJJ-MM-TT).` };
       const key = localDateStr(moment.date);
       const dayBefore = new Date(moment.date.getFullYear(), moment.date.getMonth(), moment.date.getDate() - 1);
       const dayAfter = new Date(moment.date.getFullYear(), moment.date.getMonth(), moment.date.getDate() + 2);
@@ -807,7 +883,7 @@ export function resolveEntries(entries: ImportEntry[], ctx: ImportContext): Reso
   });
 }
 
-/** Bequemer Einstieg: Text → geprüfte Einträge (Fehler pro Eintrag, nicht abbrechend). */
+/** Bequemer Einstieg: Zeilen → geprüfte Einträge (Fehler pro Eintrag, nicht abbrechend). */
 export function normalizeAll(items: unknown[]): ImportEntry[] {
   return items.map((item, i) => normalizeEntry(item, i + 1));
 }

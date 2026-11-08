@@ -1,72 +1,48 @@
 # Termine importieren
 
-**Einstellungen → Termine importieren.** Dort eine Datei auswählen, die Vorschau prüfen,
-Namen zuordnen und importieren. Unter „Dateiformat“ auf der Seite gibt es eine Beispieldatei
-mit den echten Namen der Familie zum Herunterladen — der einfachste Einstieg.
-
-Gedacht ist das für den Export aus einem anderen Programm: ein kleines Skript (oder ein
-Editor) erzeugt die Datei, die App liest sie ein.
+**Einstellungen → Termine importieren.** Dort die **CSV-Vorlage herunterladen**, lokal in Excel
+(oder einem Texteditor) ausfüllen, wieder auswählen, Vorschau prüfen, Namen zuordnen und
+importieren. Die Vorlage enthält die echten Namen der Familie und fünf Beispieltermine
+(Titel beginnen mit „Beispiel“, damit man sie leicht wieder löscht) — der einfachste Einstieg.
 
 ## Dateiformat
 
-Eine JSON-Datei (Endung `.json` oder `.txt` — der Inhalt zählt, nicht die Endung):
+Eine CSV-Datei: **die Kopfzeile bleibt stehen, jede weitere Zeile ist ein Termin, jede Spalte
+ein Feld.** Das Trennzeichen (Semikolon, Komma oder Tabulator) wird automatisch erkannt; die
+Vorlage nutzt Semikolon und UTF-8 mit BOM, damit deutsches Excel sie direkt richtig öffnet.
+Beim Speichern in Excel „CSV UTF-8 (durch Trennzeichen getrennt)“ wählen. Leere Zeilen und
+leere Zellen werden übersprungen, Spaltenreihenfolge und Groß-/Kleinschreibung der Kopfzeile
+sind egal (`travel_before` = `travelBefore`).
 
-```json
-{
-  "format": "plan-my-family/appointments",
-  "version": 1,
-  "appointments": [
-    {
-      "title": "Zahnarzt",
-      "start": "2026-11-10T09:00",
-      "end": "2026-11-10T10:00",
-      "owner": "Anna",
-      "participants": ["Ben"],
-      "vehicle": "Auto",
-      "travelBefore": 15,
-      "travelAfter": 15,
-      "notes": "Versichertenkarte mitnehmen"
-    },
-    {
-      "title": "Training",
-      "start": "2026-11-09T17:00",
-      "duration": 90,
-      "owner": "Ben",
-      "participants": [{ "name": "Anna", "supervisor": true }],
-      "repeat": { "freq": "weekly", "days": ["MO", "WE"], "until": "2026-12-20", "skip": ["2026-11-11"] }
-    }
-  ]
-}
+```csv
+title;start;end;duration;allDay;event;everyone;owner;participants;notes;vehicle;travelBefore;travelAfter;repeat;repeatInterval;repeatDays;repeatUntil;repeatCount;repeatSkip
+Zahnarzt;2026-11-10T09:00;2026-11-10T10:00;;;;;Anna;Ben;Versichertenkarte mitnehmen;Auto;15;15;;;;;;
+Training;2026-11-09T17:00;;90;;;;Ben;Anna*;;;;;weekly;;MO|WE;2026-12-20;;2026-11-11
 ```
-
-`format` und `version` sind optional, aber empfohlen: eine Datei mit einer neueren Version
-als die App kennt, wird abgelehnt statt falsch gelesen.
-
-Alternativ werden zwei kürzere Schreibweisen akzeptiert:
-
-- **nacktes Array**: `[ { "title": … }, { "title": … } ]`
-- **JSON Lines**: ein Termin-Objekt pro Zeile. Leere Zeilen und Zeilen, die mit `#` oder `//`
-  beginnen, werden übersprungen. Praktisch, wenn ein Skript Zeile für Zeile schreibt.
 
 Bis zu 2000 Termine und 2 MB pro Datei.
 
-### Felder eines Termins
+### Spalten
 
-| Feld | Typ | Bedeutung |
-| --- | --- | --- |
-| `title` | Text, **Pflicht** | Titel des Termins |
-| `start` | Text, **Pflicht** | `"2026-11-10T17:00"` (lokale Zeit) oder `"2026-12-24"` (nur Datum → ganztägig) |
-| `end` | Text | Ende im selben Format wie `start`. Bei ganztägigen Terminen der **letzte** Tag (inklusive) |
-| `duration` | Zahl | Dauer in Minuten, statt `end`. Ohne `end` und `duration`: 60 Minuten |
-| `allDay` | `true`/`false` | Erzwingt ganztägig bzw. mit Uhrzeit. Meist unnötig, weil ein reines Datum schon ganztägig bedeutet |
-| `owner` | Text | Name des Familienmitglieds, dem der Termin gehört (seine Spalte im Kalender) |
-| `participants` | Liste | Weitere Teilnehmer: `"Ben"` oder `{ "name": "Ben", "supervisor": true }` |
-| `everyone` | `true`/`false` | Familientermin → Spalte „Alle“, kein `owner` nötig |
-| `event` | `true`/`false` | Ereignis (Geburtstag, Feiertag) → Spalte „Ereignisse“, kein `owner` nötig |
-| `repeat` | Text oder Objekt | Wiederholung, siehe unten |
-| `notes` | Text | Notizen |
-| `vehicle` | Text | Name eines Fahrzeugs (nicht bei ganztägigen Terminen und Ereignissen) |
-| `travelBefore`, `travelAfter` | Zahl | Anfahrt / Rückfahrt in Minuten, 0–240 (nicht bei ganztägigen Terminen und Ereignissen) |
+| Spalte | Bedeutung |
+| --- | --- |
+| `title` | **Pflicht.** Titel des Termins |
+| `start` | **Pflicht.** `2026-11-10T17:00` (lokale Zeit) oder `2026-12-24` (nur Datum → ganztägig). Auch `10.11.2026 17:00` / `10.11.2026` — so schreibt Excel Daten gern zurück |
+| `end` | Ende im selben Format wie `start`. Bei ganztägigen Terminen der **letzte** Tag (inklusive) |
+| `duration` | Dauer in Minuten, statt `end`. Ohne `end` und `duration`: 60 Minuten |
+| `allDay` | `ja`/`nein`. Erzwingt ganztägig bzw. mit Uhrzeit. Meist unnötig, weil ein reines Datum schon ganztägig bedeutet |
+| `owner` | Name des Familienmitglieds, dem der Termin gehört (seine Spalte im Kalender) |
+| `participants` | Weitere Teilnehmer, mit `\|` getrennt: `Ben\|Clara`. Ein `*` dahinter markiert die Aufsichtsperson: `Clara*` |
+| `everyone` | `ja`/`nein`. Familientermin → Spalte „Alle“, kein `owner` nötig |
+| `event` | `ja`/`nein`. Ereignis (Geburtstag, Feiertag) → Spalte „Ereignisse“, kein `owner` nötig |
+| `repeat` | Wiederholung, siehe unten |
+| `repeatInterval`, `repeatDays`, `repeatUntil`, `repeatCount`, `repeatSkip` | Feinheiten der Wiederholung, siehe unten |
+| `notes` | Notizen |
+| `vehicle` | Name eines Fahrzeugs (nicht bei ganztägigen Terminen und Ereignissen) |
+| `travelBefore`, `travelAfter` | Anfahrt / Rückfahrt in Minuten, 0–240 (nicht bei ganztägigen Terminen und Ereignissen) |
+
+Als „ja“ gelten `ja`, `j`, `yes`, `true`, `wahr`, `x`, `1`; als „nein“ `nein`, `n`, `no`,
+`false`, `falsch`, `0`.
 
 Hinweise:
 
@@ -78,38 +54,33 @@ Hinweise:
 - Ohne `owner`, `everyone` oder `event` (und ohne Teilnehmer) kann ein Termin nicht importiert
   werden — er wäre in keiner Spalte sichtbar.
 - Mit `everyone` oder `event` werden `owner` und `participants` ignoriert (mit Hinweis).
-- Unbekannte Felder werden ignoriert und in der Vorschau als Hinweis angezeigt, damit
+- Unbekannte Spalten werden ignoriert und in der Vorschau als Hinweis angezeigt, damit
   Tippfehler wie `ownr` auffallen.
+- `#7` in der Vorschau meint den siebten Termin der Datei (Leerzeilen zählen nicht).
 
-### Wiederholungen (`repeat`)
+### Wiederholungen
 
-**Kurzform** — ein Wort, entspricht den Auswahlpunkten im Terminformular:
+**`repeat`** — ein Wort, entspricht den Auswahlpunkten im Terminformular:
 
 `daily` · `weekdays` (Mo–Fr) · `weekend` (Sa/So) · `weekly` · `biweekly` (alle 2 Wochen) · `monthly` · `yearly`
 
-**Objekt** — für alles Weitere:
+Für alles Weitere die Zusatzspalten (nur zusammen mit einem `repeat`-Wort):
 
-| Feld | Bedeutung |
+| Spalte | Bedeutung |
 | --- | --- |
-| `freq` | eines der Wörter oben (Pflicht) |
-| `interval` | Abstand, z. B. `3` bei `weekly` = alle 3 Wochen (1–99) |
-| `days` | Wochentage `MO TU WE TH FR SA SU`, nur bei `weekly`/`biweekly` |
-| `until` | letzter möglicher Tag, `"2026-12-20"` (inklusive) |
-| `count` | Anzahl der Termine (1–1000). `until` und `count` schließen sich aus |
-| `skip` | Liste von Tagen, an denen die Serie ausfällt, z. B. `["2026-11-11"]` |
+| `repeatInterval` | Abstand, z. B. `3` bei `weekly` = alle 3 Wochen (1–99) |
+| `repeatDays` | Wochentage `MO TU WE TH FR SA SU`, mit `\|` getrennt (`MO\|WE`), nur bei `weekly`/`biweekly` |
+| `repeatUntil` | letzter möglicher Tag, `2026-12-20` (inklusive) |
+| `repeatCount` | Anzahl der Termine (1–1000). `repeatUntil` und `repeatCount` schließen sich aus |
+| `repeatSkip` | Tage, an denen die Serie ausfällt, mit `\|` getrennt: `2026-11-11\|2026-11-18` |
 
-**RRULE-Text** — wer aus einem iCal-Export kommt, kann den Text direkt übernehmen:
+**RRULE-Text** — wer aus einem iCal-Export kommt, kann den Text direkt in `repeat` übernehmen,
+z. B. `FREQ=WEEKLY;BYDAY=TU,TH;UNTIL=20261220` oder `FREQ=MONTHLY;COUNT=12`. Dazu darf nur
+`repeatSkip` kombiniert werden. Erlaubt sind tägliche, wöchentliche, monatliche und jährliche
+Regeln; `DTSTART` gehört nicht in den Text, der Start kommt aus `start`.
 
-```json
-{ "repeat": "FREQ=WEEKLY;BYDAY=TU,TH;UNTIL=20261220" }
-{ "repeat": { "rrule": "FREQ=MONTHLY;COUNT=12", "skip": ["2027-01-15"] } }
-```
-
-Erlaubt sind tägliche, wöchentliche, monatliche und jährliche Regeln; `DTSTART` gehört nicht
-in den Text, der Start kommt aus `start`.
-
-Passt der Starttag nicht zur Regel (z. B. Start am Donnerstag, `days` = Mo/Mi), beginnt die
-Serie am ersten passenden Tag; die Vorschau weist darauf hin. Tage aus `skip`, an denen die
+Passt der Starttag nicht zur Regel (z. B. Start am Donnerstag, `repeatDays` = Mo/Mi), beginnt die
+Serie am ersten passenden Tag; die Vorschau weist darauf hin. Tage aus `repeatSkip`, an denen die
 Serie gar keinen Termin hat, werden ignoriert (ebenfalls mit Hinweis).
 
 ## Ablauf und Verhalten
@@ -130,6 +101,6 @@ Importierte Termine sind danach normale Termine und lassen sich im Kalender wie 
 bearbeiten und löschen.
 
 > **Beim Bearbeiten ganzer Serien:** Das Terminformular kennt die Wiederholungs-Auswahlpunkte,
-> aber kein Enddatum (`until`/`count`). Wird eine importierte Serie mit „Ganze Serie“ im Formular
+> aber kein Enddatum (`repeatUntil`/`repeatCount`). Wird eine importierte Serie mit „Ganze Serie“ im Formular
 > gespeichert, wird sie aus der Auswahl neu gebaut und verliert ein Enddatum bzw. besondere
 > Wochentage.
