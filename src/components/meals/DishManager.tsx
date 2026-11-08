@@ -19,6 +19,7 @@ import {
   Tags,
   SquareCheckBig,
   Square,
+  ChevronRight,
 } from "lucide-react";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useRecipeSelection } from "@/lib/store/recipeSelectionStore";
@@ -73,6 +74,15 @@ export default function DishManager() {
 
   const [query, setQuery] = useState("");
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  // Kategorien in der gruppierten Ansicht: standardmäßig eingeklappt.
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(() => new Set());
+  const toggleCat = (name: string) =>
+    setExpandedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
   const [sort, setSort] = useState<SortMode>("name");
   const [editor, setEditor] = useState<EditorState>(null);
   const [planDish, setPlanDish] = useState<string | null>(null);
@@ -474,23 +484,38 @@ export default function DishManager() {
           )}
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-3">
           {sections.map(({ name, items }) => {
             const cat = name !== null ? catByName.get(name) : undefined;
+            const expanded = name === null || expandedCats.has(name);
             return (
               <section key={name ?? "_all"} className="space-y-2">
                 {name !== null && (
-                  <h2 className="flex items-center gap-2 text-sm font-semibold">
-                    <span
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: cat?.color ?? FALLBACK_CATEGORY_COLOR }}
-                    />
-                    {categoryLabel(name)}
-                    <span className="tabular text-xs font-normal text-[var(--muted-foreground)]">
-                      {items.length}
-                    </span>
+                  <h2>
+                    <button
+                      type="button"
+                      onClick={() => toggleCat(name)}
+                      aria-expanded={expanded}
+                      className="-mx-1 flex w-[calc(100%+0.5rem)] items-center gap-2 rounded-lg px-1 py-1 text-left text-sm font-semibold transition-colors hover:bg-[var(--accent)]"
+                    >
+                      <ChevronRight
+                        className={cn(
+                          "h-4 w-4 shrink-0 text-[var(--muted-foreground)] transition-transform",
+                          expanded && "rotate-90"
+                        )}
+                      />
+                      <span
+                        className="h-2.5 w-2.5 rounded-full"
+                        style={{ backgroundColor: cat?.color ?? FALLBACK_CATEGORY_COLOR }}
+                      />
+                      {categoryLabel(name)}
+                      <span className="tabular text-xs font-normal text-[var(--muted-foreground)]">
+                        {items.length}
+                      </span>
+                    </button>
                   </h2>
                 )}
+                {expanded && (
                 <div className="grid gap-2 sm:grid-cols-2">
                   {items.map((r) => (
                     <DishCard
@@ -508,6 +533,7 @@ export default function DishManager() {
                     />
                   ))}
                 </div>
+                )}
               </section>
             );
           })}
