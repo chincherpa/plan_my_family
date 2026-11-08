@@ -19,7 +19,7 @@ Familienmitglied, plus die Spalten „Alle" (Familienausflüge) und „Ereigniss
   dadurch automatisch im Kalender.
 - **Essensplanung** — Mittag- und Abendessen pro Tag als freier Text.
 - **Termin-Import** — Termine (auch Serien, mit Besitzer und weiteren Teilnehmern) aus einer
-  JSON- oder Textdatei übernehmen, siehe [docs/termin-import.md](docs/termin-import.md).
+  CSV-Datei (Vorlage zum Download in den Einstellungen) übernehmen, siehe [docs/termin-import.md](docs/termin-import.md).
 
 ## Stack
 

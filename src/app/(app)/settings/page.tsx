@@ -71,7 +71,7 @@ export default function SettingsPage() {
           </div>
           <div>
             <p className="font-medium">Termine importieren</p>
-            <p className="text-sm text-[var(--muted-foreground)]">Aus JSON- oder Textdatei, inkl. Serientermine</p>
+            <p className="text-sm text-[var(--muted-foreground)]">Aus CSV-Datei (Vorlage zum Download), inkl. Serientermine</p>
           </div>
         </div>
         <ArrowRight className="w-4 h-4 text-[var(--muted-foreground)]" />
