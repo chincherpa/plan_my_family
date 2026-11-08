@@ -17,7 +17,9 @@ Familienmitglied, plus die Spalten „Alle" (Familienausflüge) und „Ereigniss
   Übersichtsseite (demnächst anstehend, nach Monaten gruppiert, mit Alter bzw.
   Jubiläum). Sie werden als jährliche Ereignis-Serie gespeichert und erscheinen
   dadurch automatisch im Kalender.
-- **Essensplanung** — Mittag- und Abendessen pro Tag als freier Text.
+- **Essensplanung** — Mittag- und Abendessen pro Tag als freier Text oder aus der Rezepte-App.
+  Pro Wochentag lässt sich in den Einstellungen eine Kategorie festlegen (z. B. Montag = Pasta);
+  beim Planen werden dann zuerst nur Gerichte dieser Kategorie angeboten, ein Schalter zeigt alle.
 - **Termin-Import** — Termine (auch Serien, mit Besitzer und weiteren Teilnehmern) aus einer
   CSV-Datei (Vorlage zum Download in den Einstellungen) übernehmen, siehe [docs/termin-import.md](docs/termin-import.md).
 

@@ -11,6 +11,7 @@ export interface Database {
           name: string;
           calendar_start_hour: number;
           calendar_end_hour: number;
+          meal_weekday_categories: Json;
           created_at: string;
         };
         Insert: {
@@ -18,6 +19,7 @@ export interface Database {
           name: string;
           calendar_start_hour?: number;
           calendar_end_hour?: number;
+          meal_weekday_categories?: Json;
           created_at?: string;
         };
         Update: {
@@ -25,6 +27,7 @@ export interface Database {
           name?: string;
           calendar_start_hour?: number;
           calendar_end_hour?: number;
+          meal_weekday_categories?: Json;
           created_at?: string;
         };
         Relationships: [];
