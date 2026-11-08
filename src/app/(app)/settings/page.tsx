@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Users, Car, UtensilsCrossed, FileUp, ArrowRight } from "lucide-react";
 import CalendarDisplaySettings from "@/components/settings/CalendarDisplaySettings";
 import ThemeSettings from "@/components/settings/ThemeSettings";
+import MealWeekdaySettings from "@/components/settings/MealWeekdaySettings";
 
 export default function SettingsPage() {
   return (
@@ -60,6 +61,8 @@ export default function SettingsPage() {
         </div>
         <ArrowRight className="w-4 h-4 text-[var(--muted-foreground)]" />
       </Link>
+
+      <MealWeekdaySettings />
 
       <Link
         href="/settings/import"
