@@ -22,7 +22,7 @@ const DAYS_AHEAD = 31;
 
 export default function MealOverview() {
   const { family, meals, recipes, upsertMeal } = useDataStore();
-  const [editDate, setEditDate] = useState<string | null>(null);
+  const [edit, setEdit] = useState<{ date: string; type: MealType } | null>(null);
   const [shopping, setShopping] = useState<{ kw: number; weekStart: string; planned: PlannedDish[] } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [dragKey, setDragKey] = useState<string | null>(null);
@@ -144,7 +144,7 @@ export default function MealOverview() {
     return (
       <div className="flex items-center gap-1">
         <button
-          onClick={() => setEditDate(dateStr)}
+          onClick={() => setEdit({ date: dateStr, type: mealType })}
           disabled={isPast}
           draggable={!isPast && !!dish}
           onDragStart={(e) => {
@@ -295,11 +295,12 @@ export default function MealOverview() {
         />
       )}
 
-      {editDate && (
+      {edit && (
         <MealEditDialog
-          date={editDate}
-          meal={mealsByDate.get(editDate) ?? null}
-          onClose={() => setEditDate(null)}
+          date={edit.date}
+          meal={mealsByDate.get(edit.date) ?? null}
+          initialType={edit.type}
+          onClose={() => setEdit(null)}
         />
       )}
     </div>
