@@ -10,7 +10,7 @@ Familienmitglied, plus die Spalten „Alle" (Familienausflüge) und „Ereigniss
   sobald kein erziehungsberechtigtes Mitglied verfügbar ist.
 - **Fahrzeugkonflikte** — Doppelbuchungen eines Fahrzeugs werden inklusive
   Anfahrts- und Rückfahrtszeiten erkannt.
-- **Konflikt-Banner** — beides gebündelt für die nächsten 14 Tage, mit Sprunglinks.
+- **Konflikt-Banner** — Konflikte gebündelt für die nächsten 14 Tage, mit Sprunglinks.
 - **Serientermine** — wiederkehrende Termine (RRULE), einzeln oder als ganze
   Serie bearbeit- und löschbar.
 - **Jahrestage** — Geburtstage, Hochzeits-, Kennenlern- und Gedenktage auf einer
