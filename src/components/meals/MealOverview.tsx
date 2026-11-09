@@ -6,6 +6,7 @@ import { getISOWeek, localDateStr, startOfDay } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import MealEditDialog from "@/components/calendar/MealEditDialog";
 import ShoppingListDialog from "./ShoppingListDialog";
+import { weekStartOf, type PlannedDish } from "@/lib/recipes/shoppingList";
 import type { Meal } from "@/lib/supabase/types";
 
 type MealType = "lunch" | "dinner";
@@ -22,7 +23,7 @@ const DAYS_AHEAD = 31;
 export default function MealOverview() {
   const { family, meals, recipes, upsertMeal } = useDataStore();
   const [editDate, setEditDate] = useState<string | null>(null);
-  const [shopping, setShopping] = useState<{ kw: number; dishes: string[] } | null>(null);
+  const [shopping, setShopping] = useState<{ kw: number; weekStart: string; planned: PlannedDish[] } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
@@ -211,11 +212,14 @@ export default function MealOverview() {
         <div key={`${year}-${kw}`}>
           {(() => {
             // Einkauf nur für noch anstehende Tage dieser Woche (vergangene sind bereits gegessen)
-            const dishes = groupDays
+            const planned: PlannedDish[] = groupDays
               .filter((d) => !d.isPast)
               .flatMap((d) => {
                 const m = mealsByDate.get(d.dateStr);
-                return [m?.lunch, m?.dinner].filter((x): x is string => !!x?.trim());
+                const slots: PlannedDish[] = [];
+                if (m?.lunch?.trim()) slots.push({ name: m.lunch, date: d.dateStr, type: "lunch" });
+                if (m?.dinner?.trim()) slots.push({ name: m.dinner, date: d.dateStr, type: "dinner" });
+                return slots;
               });
             return (
               <div className="flex items-center gap-3 mb-2">
@@ -225,9 +229,9 @@ export default function MealOverview() {
                 <div className="flex-1 h-px bg-[var(--border)]" />
                 <button
                   type="button"
-                  onClick={() => setShopping({ kw, dishes })}
-                  disabled={dishes.length === 0}
-                  title={dishes.length === 0 ? "Keine geplanten Gerichte in dieser Woche" : "Einkaufszettel erstellen"}
+                  onClick={() => setShopping({ kw, weekStart: weekStartOf(groupDays[0].date), planned })}
+                  disabled={planned.length === 0 || !family}
+                  title={planned.length === 0 ? "Keine geplanten Gerichte in dieser Woche" : "Einkaufszettel erstellen"}
                   className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-40"
                 >
                   <ShoppingCart className="h-3.5 w-3.5" />
@@ -280,10 +284,12 @@ export default function MealOverview() {
         </div>
       ))}
 
-      {shopping && (
+      {shopping && family && (
         <ShoppingListDialog
           title={`Einkaufszettel KW ${shopping.kw}`}
-          dishNames={shopping.dishes}
+          familyId={family.id}
+          weekStart={shopping.weekStart}
+          planned={shopping.planned}
           recipes={recipes}
           onClose={() => setShopping(null)}
         />
