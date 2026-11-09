@@ -251,8 +251,13 @@ export default function ShoppingListDialog({
                     <ul className="space-y-1 bg-[var(--accent)]/40 px-4 pb-3 pt-1 text-sm">
                       {line.uses.map((u) => (
                         <li key={u.dish} className="flex flex-wrap items-baseline gap-x-2">
-                          <span className="font-medium">{u.dish}</span>
-                          {line.uses.length > 1 && u.amounts.length > 0 && (
+                          <span className="font-medium">
+                            {u.slots.length > 1 && (
+                              <span className="tabular mr-1 text-[var(--muted-foreground)]">{u.slots.length}×</span>
+                            )}
+                            {u.dish}
+                          </span>
+                          {(line.uses.length > 1 || u.slots.length > 1) && u.amounts.length > 0 && (
                             <span className="tabular text-xs text-[var(--muted-foreground)]">
                               {u.amounts.join(" + ")}
                             </span>

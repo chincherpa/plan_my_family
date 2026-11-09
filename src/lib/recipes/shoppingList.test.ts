@@ -88,12 +88,12 @@ describe("ingredientLines", () => {
   );
   const lines = ingredientLines(list);
 
-  it("sortiert alphabetisch nach Zutat und summiert die Mengen", () => {
+  it("sortiert alphabetisch nach Zutat und summiert die Mengen pro Termin", () => {
     expect(lines.map((l) => [l.zutat, l.amounts])).toEqual([
       ["Kokosmilch", ["1 Dose"]],
-      ["Linsen", ["300 g"]],
+      ["Linsen", ["400 g"]], // 200 g Curry + 2 × 100 g Pasta
       ["Parmesan", []],
-      ["Zwiebel", ["3"]],
+      ["Zwiebel", ["4"]], // 2 Curry + 2 × 1 Pasta
     ]);
   });
 
@@ -102,7 +102,7 @@ describe("ingredientLines", () => {
       { dish: "Linsen-Curry", amounts: ["2"], slots: [{ date: "2026-11-10", type: "dinner" }] },
       {
         dish: "Pasta",
-        amounts: ["1"],
+        amounts: ["2"],
         slots: [
           { date: "2026-11-12", type: "lunch" },
           { date: "2026-11-13", type: "dinner" },
