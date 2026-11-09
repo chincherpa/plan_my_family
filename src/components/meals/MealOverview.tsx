@@ -1,10 +1,11 @@
 "use client";
 import { useMemo, useState } from "react";
-import { X } from "lucide-react";
+import { ShoppingCart, X } from "lucide-react";
 import { useDataStore } from "@/lib/store/dataStore";
 import { getISOWeek, localDateStr, startOfDay } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import MealEditDialog from "@/components/calendar/MealEditDialog";
+import ShoppingListDialog from "./ShoppingListDialog";
 import type { Meal } from "@/lib/supabase/types";
 
 type MealType = "lunch" | "dinner";
@@ -19,8 +20,9 @@ interface DayEntry {
 const DAYS_AHEAD = 31;
 
 export default function MealOverview() {
-  const { family, meals, upsertMeal } = useDataStore();
+  const { family, meals, recipes, upsertMeal } = useDataStore();
   const [editDate, setEditDate] = useState<string | null>(null);
+  const [shopping, setShopping] = useState<{ kw: number; dishes: string[] } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
@@ -34,28 +36,24 @@ export default function MealOverview() {
     const today = startOfDay(new Date());
     const todayStr = localDateStr(today);
 
-    // Today + the next 30 days, plus any past day that already has a meal
-    const entries = new Map<string, DayEntry>();
+    // Ab Montag der aktuellen Kalenderwoche, bis heute + 30 Tage. Vergangene Wochen bleiben außen vor.
+    const mondayOffset = (today.getDay() + 6) % 7;
+    const monday = new Date(today);
+    monday.setDate(today.getDate() - mondayOffset);
+    const lastDate = new Date(today);
+    lastDate.setDate(today.getDate() + DAYS_AHEAD - 1);
+    const lastStr = localDateStr(lastDate);
 
-    for (const meal of meals) {
-      if (meal.date >= todayStr) continue;
-      entries.set(meal.date, {
-        date: new Date(`${meal.date}T00:00:00`),
-        dateStr: meal.date,
-        isPast: true,
-        isToday: false,
-      });
-    }
-
-    for (let i = 0; i < DAYS_AHEAD; i++) {
-      const date = new Date(today);
-      date.setDate(date.getDate() + i);
+    const result: DayEntry[] = [];
+    for (let i = 0; ; i++) {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + i);
       const dateStr = localDateStr(date);
-      entries.set(dateStr, { date, dateStr, isPast: false, isToday: i === 0 });
+      if (dateStr > lastStr) break;
+      result.push({ date, dateStr, isPast: dateStr < todayStr, isToday: dateStr === todayStr });
     }
-
-    return [...entries.values()].sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [meals]);
+    return result;
+  }, []);
 
   // Group by ISO calendar week
   const groups = useMemo(() => {
@@ -211,12 +209,33 @@ export default function MealOverview() {
 
       {groups.map(({ kw, year, days: groupDays }) => (
         <div key={`${year}-${kw}`}>
-          <div className="flex items-center gap-3 mb-2">
-            <span className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
-              KW {kw}
-            </span>
-            <div className="flex-1 h-px bg-[var(--border)]" />
-          </div>
+          {(() => {
+            // Einkauf nur für noch anstehende Tage dieser Woche (vergangene sind bereits gegessen)
+            const dishes = groupDays
+              .filter((d) => !d.isPast)
+              .flatMap((d) => {
+                const m = mealsByDate.get(d.dateStr);
+                return [m?.lunch, m?.dinner].filter((x): x is string => !!x?.trim());
+              });
+            return (
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
+                  KW {kw}
+                </span>
+                <div className="flex-1 h-px bg-[var(--border)]" />
+                <button
+                  type="button"
+                  onClick={() => setShopping({ kw, dishes })}
+                  disabled={dishes.length === 0}
+                  title={dishes.length === 0 ? "Keine geplanten Gerichte in dieser Woche" : "Einkaufszettel erstellen"}
+                  className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-40"
+                >
+                  <ShoppingCart className="h-3.5 w-3.5" />
+                  Einkaufszettel erstellen
+                </button>
+              </div>
+            );
+          })()}
 
           <div className="space-y-1.5">
             {groupDays.map(({ date, dateStr, isPast, isToday }) => {
@@ -260,6 +279,15 @@ export default function MealOverview() {
           </div>
         </div>
       ))}
+
+      {shopping && (
+        <ShoppingListDialog
+          title={`Einkaufszettel KW ${shopping.kw}`}
+          dishNames={shopping.dishes}
+          recipes={recipes}
+          onClose={() => setShopping(null)}
+        />
+      )}
 
       {editDate && (
         <MealEditDialog
