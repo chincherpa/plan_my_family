@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildShoppingList,
-  ingredientUsage,
+  ingredientLines,
   sumAmounts,
   weekStartOf,
   type PlannedDish,
@@ -80,19 +80,42 @@ describe("buildShoppingList", () => {
   });
 });
 
-describe("ingredientUsage", () => {
-  it("sammelt pro Zutat alle Gerichte mit ihrer Menge", () => {
-    const list = buildShoppingList(
-      [plan("Linsen-Curry", "2026-11-10"), plan("Pasta", "2026-11-11")],
-      recipes,
-      ingredients
-    );
-    const usage = ingredientUsage(list);
-    expect(usage.get("zwiebel")?.map((u) => [u.dish, u.menge])).toEqual([
-      ["Linsen-Curry", "2"],
-      ["Pasta", "1"],
+describe("ingredientLines", () => {
+  const list = buildShoppingList(
+    [plan("Pasta", "2026-11-12", "lunch"), plan("Linsen-Curry", "2026-11-10"), plan("Pasta", "2026-11-13")],
+    recipes,
+    ingredients
+  );
+  const lines = ingredientLines(list);
+
+  it("sortiert alphabetisch nach Zutat und summiert die Mengen", () => {
+    expect(lines.map((l) => [l.zutat, l.amounts])).toEqual([
+      ["Kokosmilch", ["1 Dose"]],
+      ["Linsen", ["300 g"]],
+      ["Parmesan", []],
+      ["Zwiebel", ["3"]],
     ]);
-    expect(usage.get("kokosmilch")).toHaveLength(1);
+  });
+
+  it("listet je Zutat die Gerichte mit Menge und Terminen, chronologisch", () => {
+    expect(lines.find((l) => l.zutat === "Zwiebel")?.uses).toEqual([
+      { dish: "Linsen-Curry", amounts: ["2"], slots: [{ date: "2026-11-10", type: "dinner" }] },
+      {
+        dish: "Pasta",
+        amounts: ["1"],
+        slots: [
+          { date: "2026-11-12", type: "lunch" },
+          { date: "2026-11-13", type: "dinner" },
+        ],
+      },
+    ]);
+  });
+
+  it("Schlüssel hängt nur an der Zutat, auch bei kurzen Namen gültig", () => {
+    const short = ingredientLines(
+      buildShoppingList([plan("Pasta", "2026-11-10")], recipes, { 2: [ing(2, "Ei", "2")] })
+    );
+    expect(short[0].key).toBe("z|ei");
   });
 });
 
