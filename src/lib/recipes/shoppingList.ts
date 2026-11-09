@@ -114,9 +114,9 @@ export type IngredientLine = {
   /** Schlüssel für den gespeicherten Abhak-Status: "z|<zutat>" */
   key: string;
   zutat: string;
-  /** Gesamtmenge, z.B. ["300 g", "1 Dose"] */
+  /** Gesamtmenge über alle Termine, z.B. ["300 g", "1 Dose"] */
   amounts: string[];
-  /** Gerichte, die diese Zutat brauchen, chronologisch nach erstem Termin */
+  /** Gerichte, die diese Zutat brauchen, chronologisch nach erstem Termin. amounts = Menge über alle Termine des Gerichts */
   uses: { dish: string; amounts: string[]; slots: Slot[] }[];
 };
 
@@ -128,9 +128,12 @@ export function ingredientLines(list: ShoppingList): IngredientLine[] {
   for (const d of list.dishes) {
     for (const item of d.items) {
       const line: Group = byZutat.get(item.zutatKey) ?? { zutat: item.zutat, mengen: [], uses: new Map() };
-      line.mengen.push(item.menge);
       const use: Use = line.uses.get(d.key) ?? { dish: d.dish, mengen: [], slots: d.slots };
-      use.mengen.push(item.menge);
+      // Jeder Termin wird gekocht: Menge pro eingeplantem Termin zählen
+      for (let i = 0; i < d.slots.length; i++) {
+        line.mengen.push(item.menge);
+        use.mengen.push(item.menge);
+      }
       line.uses.set(d.key, use);
       byZutat.set(item.zutatKey, line);
     }
