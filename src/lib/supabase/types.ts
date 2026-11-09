@@ -283,6 +283,29 @@ export interface Database {
           },
         ];
       };
+      shopping_checks: {
+        Row: {
+          family_id: string;
+          /** Montag der Kalenderwoche, "YYYY-MM-DD" */
+          week_start: string;
+          /** "<gericht>|<zutat>", normalisiert */
+          item_key: string;
+          checked_at: string;
+        };
+        Insert: {
+          family_id: string;
+          week_start: string;
+          item_key: string;
+          checked_at?: string;
+        };
+        Update: {
+          family_id?: string;
+          week_start?: string;
+          item_key?: string;
+          checked_at?: string;
+        };
+        Relationships: [];
+      };
       meals: {
         Row: {
           id: string;

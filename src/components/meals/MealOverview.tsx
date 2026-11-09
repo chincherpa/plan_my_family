@@ -6,7 +6,7 @@ import { getISOWeek, localDateStr, startOfDay } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import MealEditDialog from "@/components/calendar/MealEditDialog";
 import ShoppingListDialog from "./ShoppingListDialog";
-import type { PlannedDish } from "@/lib/recipes/shoppingList";
+import { weekStartOf, type PlannedDish } from "@/lib/recipes/shoppingList";
 import type { Meal } from "@/lib/supabase/types";
 
 type MealType = "lunch" | "dinner";
@@ -23,7 +23,7 @@ const DAYS_AHEAD = 31;
 export default function MealOverview() {
   const { family, meals, recipes, upsertMeal } = useDataStore();
   const [editDate, setEditDate] = useState<string | null>(null);
-  const [shopping, setShopping] = useState<{ kw: number; planned: PlannedDish[] } | null>(null);
+  const [shopping, setShopping] = useState<{ kw: number; weekStart: string; planned: PlannedDish[] } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
@@ -229,8 +229,8 @@ export default function MealOverview() {
                 <div className="flex-1 h-px bg-[var(--border)]" />
                 <button
                   type="button"
-                  onClick={() => setShopping({ kw, planned })}
-                  disabled={planned.length === 0}
+                  onClick={() => setShopping({ kw, weekStart: weekStartOf(groupDays[0].date), planned })}
+                  disabled={planned.length === 0 || !family}
                   title={planned.length === 0 ? "Keine geplanten Gerichte in dieser Woche" : "Einkaufszettel erstellen"}
                   className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-40"
                 >
@@ -284,9 +284,11 @@ export default function MealOverview() {
         </div>
       ))}
 
-      {shopping && (
+      {shopping && family && (
         <ShoppingListDialog
           title={`Einkaufszettel KW ${shopping.kw}`}
+          familyId={family.id}
+          weekStart={shopping.weekStart}
           planned={shopping.planned}
           recipes={recipes}
           onClose={() => setShopping(null)}
