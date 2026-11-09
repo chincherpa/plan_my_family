@@ -6,10 +6,9 @@ import { createClient } from "@/lib/supabase/client";
 import { listIngredientsFor } from "@/lib/recipes/actions";
 import {
   buildShoppingList,
-  ingredientUsage,
-  sumAmounts,
+  ingredientLines,
+  type IngredientLine,
   type PlannedDish,
-  type ShoppingItem,
   type Slot,
 } from "@/lib/recipes/shoppingList";
 import type { Ingredient, Recipe } from "@/lib/recipes/types";
@@ -25,7 +24,7 @@ const slotLabel = ({ date, type }: Slot) => {
 };
 
 /**
- * Einkaufszettel einer Kalenderwoche, gegliedert nach Gericht. Der Abhak-Status liegt in
+ * Einkaufszettel einer Kalenderwoche, alphabetisch nach Zutat. Der Abhak-Status liegt in
  * `shopping_checks` und wird per Realtime zwischen den Geräten der Familie abgeglichen.
  */
 export default function ShoppingListDialog({
@@ -111,16 +110,16 @@ export default function ShoppingListDialog({
     () => (ingredients ? buildShoppingList(planned, recipes, ingredients) : null),
     [ingredients, planned, recipes]
   );
-  const usage = useMemo(() => ingredientUsage(list ?? { dishes: [], unmatched: [] }), [list]);
+  const lines = useMemo(() => (list ? ingredientLines(list) : []), [list]);
 
-  async function toggleChecked(item: ShoppingItem) {
+  async function toggleChecked(line: IngredientLine) {
     if (!checked) return;
-    const wasChecked = checked.has(item.key);
+    const wasChecked = checked.has(line.key);
     const apply = (on: boolean) =>
       setChecked((prev) => {
         const next = new Set(prev);
-        if (on) next.add(item.key);
-        else next.delete(item.key);
+        if (on) next.add(line.key);
+        else next.delete(line.key);
         return next;
       });
     apply(!wasChecked); // optimistisch
@@ -131,11 +130,11 @@ export default function ShoppingListDialog({
           .delete()
           .eq("family_id", familyId)
           .eq("week_start", weekStart)
-          .eq("item_key", item.key)
+          .eq("item_key", line.key)
       : await supabase
           .from("shopping_checks")
           .upsert(
-            { family_id: familyId, week_start: weekStart, item_key: item.key },
+            { family_id: familyId, week_start: weekStart, item_key: line.key },
             { onConflict: "family_id,week_start,item_key", ignoreDuplicates: true }
           );
     if (error) {
@@ -154,17 +153,16 @@ export default function ShoppingListDialog({
     });
   }
 
-  const allItems = list?.dishes.flatMap((d) => d.items) ?? [];
-  const doneCount = checked ? allItems.filter((i) => checked.has(i.key)).length : 0;
+  const doneCount = checked ? lines.filter((l) => checked.has(l.key)).length : 0;
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[85dvh] gap-3 overflow-y-auto sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          {list && checked && allItems.length > 0 && (
+          {list && checked && lines.length > 0 && (
             <p className="tabular text-sm text-[var(--muted-foreground)]">
-              {doneCount}/{allItems.length} eingekauft · wird mit der Familie geteilt
+              {doneCount}/{lines.length} eingekauft · wird mit der Familie geteilt
             </p>
           )}
         </DialogHeader>
@@ -183,151 +181,99 @@ export default function ShoppingListDialog({
               ))}
             </div>
           )
-        ) : list.dishes.length === 0 ? (
+        ) : lines.length === 0 ? (
           <p className="py-6 text-center text-sm text-[var(--muted-foreground)]">
-            Keine Rezepte zu den geplanten Gerichten gefunden.
+            Keine Zutaten für die geplanten Gerichte gefunden.
           </p>
         ) : (
-          <div className="space-y-4">
-            {list.dishes.map((d) => {
-              const dishDone = d.items.filter((i) => checked.has(i.key)).length;
+          <ul className="divide-y divide-[var(--border)] overflow-hidden rounded-xl border border-[var(--border)]">
+            {lines.map((line) => {
+              const isDone = checked.has(line.key);
+              const expanded = open.has(line.key);
               return (
-                <section key={d.key} className="overflow-hidden rounded-xl border border-[var(--border)]">
-                  <header className="flex items-start justify-between gap-2 bg-[var(--accent)]/60 px-3 py-2">
-                    <div className="min-w-0">
-                      <h3 className="truncate font-semibold">{d.dish}</h3>
-                      <p className="text-xs text-[var(--muted-foreground)]">{d.slots.map(slotLabel).join(" · ")}</p>
-                    </div>
-                    {d.items.length > 0 && (
+                <li key={line.key}>
+                  <div className="flex items-center">
+                    {/* Abhaken nur über die Checkbox */}
+                    <button
+                      type="button"
+                      onClick={() => toggleChecked(line)}
+                      aria-pressed={isDone}
+                      aria-label={`${line.zutat} ${isDone ? "wieder auf die Liste" : "als eingekauft markieren"}`}
+                      className="flex shrink-0 items-center py-2.5 pl-3 pr-2"
+                    >
                       <span
                         className={cn(
-                          "tabular shrink-0 rounded-full px-2 py-0.5 text-xs",
-                          dishDone === d.items.length
-                            ? "bg-[var(--primary)]/15 font-medium text-[var(--primary)]"
-                            : "text-[var(--muted-foreground)]"
+                          "flex h-5 w-5 items-center justify-center rounded-md border-2",
+                          isDone
+                            ? "border-transparent bg-[var(--primary)] text-[var(--primary-foreground)]"
+                            : "border-[var(--input)]"
                         )}
                       >
-                        {dishDone}/{d.items.length}
+                        {isDone && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
                       </span>
-                    )}
-                  </header>
+                    </button>
 
-                  {d.items.length === 0 ? (
-                    <p className="px-3 py-2.5 text-sm text-[var(--muted-foreground)]">Keine Zutaten hinterlegt</p>
-                  ) : (
-                    <ul className="divide-y divide-[var(--border)]">
-                      {d.items.map((item) => {
-                        const isDone = checked.has(item.key);
-                        const others = (usage.get(item.zutatKey) ?? []).filter((u) => u.dish !== d.dish);
-                        const expanded = open.has(item.key);
-                        return (
-                          <li key={item.key}>
-                            <div className="flex items-center">
-                              {/* Abhaken nur über die Checkbox */}
-                              <button
-                                type="button"
-                                onClick={() => toggleChecked(item)}
-                                aria-pressed={isDone}
-                                aria-label={`${item.zutat} ${isDone ? "wieder auf die Liste" : "als eingekauft markieren"}`}
-                                className="flex shrink-0 items-center py-2.5 pl-3 pr-2"
-                              >
-                                <span
-                                  className={cn(
-                                    "flex h-5 w-5 items-center justify-center rounded-md border-2",
-                                    isDone
-                                      ? "border-transparent bg-[var(--primary)] text-[var(--primary-foreground)]"
-                                      : "border-[var(--input)]"
-                                  )}
-                                >
-                                  {isDone && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
-                                </span>
-                              </button>
+                    {/* Antippen zeigt, für welche Gerichte die Zutat gebraucht wird */}
+                    <button
+                      type="button"
+                      onClick={() => toggleOpen(line.key)}
+                      aria-expanded={expanded}
+                      className="flex min-w-0 flex-1 items-center gap-2 py-2.5 pr-3 text-left"
+                    >
+                      <span
+                        className={cn(
+                          "min-w-0 flex-1 font-medium",
+                          isDone && "text-[var(--muted-foreground)] line-through"
+                        )}
+                      >
+                        {line.zutat}
+                      </span>
+                      {line.amounts.length > 0 && (
+                        <span
+                          className={cn(
+                            "tabular shrink-0 text-sm text-[var(--muted-foreground)]",
+                            isDone && "opacity-50"
+                          )}
+                        >
+                          {line.amounts.join(" + ")}
+                        </span>
+                      )}
+                      <ChevronDown
+                        className={cn(
+                          "h-4 w-4 shrink-0 text-[var(--muted-foreground)] transition-transform",
+                          expanded && "rotate-180"
+                        )}
+                      />
+                    </button>
+                  </div>
 
-                              {/* Antippen zeigt, wofür die Zutat sonst noch gebraucht wird */}
-                              <button
-                                type="button"
-                                onClick={() => others.length > 0 && toggleOpen(item.key)}
-                                aria-expanded={others.length > 0 ? expanded : undefined}
-                                className={cn(
-                                  "flex min-w-0 flex-1 items-center gap-2 py-2.5 pr-3 text-left",
-                                  others.length === 0 && "cursor-default"
-                                )}
-                              >
-                                <span
-                                  className={cn(
-                                    "min-w-0 flex-1 font-medium",
-                                    isDone && "text-[var(--muted-foreground)] line-through"
-                                  )}
-                                >
-                                  {item.zutat}
-                                </span>
-                                {item.menge && (
-                                  <span
-                                    className={cn(
-                                      "tabular shrink-0 text-sm text-[var(--muted-foreground)]",
-                                      isDone && "opacity-50"
-                                    )}
-                                  >
-                                    {item.menge}
-                                  </span>
-                                )}
-                                {others.length > 0 && (
-                                  <span className="flex shrink-0 items-center gap-0.5 rounded-full bg-[var(--accent)] px-1.5 py-0.5 text-[11px] text-[var(--muted-foreground)]">
-                                    +{others.length}
-                                    <ChevronDown
-                                      className={cn("h-3 w-3 transition-transform", expanded && "rotate-180")}
-                                    />
-                                  </span>
-                                )}
-                              </button>
-                            </div>
-
-                            {expanded && others.length > 0 && (
-                              <div className="space-y-1.5 bg-[var(--accent)]/40 px-4 pb-3 pt-1 text-sm">
-                                <p className="text-xs font-semibold uppercase tracking-wider text-[var(--muted-foreground)]">
-                                  Auch gebraucht für
-                                </p>
-                                <ul className="space-y-1">
-                                  {others.map((u) => (
-                                    <li key={u.dish}>
-                                      <span className="font-medium">{u.dish}</span>
-                                      {u.menge && (
-                                        <span className="text-[var(--muted-foreground)]"> · {u.menge}</span>
-                                      )}
-                                      <span className="block text-xs text-[var(--muted-foreground)]">
-                                        {u.slots.map(slotLabel).join(" · ")}
-                                      </span>
-                                    </li>
-                                  ))}
-                                </ul>
-                                {(() => {
-                                  const total = sumAmounts([
-                                    item.menge,
-                                    ...others.map((u) => u.menge),
-                                  ]);
-                                  return total.length > 0 ? (
-                                    <p className="pt-1 text-xs">
-                                      <span className="text-[var(--muted-foreground)]">Insgesamt: </span>
-                                      <span className="font-medium">{total.join(" + ")}</span>
-                                    </p>
-                                  ) : null;
-                                })()}
-                              </div>
-                            )}
-                          </li>
-                        );
-                      })}
+                  {expanded && (
+                    <ul className="space-y-1 bg-[var(--accent)]/40 px-4 pb-3 pt-1 text-sm">
+                      {line.uses.map((u) => (
+                        <li key={u.dish} className="flex flex-wrap items-baseline gap-x-2">
+                          <span className="font-medium">{u.dish}</span>
+                          {line.uses.length > 1 && u.amounts.length > 0 && (
+                            <span className="tabular text-xs text-[var(--muted-foreground)]">
+                              {u.amounts.join(" + ")}
+                            </span>
+                          )}
+                          <span className="tabular ml-auto text-xs text-[var(--muted-foreground)]">
+                            {u.slots.map(slotLabel).join(" · ")}
+                          </span>
+                        </li>
+                      ))}
                     </ul>
                   )}
-                </section>
+                </li>
               );
             })}
-            {list.unmatched.length > 0 && (
-              <p className="text-xs text-[var(--muted-foreground)]">
-                Ohne Rezept, daher ohne Zutaten: {list.unmatched.join(", ")}
-              </p>
-            )}
-          </div>
+          </ul>
+        )}
+
+        {list && list.unmatched.length > 0 && (
+          <p className="text-xs text-[var(--muted-foreground)]">
+            Ohne Rezept, daher ohne Zutaten: {list.unmatched.join(", ")}
+          </p>
         )}
       </DialogContent>
     </Dialog>

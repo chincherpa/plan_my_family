@@ -1,6 +1,7 @@
-// Einkaufszettel: Zutaten der geplanten Gerichte einer Woche, gegliedert nach Gericht.
-// Mengen sind Freitext („2“, „200 g“, „1 Dose“). Für die Übersicht „auch gebraucht für“
-// werden Zahlen mit gleicher Einheit addiert, alles andere steht nebeneinander.
+// Einkaufszettel: Zutaten der geplanten Gerichte einer Woche, alphabetisch nach Zutat.
+// buildShoppingList ordnet die Zutaten zuerst den Gerichten zu, ingredientLines fasst sie
+// dann je Zutat zusammen. Mengen sind Freitext („2“, „200 g“, „1 Dose“): Zahlen mit gleicher
+// Einheit werden addiert, alles andere steht nebeneinander.
 
 import { localDateStr } from "@/lib/utils";
 import { dishKey } from "./stats";
@@ -108,19 +109,42 @@ export function buildShoppingList(
   return { dishes, unmatched: unmatched.map((u) => u.name) };
 }
 
-/** Pro Zutat: alle Gerichte der Liste, die sie brauchen. */
-export function ingredientUsage(
-  list: ShoppingList
-): Map<string, { dish: string; menge: string; slots: Slot[] }[]> {
-  const usage = new Map<string, { dish: string; menge: string; slots: Slot[] }[]>();
+/** Eine Zeile des Einkaufszettels: eine Zutat, zusammengefasst über alle Gerichte. */
+export type IngredientLine = {
+  /** Schlüssel für den gespeicherten Abhak-Status: "z|<zutat>" */
+  key: string;
+  zutat: string;
+  /** Gesamtmenge, z.B. ["300 g", "1 Dose"] */
+  amounts: string[];
+  /** Gerichte, die diese Zutat brauchen, chronologisch nach erstem Termin */
+  uses: { dish: string; amounts: string[]; slots: Slot[] }[];
+};
+
+/** Einkaufszettel alphabetisch nach Zutat; gleiche Zutaten verschiedener Gerichte in einer Zeile. */
+export function ingredientLines(list: ShoppingList): IngredientLine[] {
+  type Use = { dish: string; mengen: string[]; slots: Slot[] };
+  type Group = { zutat: string; mengen: string[]; uses: Map<string, Use> };
+  const byZutat = new Map<string, Group>();
   for (const d of list.dishes) {
     for (const item of d.items) {
-      const entries = usage.get(item.zutatKey) ?? [];
-      entries.push({ dish: d.dish, menge: item.menge, slots: d.slots });
-      usage.set(item.zutatKey, entries);
+      const line: Group = byZutat.get(item.zutatKey) ?? { zutat: item.zutat, mengen: [], uses: new Map() };
+      line.mengen.push(item.menge);
+      const use: Use = line.uses.get(d.key) ?? { dish: d.dish, mengen: [], slots: d.slots };
+      use.mengen.push(item.menge);
+      line.uses.set(d.key, use);
+      byZutat.set(item.zutatKey, line);
     }
   }
-  return usage;
+  return [...byZutat.entries()]
+    .map(([zutatKey, l]) => ({
+      key: `z|${zutatKey}`,
+      zutat: l.zutat,
+      amounts: sumAmounts(l.mengen),
+      uses: [...l.uses.values()]
+        .sort((a, b) => bySlot(a.slots[0], b.slots[0]))
+        .map((u) => ({ dish: u.dish, amounts: sumAmounts(u.mengen), slots: u.slots })),
+    }))
+    .sort((a, b) => a.zutat.localeCompare(b.zutat, "de"));
 }
 
 const NUMBER_PREFIX = /^(\d+(?:[.,]\d+)?)\s*(.*)$/;
