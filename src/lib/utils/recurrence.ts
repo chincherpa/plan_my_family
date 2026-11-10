@@ -113,3 +113,63 @@ function buildOccurrence(
     isRecurringInstance: isRecurring,
   };
 }
+
+/**
+ * DTSTART der Regel: der lokale Mittag des Starttags statt der echten Startzeit.
+ *
+ * rrule wertet Wochentage in UTC aus, `expandAppointments` übersetzt die Treffer
+ * aber in lokale Tage. Bei Terminen kurz nach Mitternacht (und ganztägigen, die
+ * um 00:00 beginnen) liegt das UTC-Datum vor dem lokalen — „Mo/Mi“ würde dann
+ * als Di/Do angezeigt. Mittags stimmen beide Daten in jeder Zeitzone überein.
+ * Die Uhrzeit des Termins kommt ohnehin aus start_time, nicht aus der Regel.
+ */
+export function ruleAnchor(start: Date): Date {
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate(), 12, 0, 0, 0);
+}
+
+export type RecurrenceFreqKey =
+  | "daily"
+  | "weekdays"
+  | "weekend"
+  | "weekly"
+  | "biweekly"
+  | "monthly"
+  | "yearly";
+
+export type RecurrenceEndSpec =
+  | { mode: "none" }
+  | { mode: "count"; count: number }
+  | { mode: "until"; date: Date };
+
+/**
+ * Der eine Erzeuger für Serienregeln (Kalenderformular, Jahrestage).
+ * Verankert DTSTART über `ruleAnchor`; am 29. Februar jährlich fällt der Termin
+ * in Nicht-Schaltjahren auf den 28.
+ */
+export function buildRecurrenceRule(opts: {
+  freq: RecurrenceFreqKey;
+  start: Date;
+  end: RecurrenceEndSpec;
+}): string {
+  const { freq, start, end } = opts;
+  const freqMap = {
+    daily: RRule.DAILY,
+    weekdays: RRule.WEEKLY,
+    weekend: RRule.WEEKLY,
+    weekly: RRule.WEEKLY,
+    biweekly: RRule.WEEKLY,
+    monthly: RRule.MONTHLY,
+    yearly: RRule.YEARLY,
+  };
+  const leapDay = freq === "yearly" && start.getMonth() === 1 && start.getDate() === 29;
+  return new RRule({
+    freq: freqMap[freq],
+    dtstart: ruleAnchor(start),
+    ...(freq === "biweekly" && { interval: 2 }),
+    ...(freq === "weekdays" && { byweekday: [RRule.MO, RRule.TU, RRule.WE, RRule.TH, RRule.FR] }),
+    ...(freq === "weekend" && { byweekday: [RRule.SA, RRule.SU] }),
+    ...(leapDay && { bymonth: 2, bymonthday: -1 }),
+    ...(end.mode === "count" && { count: end.count }),
+    ...(end.mode === "until" && { until: end.date }),
+  }).toString();
+}

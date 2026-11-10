@@ -1,5 +1,6 @@
 import type { AnniversaryKind, AppointmentWithParticipants } from "@/lib/supabase/types";
 import { startOfDay } from "@/lib/utils";
+import { buildRecurrenceRule } from "@/lib/utils/recurrence";
 
 /**
  * Jahrestage sind ganztägige Ereignis-Serien (is_event, is_all_day,
@@ -247,10 +248,11 @@ export function anniversaryRecord(input: AnniversaryInput) {
   const year = input.year ?? UNKNOWN_YEAR_ANCHOR;
   const start = new Date(year, input.month - 1, input.day, 0, 0, 0);
   const end = new Date(year, input.month - 1, input.day, 23, 59, 59);
-  const leapDay = input.month === 2 && input.day === 29;
-  const recurrence_rule =
-    `DTSTART:${pad(year, 4)}${pad(input.month)}${pad(input.day)}T120000Z\n` +
-    `RRULE:FREQ=YEARLY${leapDay ? ";BYMONTH=2;BYMONTHDAY=-1" : ""}`;
+  const recurrence_rule = buildRecurrenceRule({
+    freq: "yearly",
+    start,
+    end: { mode: "none" },
+  });
 
   return {
     title: input.title.trim(),

@@ -19,8 +19,8 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { AppointmentWithParticipants } from "@/lib/supabase/types";
-import { hexToRgba } from "@/lib/utils";
-import { occurrenceDateKey } from "@/lib/utils/recurrence";
+import { hexToRgba, startOfDay } from "@/lib/utils";
+import { buildRecurrenceRule, occurrenceDateKey } from "@/lib/utils/recurrence";
 
 type RecurrenceFreq =
   | "none"
@@ -289,7 +289,11 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   const isFirstOccurrence = useMemo(() => {
     if (!existingAppt?.recurrence_rule || !formOccurrenceStart) return true;
     try {
-      return !RRule.fromString(existingAppt.recurrence_rule).before(formOccurrenceStart, false);
+      // Regeln sind auf lokalen Mittag verankert → nach lokalem Tag vergleichen
+      return !RRule.fromString(existingAppt.recurrence_rule).before(
+        startOfDay(formOccurrenceStart),
+        false
+      );
     } catch {
       return true;
     }
@@ -403,27 +407,16 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
 
   function buildRRule(freq: RecurrenceFreq, from: Date, countOverride?: number): string | null {
     if (freq === "none") return null;
-    const freqMap = {
-      daily: RRule.DAILY,
-      weekdays: RRule.WEEKLY,
-      weekend: RRule.WEEKLY,
-      weekly: RRule.WEEKLY,
-      biweekly: RRule.WEEKLY,
-      monthly: RRule.MONTHLY,
-      yearly: RRule.YEARLY,
-    };
-    const rule = new RRule({
-      freq: freqMap[freq],
-      dtstart: from,
-      ...(freq === "biweekly" && { interval: 2 }),
-      ...(freq === "weekdays" && { byweekday: [RRule.MO, RRule.TU, RRule.WE, RRule.TH, RRule.FR] }),
-      ...(freq === "weekend" && { byweekday: [RRule.SA, RRule.SU] }),
-      ...(recurrenceEnd === "count" && {
-        count: Math.min(Math.max(countOverride ?? recurrenceCount, 1), MAX_COUNT),
-      }),
-      ...(recurrenceEnd === "until" && { until: new Date(`${recurrenceUntil}T23:59:59`) }),
+    return buildRecurrenceRule({
+      freq,
+      start: from,
+      end:
+        recurrenceEnd === "count"
+          ? { mode: "count", count: Math.min(Math.max(countOverride ?? recurrenceCount, 1), MAX_COUNT) }
+          : recurrenceEnd === "until"
+            ? { mode: "until", date: new Date(`${recurrenceUntil}T23:59:59`) }
+            : { mode: "none" },
     });
-    return rule.toString();
   }
 
   // Weekday of the (first) occurrence, for labels like "Jeden Montag"
