@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Users, Car, UtensilsCrossed, FileUp, ArrowRight } from "lucide-react";
+import { Users, Car, UtensilsCrossed, FileUp, ArrowRight, TreePalm } from "lucide-react";
 import CalendarDisplaySettings from "@/components/settings/CalendarDisplaySettings";
 import ThemeSettings from "@/components/settings/ThemeSettings";
 import MealWeekdaySettings from "@/components/settings/MealWeekdaySettings";
@@ -41,6 +41,22 @@ export default function SettingsPage() {
           <div>
             <p className="font-medium">Fahrzeuge</p>
             <p className="text-sm text-[var(--muted-foreground)]">Autos und andere Fahrzeuge</p>
+          </div>
+        </div>
+        <ArrowRight className="w-4 h-4 text-[var(--muted-foreground)]" />
+      </Link>
+
+      <Link
+        href="/settings/holidays"
+        className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--accent)] transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-[var(--primary)]/10 flex items-center justify-center">
+            <TreePalm className="w-5 h-5 text-[var(--primary)]" />
+          </div>
+          <div>
+            <p className="font-medium">Schulferien</p>
+            <p className="text-sm text-[var(--muted-foreground)]">Ferienzeiträume für Kalender und Serientermine</p>
           </div>
         </div>
         <ArrowRight className="w-4 h-4 text-[var(--muted-foreground)]" />

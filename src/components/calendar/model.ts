@@ -5,6 +5,8 @@ export const ALL_COLUMN_ID = "all";
 export const EVENTS_COLUMN_ID = "events";
 export const ALL_COLUMN_COLOR = "#6366f1";
 export const EVENT_COLOR = "#8b5cf6";
+/** Schulferien-Hinweis im Tagesbanner */
+export const HOLIDAY_COLOR = "#0d9488";
 
 export interface Column {
   id: string;

@@ -1,6 +1,7 @@
 import { RRule } from "rrule";
 import type { AppointmentWithParticipants } from "@/lib/supabase/types";
 import { addMinutes, localDateStr } from "@/lib/utils";
+import { occurrencesSkippingHolidays, type HolidayRange } from "@/lib/utils/schoolHolidays";
 
 /**
  * Local "YYYY-MM-DD" key used for `exception_date` matching.
@@ -24,11 +25,15 @@ export interface AppointmentOccurrence {
 /**
  * Expand appointments (including recurring ones) into occurrences
  * within the given date range.
+ *
+ * Series flagged `skip_school_holidays` drop occurrences on days inside
+ * `holidays`; with COUNT those days do not count towards the total.
  */
 export function expandAppointments(
   appointments: AppointmentWithParticipants[],
   rangeStart: Date,
-  rangeEnd: Date
+  rangeEnd: Date,
+  holidays: HolidayRange[] = []
 ): AppointmentOccurrence[] {
   const results: AppointmentOccurrence[] = [];
 
@@ -54,7 +59,10 @@ export function expandAppointments(
       // Expand recurring event
       try {
         const rule = RRule.fromString(appt.recurrence_rule);
-        const occurrenceDates = rule.between(rangeStart, rangeEnd, true);
+        const occurrenceDates =
+          appt.skip_school_holidays && holidays.length > 0
+            ? occurrencesSkippingHolidays(rule, rangeStart, rangeEnd, holidays)
+            : rule.between(rangeStart, rangeEnd, true);
         const exceptedDates = exceptions.get(appt.id) ?? new Set();
 
         for (const occDate of occurrenceDates) {

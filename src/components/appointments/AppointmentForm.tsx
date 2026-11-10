@@ -1,7 +1,7 @@
 "use client";
 import { useState, useMemo, useRef } from "react";
 import { Trash2, Repeat, Car, Users, Clock, AlertTriangle } from "lucide-react";
-import { RRule } from "rrule";
+import { RRule, Weekday, type ByWeekday } from "rrule";
 import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useCalendarStore } from "@/lib/store/calendarStore";
@@ -19,8 +19,10 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { AppointmentWithParticipants } from "@/lib/supabase/types";
-import { hexToRgba } from "@/lib/utils";
+import { hexToRgba, startOfDay } from "@/lib/utils";
 import { occurrenceDateKey } from "@/lib/utils/recurrence";
+import { isSchoolHoliday } from "@/lib/utils/schoolHolidays";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type RecurrenceFreq =
   | "none"
@@ -30,12 +32,44 @@ type RecurrenceFreq =
   | "weekly"
   | "biweekly"
   | "monthly"
-  | "yearly";
+  | "yearly"
+  | "custom";
 
 const WEEKDAYS_DE = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
 /** rrule weekday numbers: Mon=0 … Sun=6 */
 const MON_TO_FRI = [0, 1, 2, 3, 4];
 const SAT_SUN = [5, 6];
+/** Checkboxes for "Benutzerdefiniert", in rrule numbering (Mon=0 … Sun=6) */
+const CUSTOM_WEEKDAYS: [number, string][] = [
+  [0, "Mo"],
+  [1, "Di"],
+  [2, "Mi"],
+  [3, "Do"],
+  [4, "Fr"],
+  [5, "Sa"],
+  [6, "So"],
+];
+
+/** Weekdays written explicitly into the rule (BYDAY), rrule numbering; null if none. */
+function explicitWeekdays(rule: RRule): number[] | null {
+  const raw = rule.origOptions.byweekday;
+  if (raw == null) return null;
+  const list: ByWeekday[] = Array.isArray(raw) ? raw : [raw];
+  return list.map((w) =>
+    typeof w === "number" ? w : typeof w === "string" ? Weekday.fromStr(w).weekday : w.weekday
+  );
+}
+
+/**
+ * DTSTART of a rule: local noon of the start day instead of the real start
+ * time. rrule evaluates weekdays in UTC, expandAppointments maps hits to local
+ * days — for appointments shortly after midnight (and all-day ones at 00:00)
+ * BYDAY would otherwise land one day early. The time of day comes from
+ * start_time anyway (same approach as the CSV import).
+ */
+function ruleAnchor(start: Date): Date {
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate(), 12, 0, 0, 0);
+}
 
 function sameDays(a: number[], b: number[]): boolean {
   return a.length === b.length && [...a].sort().join() === [...b].sort().join();
@@ -169,8 +203,16 @@ interface AppointmentFormProps {
 }
 
 export default function AppointmentForm({ onClose }: AppointmentFormProps) {
-  const { members, vehicles, appointments, family, addAppointment, updateAppointment, removeAppointment } =
-    useDataStore();
+  const {
+    members,
+    vehicles,
+    appointments,
+    schoolHolidays,
+    family,
+    addAppointment,
+    updateAppointment,
+    removeAppointment,
+  } = useDataStore();
   const { formInitialDate, formMemberId, formOccurrenceStart, selectedAppointmentId } =
     useCalendarStore();
 
@@ -249,24 +291,35 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   const [isEvent, setIsEvent] = useState(
     existingAppt ? existingAppt.is_event ?? false : formMemberId === "events"
   );
-  const [recurrence, setRecurrence] = useState<RecurrenceFreq>(() => {
-    if (!existingAppt?.recurrence_rule) return "none";
+  const [initialRecurrence] = useState<{ freq: RecurrenceFreq; days: number[] }>(() => {
+    const none = { freq: "none" as RecurrenceFreq, days: [] };
+    if (!existingAppt?.recurrence_rule) return none;
     try {
-      const { freq, interval, byweekday } = RRule.fromString(existingAppt.recurrence_rule).options;
-      if (freq === RRule.DAILY) return "daily";
+      const rule = RRule.fromString(existingAppt.recurrence_rule);
+      const { freq, interval, byweekday } = rule.options;
+      if (freq === RRule.DAILY) return { ...none, freq: "daily" };
       if (freq === RRule.WEEKLY) {
-        if (interval === 2) return "biweekly";
-        if (byweekday && sameDays(byweekday, MON_TO_FRI)) return "weekdays";
-        if (byweekday && sameDays(byweekday, SAT_SUN)) return "weekend";
-        return "weekly";
+        if (interval === 2) return { ...none, freq: "biweekly" };
+        if (byweekday && sameDays(byweekday, MON_TO_FRI)) return { ...none, freq: "weekdays" };
+        if (byweekday && sameDays(byweekday, SAT_SUN)) return { ...none, freq: "weekend" };
+        // Explicit BYDAY (e.g. Mo/Mi/Fr) → custom; plain weekly uses the start's weekday
+        const explicit = explicitWeekdays(rule);
+        if (explicit?.length) return { freq: "custom", days: [...new Set(explicit)].sort() };
+        return { ...none, freq: "weekly" };
       }
-      if (freq === RRule.MONTHLY) return "monthly";
-      if (freq === RRule.YEARLY) return "yearly";
-      return "none";
+      if (freq === RRule.MONTHLY) return { ...none, freq: "monthly" };
+      if (freq === RRule.YEARLY) return { ...none, freq: "yearly" };
+      return none;
     } catch {
-      return "none";
+      return none;
     }
   });
+  const [recurrence, setRecurrence] = useState<RecurrenceFreq>(initialRecurrence.freq);
+  /** Selected weekdays for "Benutzerdefiniert" (rrule numbering), all off by default */
+  const [customDays, setCustomDays] = useState<number[]>(initialRecurrence.days);
+  const [skipSchoolHolidays, setSkipSchoolHolidays] = useState(
+    existingAppt?.skip_school_holidays ?? false
+  );
   // End of the recurrence: after N occurrences or on a date
   const [initialEnd] = useState<{ mode: RecurrenceEnd; count: number; until: string }>(() => {
     const fallback = { mode: "count" as RecurrenceEnd, count: DEFAULT_COUNT, until: "" };
@@ -289,7 +342,11 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   const isFirstOccurrence = useMemo(() => {
     if (!existingAppt?.recurrence_rule || !formOccurrenceStart) return true;
     try {
-      return !RRule.fromString(existingAppt.recurrence_rule).before(formOccurrenceStart, false);
+      // Compare by day: DTSTART may be anchored at noon (see ruleAnchor)
+      return !RRule.fromString(existingAppt.recurrence_rule).before(
+        startOfDay(formOccurrenceStart),
+        false
+      );
     } catch {
       return true;
     }
@@ -310,12 +367,13 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
         travelBefore,
         travelAfter,
         appointments,
-        existingAppt?.id
+        existingAppt?.id,
+        schoolHolidays
       );
       if (conflict) conflicts[v.id] = conflict;
     }
     return conflicts;
-  }, [startTime, endTime, travelBefore, travelAfter, appointments, existingAppt, vehicles]);
+  }, [startTime, endTime, travelBefore, travelAfter, appointments, existingAppt, vehicles, schoolHolidays]);
   const vehicleConflict = vehicleId !== "none" ? vehicleConflicts[vehicleId] ?? null : null;
 
   // Title suggestions from known appointments (new appointments only).
@@ -396,10 +454,12 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     !isAllDay && !!startTime && !!endTime && new Date(endTime) <= new Date(startTime);
 
   const firstDatePart = isAllDay ? allDayStartDate : startTime.split("T")[0];
+  const customDaysMissing = recurrence === "custom" && customDays.length === 0;
   const recurrenceInvalid =
-    recurrence !== "none" &&
-    recurrenceEnd === "until" &&
-    (!recurrenceUntil || recurrenceUntil < firstDatePart);
+    customDaysMissing ||
+    (recurrence !== "none" &&
+      recurrenceEnd === "until" &&
+      (!recurrenceUntil || recurrenceUntil < firstDatePart));
 
   function buildRRule(freq: RecurrenceFreq, from: Date, countOverride?: number): string | null {
     if (freq === "none") return null;
@@ -411,13 +471,15 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
       biweekly: RRule.WEEKLY,
       monthly: RRule.MONTHLY,
       yearly: RRule.YEARLY,
+      custom: RRule.WEEKLY,
     };
     const rule = new RRule({
       freq: freqMap[freq],
-      dtstart: from,
+      dtstart: ruleAnchor(from),
       ...(freq === "biweekly" && { interval: 2 }),
       ...(freq === "weekdays" && { byweekday: [RRule.MO, RRule.TU, RRule.WE, RRule.TH, RRule.FR] }),
       ...(freq === "weekend" && { byweekday: [RRule.SA, RRule.SU] }),
+      ...(freq === "custom" && { byweekday: [...customDays].sort() }),
       ...(recurrenceEnd === "count" && {
         count: Math.min(Math.max(countOverride ?? recurrenceCount, 1), MAX_COUNT),
       }),
@@ -479,6 +541,10 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     if (!family || !title.trim()) return;
     if (isAllDay && !allDayStartDate) return;
     if (!isAllDay && (!startTime || !endTime || timesInvalid)) return;
+    if (customDaysMissing) {
+      setFormError("Bitte mindestens einen Wochentag für die Wiederholung wählen.");
+      return;
+    }
     if (recurrenceInvalid) {
       setFormError("Das Enddatum der Wiederholung muss am oder nach dem ersten Termin liegen.");
       return;
@@ -525,6 +591,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
       travel_after_min: isEvent || isAllDay ? 0 : travelAfter,
       vehicle_id: isAllDay || vehicleId === "none" ? null : vehicleId,
       recurrence_rule: buildRRule(recurrence, startDate),
+      // Only meaningful for series; a single appointment is never hidden
+      skip_school_holidays: recurrence !== "none" && skipSchoolHolidays,
     };
 
     try {
@@ -540,9 +608,15 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
           // Compare by local date: rrule works in UTC, so across a DST switch the
           // clicked occurrence's rrule date can lie an hour before formOccurrenceStart
           const cutKey = occurrenceDateKey(formOccurrenceStart);
+          // Occurrences in school holidays did not count for a skipping series
           const kept = RRule.fromString(existingAppt.recurrence_rule!)
-            .between(new Date(existingAppt.start_time), formOccurrenceStart, true)
-            .filter((d) => occurrenceDateKey(d) < cutKey).length;
+            .between(startOfDay(new Date(existingAppt.start_time)), formOccurrenceStart, true)
+            .map(occurrenceDateKey)
+            .filter(
+              (key) =>
+                key < cutKey &&
+                !(existingAppt.skip_school_holidays && isSchoolHoliday(key, schoolHolidays))
+            ).length;
           count = Math.max(recurrenceCount - kept, 1);
         }
         const { data, error } = await supabase.rpc("save_appointment_with_participants", {
@@ -1072,8 +1146,42 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
                 </SelectItem>
                 <SelectItem value="monthly">Monatlich</SelectItem>
                 <SelectItem value="yearly">Jährlich</SelectItem>
+                <SelectItem value="custom">Benutzerdefiniert</SelectItem>
               </SelectContent>
             </Select>
+
+            {recurrence === "custom" && (
+              <div className="space-y-1 pt-1">
+                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                  {CUSTOM_WEEKDAYS.map(([day, label]) => (
+                    <label key={day} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={customDays.includes(day)}
+                        onCheckedChange={(checked) =>
+                          setCustomDays((prev) =>
+                            checked ? [...prev, day].sort() : prev.filter((d) => d !== day)
+                          )
+                        }
+                        aria-label={label}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                {customDaysMissing && (
+                  <p className="text-xs text-[var(--destructive)]">
+                    Mindestens einen Wochentag wählen.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {recurrence !== "none" && (
+              <label className="flex items-center gap-2 pt-1 text-sm cursor-pointer">
+                <Checkbox checked={skipSchoolHolidays} onCheckedChange={setSkipSchoolHolidays} />
+                Findet nicht in Schulferien statt
+              </label>
+            )}
 
             {recurrence !== "none" && (
               <div className="grid grid-cols-2 gap-3 pt-1">

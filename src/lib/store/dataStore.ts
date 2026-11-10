@@ -3,6 +3,7 @@ import type {
   Family,
   FamilyMember,
   Vehicle,
+  SchoolHoliday,
   Meal,
   AppointmentWithParticipants,
   TodoWithItems,
@@ -14,6 +15,7 @@ interface DataState {
   family: Family | null;
   members: FamilyMember[];
   vehicles: Vehicle[];
+  schoolHolidays: SchoolHoliday[];
   appointments: AppointmentWithParticipants[];
   meals: Meal[];
   /** Rezepte aus der geteilten Rezepte-App (eigenes Supabase-Projekt) */
@@ -29,6 +31,7 @@ interface DataState {
   setMembers: (members: FamilyMember[]) => void;
   reorderMembers: (orderedIds: string[]) => void;
   setVehicles: (vehicles: Vehicle[]) => void;
+  setSchoolHolidays: (schoolHolidays: SchoolHoliday[]) => void;
   setAppointments: (appointments: AppointmentWithParticipants[]) => void;
   addAppointment: (appointment: AppointmentWithParticipants) => void;
   updateAppointment: (id: string, updates: Partial<AppointmentWithParticipants>) => void;
@@ -51,6 +54,7 @@ export const useDataStore = create<DataState>((set) => ({
   family: null,
   members: [],
   vehicles: [],
+  schoolHolidays: [],
   appointments: [],
   meals: [],
   recipes: [],
@@ -70,6 +74,8 @@ export const useDataStore = create<DataState>((set) => ({
         .map((m, i) => ({ ...m, sort_order: i })),
     })),
   setVehicles: (vehicles) => set({ vehicles }),
+  setSchoolHolidays: (schoolHolidays) =>
+    set({ schoolHolidays: [...schoolHolidays].sort((a, b) => a.start_date.localeCompare(b.start_date)) }),
   setAppointments: (appointments) => set({ appointments }),
   addAppointment: (appointment) =>
     set((state) => ({ appointments: [...state.appointments, appointment] })),
