@@ -7,8 +7,7 @@ import { useDataStore } from "@/lib/store/dataStore";
 import { assignLanes } from "@/lib/utils/lanes";
 import { formatTime, hexToRgba, localDateStr, readableTextColor } from "@/lib/utils";
 import type { AppointmentOccurrence } from "@/lib/utils/recurrence";
-import { holidaysOn } from "@/lib/utils/schoolHolidays";
-import { HOLIDAY_COLOR, placementsFor, type Column, type DayData } from "./model";
+import { placementsFor, sideBarItems, sideGutterWidth, type Column, type DayData } from "./model";
 
 const noopSubscribe = () => () => {};
 
@@ -32,6 +31,8 @@ interface DayTimelineProps {
   hourHeight: number;
   now: Date;
   conflictKeys: Set<string>;
+  /** Width of the right-hand bar gutter, in bars (see {@link SideBars}) */
+  sideSlots: number;
   onSlotClick: (start: Date, columnId: string) => void;
   onOpen: (occ: AppointmentOccurrence) => void;
 }
@@ -52,6 +53,7 @@ export default function DayTimeline({
   hourHeight,
   now,
   conflictKeys,
+  sideSlots,
   onSlotClick,
   onOpen,
 }: DayTimelineProps) {
@@ -144,46 +146,105 @@ export default function DayTimeline({
         )}
       </div>
 
-      <HolidayBar dayKey={localDateStr(data.day)} />
+      <SideBars data={data} slots={sideSlots} onOpen={onOpen} />
     </div>
   );
 }
 
-/** Right-hand gutter reserved for the school-holiday bar (keeps columns aligned). */
-export const HOLIDAY_GUTTER = "w-6 sm:w-7";
+/** Empty right-hand gutter, so rows without bars stay aligned with the timeline. */
+export function SideGutter({ slots }: { slots: number }) {
+  const width = sideGutterWidth(slots);
+  return width > 0 ? <div className="shrink-0" style={{ width }} /> : null;
+}
 
 /**
- * Vertical bar at the far right of a day, shown on every school-holiday day.
- * Always renders the gutter so column widths don't change between days.
+ * Vertical bars at the far right of a day: school holidays and Ereignisse
+ * (Geburtstage, Jahrestage, …). The gutter is `slots` bars wide on every day
+ * so the member columns keep their width; beyond that a "+n" bar sums up the rest.
  */
-export function HolidayBar({ dayKey, compact = false }: { dayKey: string; compact?: boolean }) {
+export function SideBars({
+  data,
+  slots,
+  compact = false,
+  onOpen,
+}: {
+  data: DayData;
+  slots: number;
+  compact?: boolean;
+  onOpen: (occ: AppointmentOccurrence) => void;
+}) {
   const schoolHolidays = useDataStore((s) => s.schoolHolidays);
-  const holidays = holidaysOn(dayKey, schoolHolidays);
-  const name = holidays.map((h) => h.name).join(" · ");
+  const width = sideGutterWidth(slots);
+  if (width === 0) return null;
+  const items = sideBarItems(data, schoolHolidays);
+  const overflow = items.length > slots ? items.slice(slots - 1) : [];
+  const shown = overflow.length > 0 ? items.slice(0, slots - 1) : items;
+
   return (
-    <div className={`${HOLIDAY_GUTTER} shrink-0 pl-1`}>
-      {holidays.length > 0 && (
-        <div
-          className={`flex h-full min-h-0 items-center justify-center overflow-hidden rounded-lg ${
-            compact ? "" : "py-2"
-          }`}
-          style={{
-            backgroundColor: hexToRgba(HOLIDAY_COLOR, 0.22),
-            color: HOLIDAY_COLOR,
-            boxShadow: `inset 0 0 0 1px ${hexToRgba(HOLIDAY_COLOR, 0.45)}`,
-          }}
-          title={`Schulferien: ${name}`}
-        >
-          {!compact && (
-            <span
-              className="text-[11px] font-semibold leading-none tracking-wider"
-              style={{ writingMode: "vertical-rl", textOrientation: "upright" }}
-            >
-              {name}
-            </span>
-          )}
-        </div>
+    <div className="flex shrink-0 justify-end gap-0.5 pl-0.5" style={{ width }}>
+      {shown.map((item) => (
+        <SideBar
+          key={item.key}
+          label={compact ? null : item.label}
+          title={item.title}
+          color={item.color}
+          onClick={item.occ ? () => onOpen(item.occ!) : undefined}
+        />
+      ))}
+      {overflow.length > 0 && (
+        <SideBar
+          label={compact ? null : `+${overflow.length}`}
+          title={overflow.map((i) => i.title).join("\n")}
+          color={overflow[0].color}
+        />
       )}
+    </div>
+  );
+}
+
+function SideBar({
+  label,
+  title,
+  color,
+  onClick,
+}: {
+  label: string | null;
+  title: string;
+  color: string;
+  onClick?: () => void;
+}) {
+  const className = `flex h-full min-h-0 flex-1 max-w-6 items-center justify-center overflow-hidden rounded-lg ${
+    label ? "py-2" : ""
+  } ${onClick ? "cursor-pointer hover:brightness-95" : "cursor-default"}`;
+  const style = {
+    backgroundColor: hexToRgba(color, 0.22),
+    color,
+    boxShadow: `inset 0 0 0 1px ${hexToRgba(color, 0.45)}`,
+  };
+  const content = label && (
+    <span
+      className="text-[11px] font-semibold leading-none tracking-wider"
+      style={{ writingMode: "vertical-rl", textOrientation: "upright" }}
+    >
+      {label}
+    </span>
+  );
+  return onClick ? (
+    <button
+      type="button"
+      title={title}
+      className={className}
+      style={style}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+    >
+      {content}
+    </button>
+  ) : (
+    <div title={title} className={className} style={style}>
+      {content}
     </div>
   );
 }

@@ -7,9 +7,17 @@ import { holidaysOn } from "@/lib/utils/schoolHolidays";
 import { todosDueByColumn } from "@/lib/utils/todoCalendar";
 import type { AppointmentOccurrence } from "@/lib/utils/recurrence";
 import type { Meal, TodoWithItems } from "@/lib/supabase/types";
-import { HOLIDAY_GUTTER, HolidayBar, TIME_GUTTER } from "./DayTimeline";
+import { SideBars, SideGutter, TIME_GUTTER } from "./DayTimeline";
 import { anniversaryBadge } from "@/lib/anniversaries";
-import { ALL_COLUMN_COLOR, EVENT_COLOR, HOLIDAY_COLOR, placementsFor, type Column, type DayData } from "./model";
+import {
+  ALL_COLUMN_COLOR,
+  EVENT_COLOR,
+  HOLIDAY_COLOR,
+  eventEmoji,
+  placementsFor,
+  type Column,
+  type DayData,
+} from "./model";
 
 /** Chips for todos due ("Endtermin") on a day, shown inside one calendar column. */
 export function TodoDueChips({ todos, color }: { todos: TodoWithItems[]; color: string }) {
@@ -46,7 +54,15 @@ export function TodoDueChips({ todos, color }: { todos: TodoWithItems[]; color: 
  * (time gutter + one flex cell per column). Rendered above the timeline so each
  * todo sits over its assignee's column — or "Alle" when unassigned.
  */
-export function TodoDueStrip({ day, columns }: { day: Date; columns: Column[] }) {
+export function TodoDueStrip({
+  day,
+  columns,
+  sideSlots,
+}: {
+  day: Date;
+  columns: Column[];
+  sideSlots: number;
+}) {
   const todos = useDataStore((s) => s.todos);
   const members = useDataStore((s) => s.members);
   const byColumn = todosDueByColumn(todos, day, members);
@@ -61,7 +77,7 @@ export function TodoDueStrip({ day, columns }: { day: Date; columns: Column[] })
           </div>
         ))}
       </div>
-      <div className={`${HOLIDAY_GUTTER} shrink-0`} />
+      <SideGutter slots={sideSlots} />
     </div>
   );
 }
@@ -90,10 +106,12 @@ export function DayBanner({
 }) {
   const colorOf = useOccurrenceColor();
   const schoolHolidays = useDataStore((s) => s.schoolHolidays);
-  // Full-size days show holidays as a vertical bar at the right edge of the
-  // timeline; the compact (collapsed) rows keep the chip next to the date.
+  // Full-size days show holidays and Ereignisse as vertical bars at the right
+  // edge of the timeline (SideBars); collapsed rows keep the chips next to the
+  // date, since their bars are too short for a label.
   const holidays = compact ? holidaysOn(localDateStr(data.day), schoolHolidays) : [];
-  if (data.banner.length === 0 && holidays.length === 0 && !onAddEvent) return null;
+  const banner = compact ? data.banner : data.banner.filter((occ) => !occ.appointment.is_event);
+  if (banner.length === 0 && holidays.length === 0 && !onAddEvent) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {holidays.map((h) => (
@@ -113,7 +131,7 @@ export function DayBanner({
           <span className="truncate max-w-[14rem]">{h.name}</span>
         </span>
       ))}
-      {data.banner.map((occ) => {
+      {banner.map((occ) => {
         const color = colorOf(occ);
         const appt = occ.appointment;
         const badge = anniversaryBadge(appt, occ.occurrenceStart);
@@ -149,10 +167,6 @@ export function DayBanner({
       )}
     </div>
   );
-}
-
-function eventEmoji(title: string): string {
-  return /geburtstag|bday|birthday/i.test(title) ? "🎂" : "🎉";
 }
 
 /** Lunch + dinner for a day; tapping opens the meal editor. */
@@ -206,6 +220,7 @@ export function UpcomingDay({
   columns,
   meal,
   conflictKeys,
+  sideSlots,
   expanded,
   timeline,
   onToggle,
@@ -217,6 +232,7 @@ export function UpcomingDay({
   columns: Column[];
   meal: Meal | undefined;
   conflictKeys: Set<string>;
+  sideSlots: number;
   expanded: boolean;
   /** Full timeline, rendered instead of the compact cells while expanded */
   timeline: React.ReactNode;
@@ -337,7 +353,7 @@ export function UpcomingDay({
             );
           })}
         </div>
-        <HolidayBar dayKey={localDateStr(day)} compact />
+        <SideBars data={data} slots={sideSlots} compact onOpen={onOpen} />
       </div>
       )}
     </section>
