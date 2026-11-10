@@ -2,10 +2,13 @@ import { createClient } from "@/lib/supabase/client";
 import type { Meal } from "@/lib/supabase/types";
 import type { MealType } from "@/lib/recipes/stats";
 
-/** Setzt Mittag oder Abend eines Tages; der andere Slot bleibt erhalten. */
+/**
+ * Setzt Mittag oder Abend eines Tages. Der Upsert enthält nur die eine Spalte,
+ * PostgREST aktualisiert bei Konflikt nur diese – der andere Slot bleibt erhalten,
+ * auch wenn er parallel (anderes Fenster) geändert wurde.
+ */
 export async function saveMealSlot(
   familyId: string,
-  existing: Meal | undefined,
   date: string,
   type: MealType,
   dish: string | null
@@ -16,8 +19,7 @@ export async function saveMealSlot(
       {
         family_id: familyId,
         date,
-        lunch: type === "lunch" ? dish : existing?.lunch ?? null,
-        dinner: type === "dinner" ? dish : existing?.dinner ?? null,
+        ...(type === "lunch" ? { lunch: dish } : { dinner: dish }),
       },
       { onConflict: "family_id,date" }
     )

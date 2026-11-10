@@ -12,7 +12,13 @@ import TodoItemRow from "./TodoItemRow";
 import type { Todo, TodoWithItems, TodoItem } from "@/lib/supabase/types";
 import { cn } from "@/lib/utils";
 
-export default function TodoCard({ todo }: { todo: TodoWithItems }) {
+export default function TodoCard({
+  todo,
+  onError,
+}: {
+  todo: TodoWithItems;
+  onError: (message: string) => void;
+}) {
   const { family, updateTodo, removeTodo, addTodoItem } = useDataStore();
   const [newItemTitle, setNewItemTitle] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -27,6 +33,7 @@ export default function TodoCard({ todo }: { todo: TodoWithItems }) {
       .single();
     if (error || !data) {
       console.error("Todo konnte nicht gespeichert werden.", error);
+      onError("Todo konnte nicht gespeichert werden.");
       return;
     }
     updateTodo(todo.id, data as Todo);
@@ -41,6 +48,7 @@ export default function TodoCard({ todo }: { todo: TodoWithItems }) {
     const { error } = await supabase.from("todos").delete().eq("id", todo.id);
     if (error) {
       console.error("Todo konnte nicht gelöscht werden.", error);
+      onError("Todo konnte nicht gelöscht werden.");
       return;
     }
     removeTodo(todo.id);
@@ -62,6 +70,7 @@ export default function TodoCard({ todo }: { todo: TodoWithItems }) {
       .single();
     if (error || !data) {
       console.error("Unterpunkt konnte nicht angelegt werden.", error);
+      onError("Unterpunkt konnte nicht angelegt werden.");
       return;
     }
     addTodoItem(todo.id, data as TodoItem);
@@ -122,7 +131,7 @@ export default function TodoCard({ todo }: { todo: TodoWithItems }) {
       {todo.items.length > 0 && (
         <div className="space-y-0.5">
           {todo.items.map((item) => (
-            <TodoItemRow key={item.id} todoId={todo.id} item={item} />
+            <TodoItemRow key={item.id} todoId={todo.id} item={item} onError={onError} />
           ))}
         </div>
       )}

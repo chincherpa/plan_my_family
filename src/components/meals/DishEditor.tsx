@@ -270,9 +270,7 @@ export default function DishEditor({
     let renamedCount = 0;
     if (family && oldName && renamed && renameInPlan) {
       for (const entry of upcomingEntries) {
-        // Frisch aus dem Store: Mittag und Abend am selben Tag dürfen sich nicht überschreiben
-        const existing = useDataStore.getState().meals.find((m) => m.date === entry.date);
-        const updated = await saveMealSlot(family.id, existing, entry.date, entry.type, saved.name);
+        const updated = await saveMealSlot(family.id, entry.date, entry.type, saved.name);
         if (updated) {
           upsertMeal(updated);
           renamedCount++;

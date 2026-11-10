@@ -29,14 +29,27 @@ export default function TodoSheet() {
     return () => window.removeEventListener("keydown", onKey);
   }, [isSidebarOpen, toggleSidebar]);
 
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   async function handleAddTodo() {
     const title = newTitle.trim();
-    if (!title || !family) return;
+    if (!title || !family || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await addTodoRemote(title, family.id);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function addTodoRemote(title: string, familyId: string) {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("todos")
       .insert({
-        family_id: family.id,
+        family_id: familyId,
         title,
         assignee_id: newAssigneeId,
         due_date: newDueDate || null,
@@ -45,6 +58,7 @@ export default function TodoSheet() {
       .single();
     if (error || !data) {
       console.error("Todo konnte nicht angelegt werden.", error);
+      setError("Todo konnte nicht angelegt werden.");
       return;
     }
     addTodo({ ...(data as TodoWithItems), items: [] });
@@ -101,11 +115,17 @@ export default function TodoSheet() {
             size="sm"
             className="w-full"
             onClick={handleAddTodo}
-            disabled={!newTitle.trim()}
+            disabled={!newTitle.trim() || saving}
           >
             Todo hinzufügen
           </Button>
         </div>
+
+        {error && (
+          <p role="alert" className="mx-5 mb-2 shrink-0 text-sm text-[var(--destructive)]">
+            {error}
+          </p>
+        )}
 
         <div className="flex-1 overflow-y-auto px-5 pb-6 space-y-2">
           {sorted.length === 0 && (
@@ -114,7 +134,7 @@ export default function TodoSheet() {
             </p>
           )}
           {sorted.map((todo) => (
-            <TodoCard key={todo.id} todo={todo} />
+            <TodoCard key={todo.id} todo={todo} onError={setError} />
           ))}
         </div>
       </aside>

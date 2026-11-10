@@ -44,7 +44,7 @@ export default function PlanDishDialog({
     const key = `${dateStr}-${type}`;
     setSavingKey(key);
     setError(null);
-    const saved = await saveMealSlot(family.id, mealsByDate.get(dateStr), dateStr, type, dish);
+    const saved = await saveMealSlot(family.id, dateStr, type, dish);
     setSavingKey(null);
     if (!saved) {
       setError("Konnte nicht eingeplant werden.");

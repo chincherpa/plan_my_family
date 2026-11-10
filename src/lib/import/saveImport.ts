@@ -46,10 +46,11 @@ export async function saveResolvedEntries(
     });
     const parent = data as AppointmentWithParticipants | null;
     if (error || !parent) {
+      console.error("Termin konnte nicht gespeichert werden.", error);
       failures.push({
         index: entry.index,
         title: entry.title,
-        message: error?.message ?? "Termin konnte nicht gespeichert werden.",
+        message: "Termin konnte nicht gespeichert werden.",
       });
       return;
     }
@@ -75,12 +76,11 @@ export async function saveResolvedEntries(
       .insert(markers)
       .select();
     if (markerError || !markerRows) {
+      console.error("Ausfalltermine konnten nicht gespeichert werden.", markerError);
       failures.push({
         index: entry.index,
         title: entry.title,
-        message: `Serie gespeichert, aber die ausgefallenen Termine nicht: ${
-          markerError?.message ?? "unbekannter Fehler"
-        }`,
+        message: "Serie gespeichert, aber die ausgefallenen Termine nicht.",
       });
       return;
     }
@@ -95,10 +95,11 @@ export async function saveResolvedEntries(
       try {
         await saveOne(row);
       } catch (e) {
+        console.error("Import fehlgeschlagen.", e);
         failures.push({
           index: row.entry.index,
           title: row.entry.title,
-          message: e instanceof Error ? e.message : "Unbekannter Fehler.",
+          message: "Termin konnte nicht gespeichert werden.",
         });
       }
       onProgress(++done, rows.length);

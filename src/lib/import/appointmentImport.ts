@@ -9,7 +9,7 @@
  */
 import { RRule, type Options as RRuleOptions } from "rrule";
 import { localDateStr } from "@/lib/utils";
-import { occurrenceDateKey } from "@/lib/utils/recurrence";
+import { occurrenceDateKey, ruleAnchor } from "@/lib/utils/recurrence";
 import type {
   AppointmentWithParticipants,
   FamilyMember,
@@ -490,19 +490,6 @@ const PRESETS: Record<string, Partial<RRuleOptions>> = {
   monthly: { freq: RRule.MONTHLY },
   yearly: { freq: RRule.YEARLY },
 };
-
-/**
- * DTSTART der Regel: der lokale Mittag des Starttags statt der echten Startzeit.
- *
- * rrule wertet Wochentage in UTC aus, `expandAppointments` übersetzt die Treffer
- * aber in lokale Tage. Bei Terminen kurz nach Mitternacht (und ganztägigen, die
- * um 00:00 beginnen) liegt das UTC-Datum vor dem lokalen — „Mo/Mi“ würde dann
- * als Di/Do angezeigt. Mittags stimmen beide Daten in jeder Zeitzone überein.
- * Die Uhrzeit des Termins kommt ohnehin aus start_time, nicht aus der Regel.
- */
-function ruleAnchor(start: Date): Date {
-  return new Date(start.getFullYear(), start.getMonth(), start.getDate(), 12, 0, 0, 0);
-}
 
 const ALLOWED_FREQS = [RRule.DAILY, RRule.WEEKLY, RRule.MONTHLY, RRule.YEARLY];
 

@@ -20,7 +20,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { AppointmentWithParticipants } from "@/lib/supabase/types";
 import { hexToRgba, startOfDay } from "@/lib/utils";
-import { occurrenceDateKey } from "@/lib/utils/recurrence";
+import { buildRecurrenceRule, occurrenceDateKey } from "@/lib/utils/recurrence";
 import { isSchoolHoliday } from "@/lib/utils/schoolHolidays";
 import { Checkbox } from "@/components/ui/checkbox";
 
@@ -58,17 +58,6 @@ function explicitWeekdays(rule: RRule): number[] | null {
   return list.map((w) =>
     typeof w === "number" ? w : typeof w === "string" ? Weekday.fromStr(w).weekday : w.weekday
   );
-}
-
-/**
- * DTSTART of a rule: local noon of the start day instead of the real start
- * time. rrule evaluates weekdays in UTC, expandAppointments maps hits to local
- * days — for appointments shortly after midnight (and all-day ones at 00:00)
- * BYDAY would otherwise land one day early. The time of day comes from
- * start_time anyway (same approach as the CSV import).
- */
-function ruleAnchor(start: Date): Date {
-  return new Date(start.getFullYear(), start.getMonth(), start.getDate(), 12, 0, 0, 0);
 }
 
 function sameDays(a: number[], b: number[]): boolean {
@@ -347,7 +336,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   const isFirstOccurrence = useMemo(() => {
     if (!existingAppt?.recurrence_rule || !formOccurrenceStart) return true;
     try {
-      // Compare by day: DTSTART may be anchored at noon (see ruleAnchor)
+      // Regeln sind auf lokalen Mittag verankert → nach lokalem Tag vergleichen
       return !RRule.fromString(existingAppt.recurrence_rule).before(
         startOfDay(formOccurrenceStart),
         false
@@ -468,29 +457,17 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
 
   function buildRRule(freq: RecurrenceFreq, from: Date, countOverride?: number): string | null {
     if (freq === "none") return null;
-    const freqMap = {
-      daily: RRule.DAILY,
-      weekdays: RRule.WEEKLY,
-      weekend: RRule.WEEKLY,
-      weekly: RRule.WEEKLY,
-      biweekly: RRule.WEEKLY,
-      monthly: RRule.MONTHLY,
-      yearly: RRule.YEARLY,
-      custom: RRule.WEEKLY,
-    };
-    const rule = new RRule({
-      freq: freqMap[freq],
-      dtstart: ruleAnchor(from),
-      ...(freq === "biweekly" && { interval: 2 }),
-      ...(freq === "weekdays" && { byweekday: [RRule.MO, RRule.TU, RRule.WE, RRule.TH, RRule.FR] }),
-      ...(freq === "weekend" && { byweekday: [RRule.SA, RRule.SU] }),
-      ...(freq === "custom" && { byweekday: [...customDays].sort() }),
-      ...(recurrenceEnd === "count" && {
-        count: Math.min(Math.max(countOverride ?? recurrenceCount, 1), MAX_COUNT),
-      }),
-      ...(recurrenceEnd === "until" && { until: new Date(`${recurrenceUntil}T23:59:59`) }),
+    return buildRecurrenceRule({
+      freq,
+      start: from,
+      customDays,
+      end:
+        recurrenceEnd === "count"
+          ? { mode: "count", count: Math.min(Math.max(countOverride ?? recurrenceCount, 1), MAX_COUNT) }
+          : recurrenceEnd === "until"
+            ? { mode: "until", date: new Date(`${recurrenceUntil}T23:59:59`) }
+            : { mode: "none" },
     });
-    return rule.toString();
   }
 
   // Weekday of the (first) occurrence, for labels like "Jeden Montag"
@@ -633,7 +610,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
         });
         const appointment = data as AppointmentWithParticipants | null;
         if (error || !appointment) {
-          setFormError(error?.message ?? "Termin konnte nicht gespeichert werden.");
+          console.error("Termin konnte nicht gespeichert werden.", error);
+          setFormError("Termin konnte nicht gespeichert werden.");
           return;
         }
         if (!(await endSeriesBefore(supabase, existingAppt, formOccurrenceStart))) {
@@ -660,7 +638,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
         });
         const appointment = data as AppointmentWithParticipants | null;
         if (error || !appointment) {
-          setFormError(error?.message ?? "Termin konnte nicht gespeichert werden.");
+          console.error("Termin konnte nicht gespeichert werden.", error);
+          setFormError("Termin konnte nicht gespeichert werden.");
           return;
         }
         addAppointment(appointment);
@@ -688,7 +667,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
         });
         const appointment = data as AppointmentWithParticipants | null;
         if (error || !appointment) {
-          setFormError(error?.message ?? "Termin konnte nicht gespeichert werden.");
+          console.error("Termin konnte nicht gespeichert werden.", error);
+          setFormError("Termin konnte nicht gespeichert werden.");
           return;
         }
         updateAppointment(existingAppt.id, appointment);
@@ -702,7 +682,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
         });
         const appointment = data as AppointmentWithParticipants | null;
         if (error || !appointment) {
-          setFormError(error?.message ?? "Termin konnte nicht erstellt werden.");
+          console.error("Termin konnte nicht erstellt werden.", error);
+          setFormError("Termin konnte nicht erstellt werden.");
           return;
         }
         addAppointment(appointment);

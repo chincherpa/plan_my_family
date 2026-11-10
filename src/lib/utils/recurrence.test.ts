@@ -1,5 +1,13 @@
 import { describe, it, expect } from "vitest";
-import { expandAppointments, occurrenceDateKey } from "@/lib/utils/recurrence";
+import { RRule } from "rrule";
+import {
+  buildRecurrenceRule,
+  expandAppointments,
+  occurrenceDateKey,
+  type RecurrenceEndSpec,
+  type RecurrenceFreqKey,
+} from "@/lib/utils/recurrence";
+import { anniversaryRecord } from "@/lib/anniversaries";
 import { appointment, d } from "@/lib/utils/__fixtures__/calendar";
 
 describe("occurrenceDateKey", () => {
@@ -214,5 +222,173 @@ describe("expandAppointments — series exceptions", () => {
 
     // The other series still has all five of its occurrences.
     expect(result.filter((o) => o.appointment.id === "other")).toHaveLength(5);
+  });
+});
+
+describe("buildRecurrenceRule", () => {
+  /** Regel bauen, Termin speichern und im Bereich expandieren → lokale Tage. */
+  function days(opts: {
+    freq: RecurrenceFreqKey;
+    start: string;
+    end?: string;
+    allDay?: boolean;
+    rangeStart: string;
+    rangeEnd: string;
+    endSpec?: RecurrenceEndSpec;
+  }): string[] {
+    const start = d(opts.start);
+    const rule = buildRecurrenceRule({
+      freq: opts.freq,
+      start,
+      end: opts.endSpec ?? { mode: "none" },
+    });
+    const appt = appointment({
+      start: opts.start,
+      end: opts.end ?? (opts.allDay ? opts.start.split(" ")[0] + " 23:59" : opts.start),
+      recurrence_rule: rule,
+    });
+    return expandAppointments([appt], d(opts.rangeStart), d(opts.rangeEnd)).map((o) =>
+      occurrenceDateKey(o.occurrenceStart)
+    );
+  }
+
+  it("ganztägig wöchentlich ab Sonntag bleibt im November sonntags", () => {
+    const result = days({
+      freq: "weekly",
+      start: "2026-07-05 00:00",
+      allDay: true,
+      rangeStart: "2026-11-01",
+      rangeEnd: "2026-11-30 23:59",
+    });
+    expect(result).toEqual(["2026-11-01", "2026-11-08", "2026-11-15", "2026-11-22", "2026-11-29"]);
+  });
+
+  it("ganztägig „Wochenende“ ab Samstag enthält den ersten Samstag", () => {
+    const result = days({
+      freq: "weekend",
+      start: "2026-11-14 00:00",
+      allDay: true,
+      rangeStart: "2026-11-01",
+      rangeEnd: "2026-11-23 23:59",
+    });
+    expect(result).toEqual(["2026-11-14", "2026-11-15", "2026-11-21", "2026-11-22"]);
+  });
+
+  it("ganztägig monatlich am 1. liefert zwölf Monatserste in Folge", () => {
+    const result = days({
+      freq: "monthly",
+      start: "2026-11-01 00:00",
+      allDay: true,
+      rangeStart: "2026-11-01",
+      rangeEnd: "2027-10-31 23:59",
+    });
+    expect(result).toEqual([
+      "2026-11-01", "2026-12-01", "2027-01-01", "2027-02-01", "2027-03-01", "2027-04-01",
+      "2027-05-01", "2027-06-01", "2027-07-01", "2027-08-01", "2027-09-01", "2027-10-01",
+    ]);
+  });
+
+  it("ganztägig jährlich am 1. März ab 2028 trifft jedes Jahr", () => {
+    const result = days({
+      freq: "yearly",
+      start: "2028-03-01 00:00",
+      allDay: true,
+      rangeStart: "2028-01-01",
+      rangeEnd: "2033-12-31 23:59",
+    });
+    expect(result).toEqual([
+      "2028-03-01", "2029-03-01", "2030-03-01", "2031-03-01", "2032-03-01", "2033-03-01",
+    ]);
+  });
+
+  it("ganztägig täglich mit 10 Terminen zählt keinen Tag doppelt", () => {
+    const result = days({
+      freq: "daily",
+      start: "2026-10-20 00:00",
+      allDay: true,
+      rangeStart: "2026-10-01",
+      rangeEnd: "2026-11-30 23:59",
+      endSpec: { mode: "count", count: 10 },
+    });
+    expect(result).toEqual([
+      "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-23", "2026-10-24",
+      "2026-10-25", "2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29",
+    ]);
+  });
+
+  it("jährlich am 29.02. fällt in Nicht-Schaltjahren auf den 28.02.", () => {
+    const result = days({
+      freq: "yearly",
+      start: "2024-02-29 00:00",
+      allDay: true,
+      rangeStart: "2024-01-01",
+      rangeEnd: "2028-12-31 23:59",
+    });
+    expect(result).toEqual(["2024-02-29", "2025-02-28", "2026-02-28", "2027-02-28", "2028-02-29"]);
+  });
+
+  it("werktags 08:00 bleibt Montag bis Freitag", () => {
+    const result = days({
+      freq: "weekdays",
+      start: "2026-11-09 08:00",
+      end: "2026-11-09 09:00",
+      rangeStart: "2026-11-09",
+      rangeEnd: "2026-11-15 23:59",
+    });
+    expect(result).toEqual(["2026-11-09", "2026-11-10", "2026-11-11", "2026-11-12", "2026-11-13"]);
+  });
+
+  it("verankert DTSTART auf lokalem Mittag; der erste Termin einer 18:00-Serie ist der erste", () => {
+    const rule = buildRecurrenceRule({
+      freq: "weekly",
+      start: d("2026-11-09 18:00"),
+      end: { mode: "none" },
+    });
+    const parsed = RRule.fromString(rule);
+    // Vorkommen davor gibt es nicht — Vergleich über den lokalen Tag (wie im Formular)
+    expect(parsed.before(d("2026-11-09 00:00"), false)).toBeNull();
+    expect(parsed.before(d("2026-11-16 00:00"), false)).not.toBeNull();
+  });
+});
+
+describe("Jahrestage im Kalenderformular (Befund 2)", () => {
+  it.each([
+    ["29.02.", 2, 29],
+    ["01.03.", 3, 1],
+  ])("Jahrestag am %s überlebt „Alle“ speichern mit neu gebauter Regel", (_label, month, day) => {
+    const rec = anniversaryRecord({
+      title: "Test",
+      kind: "birthday",
+      month,
+      day,
+      year: null,
+    } as Parameters<typeof anniversaryRecord>[0]);
+    const start = new Date(rec.start_time);
+    const rebuilt = buildRecurrenceRule({ freq: "yearly", start, end: { mode: "none" } });
+    expect(rebuilt).toBe(rec.recurrence_rule);
+
+    const appt = appointment({
+      start: `2000-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")} 00:00`,
+      end: `2000-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")} 23:59`,
+      recurrence_rule: rebuilt,
+    });
+    const occ = expandAppointments([appt], d("2026-01-01"), d("2031-12-31 23:59"));
+    expect(occ).toHaveLength(6);
+  });
+});
+
+describe("expandAppointments — Serien über Mitternacht", () => {
+  it("tägliche Serie 22:00–06:00 erscheint im Bereich des Folgetags zweimal", () => {
+    const appt = appointment({
+      start: "2026-11-01 22:00",
+      end: "2026-11-02 06:00",
+      recurrence_rule: buildRecurrenceRule({
+        freq: "daily",
+        start: d("2026-11-01 22:00"),
+        end: { mode: "none" },
+      }),
+    });
+    const result = expandAppointments([appt], d("2026-11-10 00:00"), d("2026-11-10 23:59"));
+    expect(result.map((o) => o.occurrenceStart)).toEqual([d("2026-11-09 22:00"), d("2026-11-10 22:00")]);
   });
 });

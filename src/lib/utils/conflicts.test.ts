@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { findVehicleConflicts, checkVehicleConflict } from "@/lib/utils/conflicts";
+import { buildRecurrenceRule } from "@/lib/utils/recurrence";
 import { appointment, occurrence, d } from "@/lib/utils/__fixtures__/calendar";
 
 const CAR = "vehicle-car";
@@ -223,5 +224,22 @@ describe("checkVehicleConflict", () => {
     expect(
       checkVehicleConflict(CAR, d("2026-06-02 10:00"), new Date("nonsense"), 0, 0, [booked])
     ).toBeNull();
+  });
+});
+
+describe("checkVehicleConflict — Nachtfahrt einer Serie", () => {
+  it("meldet einen Konflikt mit der Nachtfahrt vom Vorabend", () => {
+    const night = appointment({
+      vehicle_id: CAR,
+      start: "2026-11-01 22:00",
+      end: "2026-11-02 06:00",
+      recurrence_rule: buildRecurrenceRule({
+        freq: "daily",
+        start: d("2026-11-01 22:00"),
+        end: { mode: "none" },
+      }),
+    });
+    const hit = checkVehicleConflict(CAR, d("2026-11-10 05:00"), d("2026-11-10 07:00"), 0, 0, [night]);
+    expect(hit?.id).toBe(night.id);
   });
 });

@@ -97,5 +97,5 @@ Merge-Konfliktmarker.
 
 ## Offene Punkte
 
-`ANALYSE.md` enthält eine priorisierte Bestandsaufnahme des Projekts —
-Architektur, Sicherheit, Performance und was als Nächstes ansteht.
+`CODE_REVIEW.md` enthält die aktuelle Bestandsaufnahme des Projekts —
+Befunde nach Priorität, mit Status (erledigt/offen).

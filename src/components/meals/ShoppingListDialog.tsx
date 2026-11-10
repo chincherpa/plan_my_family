@@ -61,6 +61,9 @@ export default function ShoppingListDialog({
       if (!alive) return;
       if ("error" in res) setError(res.error);
       else setIngredients(res.data);
+    }).catch((err) => {
+      console.error("Zutaten laden fehlgeschlagen", err);
+      if (alive) setError("Zutaten konnten nicht geladen werden.");
     });
     return () => {
       alive = false;

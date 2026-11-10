@@ -9,7 +9,15 @@ import InlineEditText from "./InlineEditText";
 import AssigneeSelect from "./AssigneeSelect";
 import type { TodoItem } from "@/lib/supabase/types";
 
-export default function TodoItemRow({ todoId, item }: { todoId: string; item: TodoItem }) {
+export default function TodoItemRow({
+  todoId,
+  item,
+  onError,
+}: {
+  todoId: string;
+  item: TodoItem;
+  onError: (message: string) => void;
+}) {
   const { updateTodoItem, removeTodoItem } = useDataStore();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -23,6 +31,7 @@ export default function TodoItemRow({ todoId, item }: { todoId: string; item: To
       .single();
     if (error || !data) {
       console.error("Unterpunkt konnte nicht gespeichert werden.", error);
+      onError("Unterpunkt konnte nicht gespeichert werden.");
       return;
     }
     updateTodoItem(todoId, item.id, data as TodoItem);
@@ -33,6 +42,7 @@ export default function TodoItemRow({ todoId, item }: { todoId: string; item: To
     const { error } = await supabase.from("todo_items").delete().eq("id", item.id);
     if (error) {
       console.error("Unterpunkt konnte nicht gelöscht werden.", error);
+      onError("Unterpunkt konnte nicht gelöscht werden.");
       return;
     }
     removeTodoItem(todoId, item.id);
