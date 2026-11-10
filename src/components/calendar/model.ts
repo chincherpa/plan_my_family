@@ -1,5 +1,9 @@
 import type { AppointmentOccurrence } from "@/lib/utils/recurrence";
 import type { GuardianWarning } from "@/lib/utils/guardianCheck";
+import type { SchoolHoliday } from "@/lib/supabase/types";
+import { anniversaryBadge } from "@/lib/anniversaries";
+import { localDateStr } from "@/lib/utils";
+import { holidaysOn } from "@/lib/utils/schoolHolidays";
 
 export const ALL_COLUMN_ID = "all";
 export const EVENTS_COLUMN_ID = "events";
@@ -55,6 +59,54 @@ export function placementsFor(
     if (p.member_id !== appt.owner_id) result.push({ columnId: p.member_id, isOwner: false });
   }
   return result;
+}
+
+/** At most this many side bars per day; more are folded into a "+n" bar. */
+export const MAX_SIDE_BARS = 3;
+/** Width of one side bar slot in px (bar + gap). */
+export const SIDE_BAR_SLOT_PX = 26;
+
+/** One vertical bar at the right edge of a day: a school holiday or an Ereignis. */
+export interface SideBarItem {
+  key: string;
+  label: string;
+  title: string;
+  color: string;
+  /** Set for Ereignisse — tapping the bar opens it */
+  occ?: AppointmentOccurrence;
+}
+
+export function eventEmoji(title: string): string {
+  return /geburtstag|bday|birthday/i.test(title) ? "🎂" : "🎉";
+}
+
+/** Holidays first, then Ereignisse (Geburtstage, Jahrestage, …) of the day. */
+export function sideBarItems(data: DayData, schoolHolidays: SchoolHoliday[]): SideBarItem[] {
+  const items: SideBarItem[] = holidaysOn(localDateStr(data.day), schoolHolidays).map((h) => ({
+    key: `holiday-${h.id}`,
+    label: h.name,
+    title: `Schulferien: ${h.name}`,
+    color: HOLIDAY_COLOR,
+  }));
+  for (const occ of data.banner) {
+    const appt = occ.appointment;
+    if (!appt.is_event) continue;
+    const badge = anniversaryBadge(appt, occ.occurrenceStart);
+    const count = badge?.count != null ? ` (${badge.count})` : "";
+    items.push({
+      key: occ.key,
+      label: `${badge?.emoji ?? eventEmoji(appt.title)} ${appt.title}${count}`,
+      title: `${appt.title}${count}`,
+      color: EVENT_COLOR,
+      occ,
+    });
+  }
+  return items;
+}
+
+/** Gutter width for `slots` side bars; 0 when no day in view needs one. */
+export function sideGutterWidth(slots: number): number {
+  return slots > 0 ? slots * SIDE_BAR_SLOT_PX + 2 : 0;
 }
 
 export function dayBounds(day: Date): [Date, Date] {

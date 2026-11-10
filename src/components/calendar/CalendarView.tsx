@@ -19,13 +19,15 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import AppointmentForm from "@/components/appointments/AppointmentForm";
 import MealEditDialog from "./MealEditDialog";
-import DayTimeline, { HOLIDAY_GUTTER, TIME_GUTTER, snapShiftMin } from "./DayTimeline";
+import DayTimeline, { SideGutter, TIME_GUTTER, snapShiftMin } from "./DayTimeline";
 import { DayBanner, MealsStrip, TodoDueStrip, UpcomingDay } from "./DayParts";
 import {
   ALL_COLUMN_COLOR,
   ALL_COLUMN_ID,
   EVENTS_COLUMN_ID,
+  MAX_SIDE_BARS,
   buildDayData,
+  sideBarItems,
   type Column,
 } from "./model";
 
@@ -174,6 +176,17 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
         buildDayData(addDays(heroDay, i + 1), occurrences, guardianWarnings)
       ),
     [heroDay, upcomingCount, occurrences, guardianWarnings]
+  );
+
+  // Bar gutter on the right is as wide as the busiest day in view needs, so
+  // member columns line up across hero, header and upcoming days.
+  const sideSlots = useMemo(
+    () =>
+      Math.min(
+        MAX_SIDE_BARS,
+        Math.max(0, ...[heroData, ...upcomingData].map((d) => sideBarItems(d, schoolHolidays).length))
+      ),
+    [heroData, upcomingData, schoolHolidays]
   );
 
   const mealsByDate = useMemo(() => new Map(meals.map((m) => [m.date, m])), [meals]);
@@ -411,7 +424,7 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
                 </div>
               ))}
             </div>
-            <div className={`${HOLIDAY_GUTTER} shrink-0`} />
+            <SideGutter slots={sideSlots} />
           </div>
         </div>
 
@@ -425,7 +438,7 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
             />
           </div>
           <div className="pt-2">
-            <TodoDueStrip day={heroDay} columns={columns} />
+            <TodoDueStrip day={heroDay} columns={columns} sideSlots={sideSlots} />
             <DayTimeline
               data={heroData}
               columns={columns}
@@ -434,6 +447,7 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
               hourHeight={hourHeight}
               now={now}
               conflictKeys={conflictKeys}
+              sideSlots={sideSlots}
               onSlotClick={(start, columnId) => openForm({ date: start, memberId: columnId })}
               onOpen={openOccurrence}
             />
@@ -456,11 +470,12 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
                 columns={columns}
                 meal={mealsByDate.get(key)}
                 conflictKeys={conflictKeys}
+                sideSlots={sideSlots}
                 expanded={expanded}
                 timeline={
                   expanded && (
                     <>
-                      <TodoDueStrip day={data.day} columns={columns} />
+                      <TodoDueStrip day={data.day} columns={columns} sideSlots={sideSlots} />
                       <DayTimeline
                         data={data}
                         columns={columns}
@@ -469,6 +484,7 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
                         hourHeight={hourHeight}
                         now={now}
                         conflictKeys={conflictKeys}
+                        sideSlots={sideSlots}
                         onSlotClick={(start, columnId) => openForm({ date: start, memberId: columnId })}
                         onOpen={openOccurrence}
                       />
