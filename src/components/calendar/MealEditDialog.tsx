@@ -135,6 +135,16 @@ export default function MealEditDialog({ date, meal, initialType, onClose }: Mea
 
   async function handleSave() {
     if (!family) return;
+    // Nur Slots schreiben, die sich seit dem Öffnen geändert haben
+    const changed: Partial<Record<MealType, string | null>> = {};
+    for (const type of ["lunch", "dinner"] as const) {
+      const next = values[type].trim() || null;
+      if (next !== ((meal?.[type] ?? "").trim() || null)) changed[type] = next;
+    }
+    if (Object.keys(changed).length === 0) {
+      onClose();
+      return;
+    }
     setSaving(true);
     setError(null);
     const { data, error: saveError } = await createClient()
@@ -143,8 +153,7 @@ export default function MealEditDialog({ date, meal, initialType, onClose }: Mea
         {
           family_id: family.id,
           date,
-          lunch: values.lunch.trim() || null,
-          dinner: values.dinner.trim() || null,
+          ...changed,
         },
         { onConflict: "family_id,date" }
       )
