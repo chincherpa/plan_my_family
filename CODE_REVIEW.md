@@ -32,7 +32,7 @@ habe ich nicht gegen eine Datenbank laufen lassen; `pnpm build` habe ich nicht a
 
 ---
 
-## 1. Ganztägige Serien aus dem Formular landen am falschen Tag (hoch)
+## 1. Ganztägige Serien aus dem Formular landen am falschen Tag (hoch) — ✅ erledigt
 
 `src/components/appointments/AppointmentForm.tsx:404` (`buildRRule`) setzt `dtstart` auf
 den echten Startzeitpunkt. Bei ganztägigen Terminen ist das lokale Mitternacht, also
@@ -70,7 +70,7 @@ Nachmittagsterminen: Dort wird „Dieser & folgende" am ersten Termin angeboten 
 hinterlässt eine leere Alt-Serie. Der Vergleich sollte über das lokale Datum laufen, wie
 es Zeile 542–545 bereits tut.
 
-## 2. Jahrestag im Kalenderformular speichern zerstört seine Regel (hoch)
+## 2. Jahrestag im Kalenderformular speichern zerstört seine Regel (hoch) — ✅ erledigt
 
 Migration 016 verspricht, dass ein Jahrestag beim Bearbeiten im Kalenderformular
 erhalten bleibt. Für die Spalten stimmt das. Die Regel aber wird bei „Alle" neu gebaut
@@ -86,7 +86,7 @@ erhalten bleibt. Für die Spalten stimmt das. Die Regel aber wird bei „Alle" n
 Sonderfall 29.2. erhalten bleibt. Einfacher: Für Termine mit `anniversary_kind` im
 Kalenderformular auf die Jahrestage-Seite verweisen, statt die Regel anzufassen.
 
-## 3. Mitglied mit Login lässt sich löschen (mittel)
+## 3. Mitglied mit Login lässt sich löschen (mittel) — ✅ erledigt
 
 `src/components/settings/MembersSettings.tsx:170` löscht jedes Mitglied nach einer
 einfachen Rückfrage. Hängt daran das gemeinsame Familien-Login (`user_id`), findet
@@ -97,7 +97,7 @@ nur im SQL-Editor (`docs/konten.md`).
 **Empfehlung:** Löschen-Button für Mitglieder mit `user_id` ausblenden und in der
 Datenbank absichern, z. B. `members_delete` nur für Zeilen mit `user_id is null`.
 
-## 4. Essensplan: gleichzeitige Änderungen überschreiben sich (mittel)
+## 4. Essensplan: gleichzeitige Änderungen überschreiben sich (mittel) — ✅ erledigt
 
 Eine Zeile in `meals` enthält Mittag und Abend. Beide Schreibpfade schicken immer beide
 Felder aus dem lokalen Stand:
@@ -113,7 +113,7 @@ offen ist, löscht das Speichern am Tablet den Eintrag wieder.
 `family_id`, `date` und den einen Slot enthält, lässt die andere Spalte bei einem
 Konflikt unverändert.
 
-## 5. Kalender rechnet jede Minute alles neu (mittel)
+## 5. Kalender rechnet jede Minute alles neu (mittel) — ✅ erledigt
 
 `src/components/calendar/CalendarView.tsx:95`: `today` hängt an `now`, und `now` ist
 jede Minute ein neues `Date`. Damit ändern sich `rangeStart` und `rangeEnd`, und die
@@ -133,7 +133,7 @@ Verwandt, aber bei Familiengröße unkritisch: `AppShell` lädt alle Termine und
 ohne Zeitgrenze und holt bei jedem Realtime-Ereignis alle sechs Tabellen neu
 (`src/components/AppShell.tsx:54`).
 
-## 6. Mehrstufige Schreibvorgänge ohne Transaktion (mittel)
+## 6. Mehrstufige Schreibvorgänge ohne Transaktion (mittel) — ⏳ offen
 
 Mehrere Abläufe bestehen aus einzelnen Anfragen. Bricht einer mittendrin ab, bleibt ein
 Zwischenstand stehen:
@@ -151,7 +151,7 @@ Zwischenstand stehen:
 **Empfehlung:** Je eine Postgres-Funktion, wie es `save_appointment_with_participants`
 schon vormacht. Für Rezeptnamen ein Unique-Index auf `lower(name)`.
 
-## 7. Über Mitternacht laufende Serientermine fehlen am Folgetag (niedrig)
+## 7. Über Mitternacht laufende Serientermine fehlen am Folgetag (niedrig) — ✅ erledigt
 
 `rule.between(rangeStart, rangeEnd)` (`recurrence.ts:57`) findet nur Vorkommen, die im
 Bereich **beginnen**. Einzeltermine werden dagegen auf Überlappung geprüft (Zeile 79).
@@ -165,7 +165,7 @@ neuen Termins und übersieht so eine Nachtfahrt vom Vorabend.
 **Empfehlung:** In `expandAppointments` den Suchbeginn um die Termindauer (plus
 Rückfahrt) nach vorn ziehen und anschließend auf Überlappung filtern.
 
-## 8. Fehler werden verschluckt (niedrig)
+## 8. Fehler werden verschluckt (niedrig) — ✅ erledigt
 
 - Drag & Drop (`CalendarView.tsx:222`): Schlägt das Update fehl, springt der Termin
   kommentarlos zurück.
@@ -241,3 +241,6 @@ Rückfahrt) nach vorn ziehen und anschließend auf Überlappung filtern.
 2. Befund 3 (zwei Zeilen im Client, eine Policy).
 3. Befund 4 und 5 (jeweils kleine, lokale Änderungen).
 4. Befund 6 nach Bedarf; Kategorien und Zutaten zuerst.
+
+
+> Stand nach der Umsetzung: Befunde 1–5, 7, 8 behoben (Migrationen 019/020 liegen im Repo, sind aber noch nicht auf der Live-DB angewendet). Befund 6 und Abschnitt 9 sind offen.
