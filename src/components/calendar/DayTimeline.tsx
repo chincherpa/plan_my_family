@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useSyncExternalStore } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { useAppointmentMenu } from "./AppointmentMenu";
 import { CSS } from "@dnd-kit/utilities";
 import { Car, Repeat } from "lucide-react";
 import { useDataStore } from "@/lib/store/dataStore";
@@ -353,6 +354,7 @@ function TimelineBlock({
   onOpen: (occ: AppointmentOccurrence) => void;
 }) {
   const { members, vehicles } = useDataStore();
+  const openMenu = useAppointmentMenu();
   const { occ, isOwner } = placed;
   const appt = occ.appointment;
   const owner = members.find((m) => m.id === appt.owner_id);
@@ -389,6 +391,7 @@ function TimelineBlock({
         e.stopPropagation();
         onOpen(occ);
       }}
+      onContextMenu={openMenu ? (e) => openMenu(e, occ) : undefined}
       className="absolute flex flex-col px-0.5"
       style={{
         top,

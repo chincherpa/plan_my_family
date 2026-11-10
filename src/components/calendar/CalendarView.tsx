@@ -19,6 +19,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import AppointmentForm from "@/components/appointments/AppointmentForm";
 import MealEditDialog from "./MealEditDialog";
+import { AppointmentMenuProvider } from "./AppointmentMenu";
 import DayTimeline, { SideGutter, TIME_GUTTER, snapShiftMin } from "./DayTimeline";
 import { DayBanner, MealsStrip, TodoDueStrip, UpcomingDay } from "./DayParts";
 import {
@@ -280,6 +281,7 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragCancel={() => (lastDragEnd.current = Date.now())}>
+      <AppointmentMenuProvider>
       <div ref={scrollRef} className="h-full overflow-y-auto overflow-x-hidden">
         {/* Sticky top: date, navigation, conflicts, column names */}
         <div className="sticky top-0 z-40 bg-[var(--background)]/95 backdrop-blur px-2 sm:px-4 pt-3">
@@ -510,6 +512,7 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
           onClose={() => setMealEditDate(null)}
         />
       )}
+      </AppointmentMenuProvider>
     </DndContext>
   );
 }

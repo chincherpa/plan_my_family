@@ -8,6 +8,7 @@ import { todosDueByColumn } from "@/lib/utils/todoCalendar";
 import type { AppointmentOccurrence } from "@/lib/utils/recurrence";
 import type { Meal, TodoWithItems } from "@/lib/supabase/types";
 import { SideBars, SideGutter, TIME_GUTTER } from "./DayTimeline";
+import { useAppointmentMenu } from "./AppointmentMenu";
 import { anniversaryBadge } from "@/lib/anniversaries";
 import {
   ALL_COLUMN_COLOR,
@@ -105,6 +106,7 @@ export function DayBanner({
   compact?: boolean;
 }) {
   const colorOf = useOccurrenceColor();
+  const openMenu = useAppointmentMenu();
   const schoolHolidays = useDataStore((s) => s.schoolHolidays);
   // Full-size days show holidays and Ereignisse as vertical bars at the right
   // edge of the timeline (SideBars); collapsed rows keep the chips next to the
@@ -143,6 +145,7 @@ export function DayBanner({
               e.stopPropagation();
               onOpen(occ);
             }}
+            onContextMenu={openMenu ? (e) => openMenu(e, occ) : undefined}
             className={`flex items-center gap-1 rounded-full font-medium ${
               compact ? "px-2 py-0.5 text-[11px]" : "px-3 py-1 text-xs"
             }`}
@@ -242,6 +245,7 @@ export function UpcomingDay({
   onEditMeal: () => void;
 }) {
   const colorOf = useOccurrenceColor();
+  const openMenu = useAppointmentMenu();
   const todos = useDataStore((s) => s.todos);
   const members = useDataStore((s) => s.members);
   const { day } = data;
@@ -334,6 +338,7 @@ export function UpcomingDay({
                         e.stopPropagation();
                         onOpen(occ);
                       }}
+                      onContextMenu={openMenu ? (e) => openMenu(e, occ) : undefined}
                       className={`flex flex-col rounded-md px-1.5 py-0.5 text-left text-[11px] leading-tight ${
                         conflict ? "ring-2 ring-[var(--warning)]" : ""
                       }`}

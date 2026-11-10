@@ -21,8 +21,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import type { AppointmentWithParticipants } from "@/lib/supabase/types";
 import { hexToRgba, startOfDay } from "@/lib/utils";
 import { buildRecurrenceRule, occurrenceDateKey } from "@/lib/utils/recurrence";
-import { isSchoolHoliday } from "@/lib/utils/schoolHolidays";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  deleteOccurrence,
+  endSeriesBefore,
+  occurrencesBefore,
+  type EditScope,
+} from "@/lib/appointments/actions";
 
 type RecurrenceFreq =
   | "none"
@@ -63,8 +68,6 @@ function explicitWeekdays(rule: RRule): number[] | null {
 function sameDays(a: number[], b: number[]): boolean {
   return a.length === b.length && [...a].sort().join() === [...b].sort().join();
 }
-/** single = this one, following = this and all later ones, series = all */
-type EditScope = "single" | "following" | "series";
 /** "none" only exists for legacy series saved without end; new rules always end */
 type RecurrenceEnd = "count" | "until" | "none";
 
@@ -200,7 +203,6 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     family,
     addAppointment,
     updateAppointment,
-    removeAppointment,
   } = useDataStore();
   const { formInitialDate, formMemberId, formOccurrenceStart, selectedAppointmentId } =
     useCalendarStore();
@@ -477,48 +479,6 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   const weekdayName =
     formStart && !isNaN(formStart.getTime()) ? WEEKDAYS_DE[formStart.getDay()] : null;
 
-  /**
-   * Cut the series off before the clicked occurrence: the rule gets an UNTIL
-   * on the previous day, later exception rows are dropped. Never called for
-   * the first occurrence (that is a whole-series operation).
-   */
-  async function endSeriesBefore(
-    supabase: ReturnType<typeof createClient>,
-    parent: AppointmentWithParticipants,
-    occStart: Date
-  ): Promise<boolean> {
-    const rule = RRule.fromString(parent.recurrence_rule!);
-    const until = new Date(occStart);
-    until.setDate(until.getDate() - 1);
-    until.setHours(23, 59, 59, 0);
-    const cut = new RRule({ ...rule.origOptions, count: null, until }).toString();
-    const cutKey = occurrenceDateKey(occStart);
-
-    // Exceptions first: modified instances render regardless of the rule, so
-    // leftovers after a successful cut would duplicate the new series.
-    // If the cut fails afterwards, the series simply keeps running.
-    const { error: delError } = await supabase
-      .from("appointments")
-      .delete()
-      .eq("recurrence_parent_id", parent.id)
-      .gte("exception_date", cutKey);
-    if (delError) return false;
-    appointments
-      .filter(
-        (a) =>
-          a.recurrence_parent_id === parent.id && !!a.exception_date && a.exception_date >= cutKey
-      )
-      .forEach((a) => removeAppointment(a.id));
-
-    const { error } = await supabase
-      .from("appointments")
-      .update({ recurrence_rule: cut })
-      .eq("id", parent.id);
-    if (error) return false;
-    updateAppointment(parent.id, { recurrence_rule: cut });
-    return true;
-  }
-
   async function handleSave() {
     if (!family || !title.trim()) return;
     if (isAllDay && !allDayStartDate) return;
@@ -587,18 +547,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
           recurrenceCount === initialEnd.count
         ) {
           // Count untouched → keep the total, minus what stays in the old series
-          // Compare by local date: rrule works in UTC, so across a DST switch the
-          // clicked occurrence's rrule date can lie an hour before formOccurrenceStart
-          const cutKey = occurrenceDateKey(formOccurrenceStart);
-          // Occurrences in school holidays did not count for a skipping series
-          const kept = RRule.fromString(existingAppt.recurrence_rule!)
-            .between(startOfDay(new Date(existingAppt.start_time)), formOccurrenceStart, true)
-            .map(occurrenceDateKey)
-            .filter(
-              (key) =>
-                key < cutKey &&
-                !(existingAppt.skip_school_holidays && isSchoolHoliday(key, schoolHolidays))
-            ).length;
+          const kept = occurrencesBefore(existingAppt, formOccurrenceStart);
           count = Math.max(recurrenceCount - kept, 1);
         }
         const { data, error } = await supabase.rpc("save_appointment_with_participants", {
@@ -732,73 +681,11 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
 
   async function handleDelete() {
     if (!existingAppt) return;
-    const supabase = createClient();
-
-    // Occurrence of a series → insert a deletion marker for this date only
-    if (isSeriesInstance && editScope === "single" && formOccurrenceStart) {
-      const durationMs =
-        new Date(existingAppt.end_time).getTime() - new Date(existingAppt.start_time).getTime();
-      const { data, error } = await supabase
-        .from("appointments")
-        .insert({
-          family_id: existingAppt.family_id,
-          title: existingAppt.title,
-          start_time: formOccurrenceStart.toISOString(),
-          end_time: new Date(formOccurrenceStart.getTime() + durationMs).toISOString(),
-          recurrence_parent_id: existingAppt.id,
-          exception_date: occurrenceDateKey(formOccurrenceStart),
-          is_deleted: true,
-        })
-        .select()
-        .single();
-      if (error || !data) {
-        setFormError("Termin konnte nicht gelöscht werden.");
-        return;
-      }
-      addAppointment({ ...(data as AppointmentWithParticipants), participants: [] });
-      onClose();
+    const { result } = await deleteOccurrence(existingAppt, formOccurrenceStart, editScope);
+    if (!result.ok) {
+      setFormError(result.error);
       return;
     }
-
-    // Modified series instance → keep the row as deletion marker,
-    // otherwise the original occurrence would reappear
-    if (existingAppt.recurrence_parent_id) {
-      const { error } = await supabase
-        .from("appointments")
-        .update({ is_deleted: true })
-        .eq("id", existingAppt.id);
-      if (error) {
-        setFormError("Termin konnte nicht gelöscht werden.");
-        return;
-      }
-      updateAppointment(existingAppt.id, { is_deleted: true });
-      onClose();
-      return;
-    }
-
-    // This and all following occurrences → end the series the day before
-    if (isSeriesInstance && editScope === "following" && !isFirstOccurrence && formOccurrenceStart) {
-      if (!(await endSeriesBefore(supabase, existingAppt, formOccurrenceStart))) {
-        setFormError("Termine konnten nicht gelöscht werden.");
-        return;
-      }
-      onClose();
-      return;
-    }
-
-    // Single appointment or whole series
-    if (isSeriesInstance) {
-      await supabase.from("appointments").delete().eq("recurrence_parent_id", existingAppt.id);
-    }
-    const { error } = await supabase.from("appointments").delete().eq("id", existingAppt.id);
-    if (error) {
-      setFormError("Termin konnte nicht gelöscht werden.");
-      return;
-    }
-    appointments
-      .filter((a) => a.recurrence_parent_id === existingAppt.id)
-      .forEach((a) => removeAppointment(a.id));
-    removeAppointment(existingAppt.id);
     onClose();
   }
 
