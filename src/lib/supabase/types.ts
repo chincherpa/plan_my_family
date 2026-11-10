@@ -12,6 +12,7 @@ export interface Database {
           calendar_start_hour: number;
           calendar_end_hour: number;
           meal_weekday_categories: Json;
+          keyboard_shortcuts: Json;
           created_at: string;
         };
         Insert: {
@@ -20,6 +21,7 @@ export interface Database {
           calendar_start_hour?: number;
           calendar_end_hour?: number;
           meal_weekday_categories?: Json;
+          keyboard_shortcuts?: Json;
           created_at?: string;
         };
         Update: {
@@ -28,6 +30,7 @@ export interface Database {
           calendar_start_hour?: number;
           calendar_end_hour?: number;
           meal_weekday_categories?: Json;
+          keyboard_shortcuts?: Json;
           created_at?: string;
         };
         Relationships: [];
