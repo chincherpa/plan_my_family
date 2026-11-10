@@ -3,6 +3,7 @@ import { Users, Car, UtensilsCrossed, FileUp, ArrowRight, TreePalm } from "lucid
 import CalendarDisplaySettings from "@/components/settings/CalendarDisplaySettings";
 import ThemeSettings from "@/components/settings/ThemeSettings";
 import MealWeekdaySettings from "@/components/settings/MealWeekdaySettings";
+import ShortcutSettings from "@/components/settings/ShortcutSettings";
 
 export default function SettingsPage() {
   return (
@@ -29,6 +30,8 @@ export default function SettingsPage() {
       <ThemeSettings />
 
       <CalendarDisplaySettings />
+
+      <ShortcutSettings />
 
       <Link
         href="/settings/vehicles"

@@ -211,6 +211,8 @@ const KEY_SYMBOLS: Record<string, string> = {
   ArrowUp: "↑",
   ArrowDown: "↓",
   Shift: "⇧",
+  Escape: "Esc",
+  Backspace: "⌫",
   Ctrl: "Strg",
   Meta: "⌘",
   PageUp: "Bild ↑",

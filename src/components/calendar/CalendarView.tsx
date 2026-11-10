@@ -17,6 +17,8 @@ import { findVehicleConflicts } from "@/lib/utils/conflicts";
 import { formatDate, formatTime, getISOWeek, localDateStr, readableTextColor, startOfDay } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
+import { useKeymap, useShortcut } from "@/lib/shortcuts/useShortcuts";
+import { withShortcutHint } from "@/lib/shortcuts/keymap";
 import AppointmentForm from "@/components/appointments/AppointmentForm";
 import MealEditDialog from "./MealEditDialog";
 import { AppointmentMenuProvider } from "./AppointmentMenu";
@@ -112,7 +114,9 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const datePickerRef = useRef<HTMLInputElement>(null);
   const lastDragEnd = useRef(0);
+  const keymap = useKeymap();
 
   const hourHeight = useHourHeight(endHour - startHour);
 
@@ -232,6 +236,30 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
     openForm({ date: start, memberId: columnId });
   }
 
+  function newAppointmentOnHeroDay() {
+    openForm({ date: isHeroToday ? undefined : heroDay });
+  }
+
+  function openDatePicker() {
+    const input = datePickerRef.current;
+    if (!input) return;
+    try {
+      input.showPicker();
+    } catch {
+      // showPicker fehlt in älteren Browsern — dann wenigstens fokussieren
+      input.focus();
+    }
+  }
+
+  // Tastatur-Shortcuts dieser Ansicht; "Neuer Termin" überlagert die globale Aktion
+  useShortcut("newAppointment", newAppointmentOnHeroDay);
+  useShortcut("newEvent", () => openForm({ date: heroDay, memberId: EVENTS_COLUMN_ID }));
+  useShortcut("today", () => showDay(today));
+  useShortcut("prevDay", () => showDay(addDays(heroDay, -1)));
+  useShortcut("nextDay", () => showDay(addDays(heroDay, 1)));
+  useShortcut("pickDate", openDatePicker);
+  useShortcut("editMeal", () => setMealEditDate(localDateStr(heroDay)));
+
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } })
@@ -306,7 +334,7 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
                   <button
                     type="button"
                     onClick={() => showDay(today)}
-                    title="Zu heute springen"
+                    title={withShortcutHint("Zu heute springen", keymap.today)}
                     className="cursor-pointer rounded-full bg-[var(--primary)] px-2 py-0.5 text-[10px] text-[var(--primary-foreground)] hover:opacity-90"
                   >
                     Heute
@@ -327,27 +355,28 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
             </div>
 
             <div className="flex items-center gap-1">
-              <Button variant="ghost" size="icon" onClick={() => showDay(addDays(heroDay, -1))} title="Vorheriger Tag">
+              <Button variant="ghost" size="icon" onClick={() => showDay(addDays(heroDay, -1))} title={withShortcutHint("Vorheriger Tag", keymap.prevDay)}>
                 <ChevronLeft className="w-5 h-5" />
               </Button>
               {!isHeroToday && (
-                <Button variant="secondary" size="sm" onClick={() => showDay(today)}>
+                <Button variant="secondary" size="sm" onClick={() => showDay(today)} title={withShortcutHint("Zu heute springen", keymap.today)}>
                   Heute
                 </Button>
               )}
-              <Button variant="ghost" size="icon" onClick={() => showDay(addDays(heroDay, 1))} title="Nächster Tag">
+              <Button variant="ghost" size="icon" onClick={() => showDay(addDays(heroDay, 1))} title={withShortcutHint("Nächster Tag", keymap.nextDay)}>
                 <ChevronRight className="w-5 h-5" />
               </Button>
-              <label className="relative inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg hover:bg-[var(--accent)]" title="Datum wählen">
+              <label className="relative inline-flex h-9 w-9 cursor-pointer items-center justify-center rounded-lg hover:bg-[var(--accent)]" title={withShortcutHint("Datum wählen", keymap.pickDate)}>
                 <CalendarDays className="w-5 h-5" />
                 <input
+                  ref={datePickerRef}
                   type="date"
                   value={heroKey}
                   className="absolute inset-0 cursor-pointer opacity-0"
                   onChange={(e) => e.target.value && showDateStr(e.target.value)}
                 />
               </label>
-              <Button className="ml-1 gap-1" onClick={() => openForm({ date: isHeroToday ? undefined : heroDay })}>
+              <Button className="ml-1 gap-1" onClick={newAppointmentOnHeroDay} title={withShortcutHint("Neuer Termin", keymap.newAppointment)}>
                 <Plus className="w-4 h-4" />
                 <span className="hidden sm:inline">Termin</span>
               </Button>

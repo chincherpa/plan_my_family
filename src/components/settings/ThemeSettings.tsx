@@ -27,9 +27,14 @@ export default function ThemeSettings() {
   const [theme, setTheme] = useState<Theme>("system");
 
   useEffect(() => {
-    const t = document.documentElement.dataset.theme;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- read persisted choice after mount
-    if (t === "light" || t === "dark") setTheme(t);
+    const sync = () => {
+      const t = document.documentElement.dataset.theme;
+      if (t === "light" || t === "dark") setTheme(t);
+    };
+    sync();
+    // Umschalten per Theme-Button oder Shortcut
+    window.addEventListener("themechange", sync);
+    return () => window.removeEventListener("themechange", sync);
   }, []);
 
   return (

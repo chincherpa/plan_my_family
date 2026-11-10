@@ -8,8 +8,12 @@ import { useDataStore } from "@/lib/store/dataStore";
 import { useCalendarStore } from "@/lib/store/calendarStore";
 import { useTodoStore } from "@/lib/store/todoStore";
 import { cn } from "@/lib/utils";
-import ThemeToggle from "@/components/ThemeToggle";
+import ThemeToggle, { toggleTheme } from "@/components/ThemeToggle";
 import TodoSheet from "@/components/todos/TodoSheet";
+import ShortcutHelpDialog from "@/components/shortcuts/ShortcutHelpDialog";
+import { useKeymap, useShortcut, useShortcutListener } from "@/lib/shortcuts/useShortcuts";
+import { withShortcutHint, type ShortcutActionId } from "@/lib/shortcuts/keymap";
+import { useShortcutStore } from "@/lib/store/shortcutStore";
 import { listRecipes } from "@/lib/recipes/actions";
 import type {
   AppointmentWithParticipants,
@@ -38,7 +42,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setTodos,
     setLoading,
   } = useDataStore();
-  const { setTimeRange } = useCalendarStore();
+  const { setTimeRange, openForm } = useCalendarStore();
   const todos = useDataStore((s) => s.todos);
   const { isSidebarOpen: isTodosOpen, toggleSidebar: toggleTodos } = useTodoStore();
   const openTodoCount = todos.filter((t) => !t.is_done).length;
@@ -216,11 +220,29 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     router.push("/login");
   }
 
-  const links = [
-    { href: "/calendar", label: "Kalender", icon: Calendar },
-    { href: "/meals", label: "Essen", icon: UtensilsCrossed },
-    { href: "/anniversaries", label: "Jahrestage", icon: Cake },
-    { href: "/settings", label: "Einstellungen", icon: Settings },
+  // Tastatur-Shortcuts: ein Listener für die ganze App, dazu die globalen Aktionen.
+  // Seiten wie der Kalender registrieren ihre eigenen Aktionen selbst.
+  useShortcutListener();
+  const keymap = useKeymap();
+  const setHelpOpen = useShortcutStore((s) => s.setHelpOpen);
+  useShortcut("goCalendar", () => router.push("/calendar"));
+  useShortcut("goMeals", () => router.push("/meals"));
+  useShortcut("goAnniversaries", () => router.push("/anniversaries"));
+  useShortcut("goSettings", () => router.push("/settings"));
+  useShortcut("toggleTodos", toggleTodos);
+  useShortcut("toggleTheme", toggleTheme);
+  useShortcut("showHelp", () => setHelpOpen(!useShortcutStore.getState().isHelpOpen));
+  // Außerhalb des Kalenders: dorthin wechseln, der Kalender zeigt das offene Formular.
+  useShortcut("newAppointment", () => {
+    openForm();
+    router.push("/calendar");
+  });
+
+  const links: { href: string; label: string; icon: typeof Calendar; shortcut: ShortcutActionId }[] = [
+    { href: "/calendar", label: "Kalender", icon: Calendar, shortcut: "goCalendar" },
+    { href: "/meals", label: "Essen", icon: UtensilsCrossed, shortcut: "goMeals" },
+    { href: "/anniversaries", label: "Jahrestage", icon: Cake, shortcut: "goAnniversaries" },
+    { href: "/settings", label: "Einstellungen", icon: Settings, shortcut: "goSettings" },
   ];
 
   const navItem = (active: boolean) =>
@@ -235,6 +257,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     <button
       type="button"
       onClick={toggleTodos}
+      title={withShortcutHint("Todos", keymap.toggleTodos)}
       className={cn(navItem(isTodosOpen), className)}
     >
       <span className="relative">
@@ -256,8 +279,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-[var(--primary)] text-[var(--primary-foreground)]">
           <Calendar className="w-5 h-5" />
         </div>
-        {links.map(({ href, label, icon: Icon }) => (
-          <Link key={href} href={href} className={cn(navItem(pathname.startsWith(href)), "h-16 w-16")}>
+        {links.map(({ href, label, icon: Icon, shortcut }) => (
+          <Link
+            key={href}
+            href={href}
+            title={withShortcutHint(label, keymap[shortcut])}
+            className={cn(navItem(pathname.startsWith(href)), "h-16 w-16")}
+          >
             <Icon className="w-5 h-5" />
             {label === "Einstellungen" ? "Setup" : label}
           </Link>
@@ -302,6 +330,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       <ThemeToggle />
       <TodoSheet />
+      <ShortcutHelpDialog />
     </div>
   );
 }
