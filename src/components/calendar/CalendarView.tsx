@@ -89,7 +89,8 @@ function parseDayParam(value: string | undefined): Date | null {
 
 export default function CalendarView({ initialDay }: { initialDay?: string } = {}) {
   const { isFormOpen, openForm, closeForm, startHour, endHour } = useCalendarStore();
-  const { members, vehicles, appointments, meals, isLoading, updateAppointment } = useDataStore();
+  const { members, vehicles, appointments, meals, schoolHolidays, isLoading, updateAppointment } =
+    useDataStore();
 
   const now = useNow();
   const today = useMemo(() => startOfDay(now), [now]);
@@ -123,8 +124,8 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
   }, [heroDay, today, upcomingCount]);
 
   const occurrences = useMemo(
-    () => expandAppointments(appointments, rangeStart, rangeEnd),
-    [appointments, rangeStart, rangeEnd]
+    () => expandAppointments(appointments, rangeStart, rangeEnd, schoolHolidays),
+    [appointments, rangeStart, rangeEnd, schoolHolidays]
   );
 
   const guardianWarnings = useMemo(

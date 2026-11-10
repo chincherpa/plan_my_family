@@ -13,6 +13,10 @@ Familienmitglied, plus die Spalten „Alle" (Familienausflüge) und „Ereigniss
 - **Konflikt-Banner** — Konflikte gebündelt für die nächsten 14 Tage, mit Sprunglinks.
 - **Serientermine** — wiederkehrende Termine (RRULE), einzeln oder als ganze
   Serie bearbeit- und löschbar.
+- **Schulferien** — Ferienzeiträume in den Einstellungen pflegen; sie erscheinen im Kalender als
+  ganztägiger Hinweis. Serientermine mit „Findet nicht in Schulferien statt“ entfallen in den Ferien
+  und zählen bei „Nach Anzahl“ nicht mit. Wiederholung „Benutzerdefiniert“ erlaubt beliebige
+  Wochentage (z. B. Mo, Mi, Fr).
 - **Jahrestage** — Geburtstage, Hochzeits-, Kennenlern- und Gedenktage auf einer
   Übersichtsseite (demnächst anstehend, nach Monaten gruppiert, mit Alter bzw.
   Jubiläum). Sie werden als jährliche Ereignis-Serie gespeichert und erscheinen

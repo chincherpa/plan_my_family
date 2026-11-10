@@ -114,6 +114,8 @@ export interface Database {
           color: string | null;
           anniversary_kind: AnniversaryKind | null;
           anniversary_year_known: boolean;
+          /** Serienvorkommen in Schulferien entfallen und zählen nicht mit */
+          skip_school_holidays: boolean;
           created_at: string;
         };
         Insert: {
@@ -137,6 +139,7 @@ export interface Database {
           color?: string | null;
           anniversary_kind?: AnniversaryKind | null;
           anniversary_year_known?: boolean;
+          skip_school_holidays?: boolean;
           created_at?: string;
         };
         Update: {
@@ -160,6 +163,7 @@ export interface Database {
           color?: string | null;
           anniversary_kind?: AnniversaryKind | null;
           anniversary_year_known?: boolean;
+          skip_school_holidays?: boolean;
           created_at?: string;
         };
         Relationships: [];
@@ -283,6 +287,35 @@ export interface Database {
           },
         ];
       };
+      school_holidays: {
+        Row: {
+          id: string;
+          family_id: string;
+          name: string;
+          /** "YYYY-MM-DD", einschließlich */
+          start_date: string;
+          /** "YYYY-MM-DD", einschließlich */
+          end_date: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          family_id: string;
+          name: string;
+          start_date: string;
+          end_date: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          family_id?: string;
+          name?: string;
+          start_date?: string;
+          end_date?: string;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
       shopping_checks: {
         Row: {
           family_id: string;
@@ -370,6 +403,7 @@ export type Vehicle = Database["public"]["Tables"]["vehicles"]["Row"];
 export type Appointment = Database["public"]["Tables"]["appointments"]["Row"];
 export type AppointmentParticipant = Database["public"]["Tables"]["appointment_participants"]["Row"];
 export type Meal = Database["public"]["Tables"]["meals"]["Row"];
+export type SchoolHoliday = Database["public"]["Tables"]["school_holidays"]["Row"];
 export type Todo = Database["public"]["Tables"]["todos"]["Row"];
 export type TodoItem = Database["public"]["Tables"]["todo_items"]["Row"];
 
