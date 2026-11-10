@@ -230,8 +230,6 @@ export function validateAnniversary(input: AnniversaryInput, today: Date): strin
   return null;
 }
 
-const pad = (n: number, width = 2) => String(n).padStart(width, "0");
-
 /**
  * Die Spalten, mit denen ein Jahrestag in `appointments` landet.
  *
