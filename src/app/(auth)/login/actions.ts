@@ -16,7 +16,11 @@ export async function loginWithFamilyPassword(
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    return { error: "Passwort ist falsch. Bitte erneut versuchen." };
+    if (error.code === "invalid_credentials") {
+      return { error: "Passwort ist falsch. Bitte erneut versuchen." };
+    }
+    console.error("Anmeldung fehlgeschlagen", error);
+    return { error: "Anmeldung derzeit nicht möglich. Bitte später erneut versuchen." };
   }
   return null;
 }

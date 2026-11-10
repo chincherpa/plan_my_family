@@ -91,6 +91,7 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
   const { isFormOpen, openForm, closeForm, startHour, endHour } = useCalendarStore();
   const { members, vehicles, appointments, meals, isLoading, updateAppointment } = useDataStore();
 
+  const [moveError, setMoveError] = useState<string | null>(null);
   const now = useNow();
   // Nur der Tag zählt: ohne stabile Referenz würde jede Minute alles neu berechnet
   const todayMs = startOfDay(now).getTime();
@@ -234,7 +235,7 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
     const newStart = new Date(occ.occurrenceStart.getTime() + shiftMin * 60000);
     const newEnd = new Date(occ.occurrenceEnd.getTime() + shiftMin * 60000);
     const supabase = createClient();
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("appointments")
       .update({
         start_time: newStart.toISOString(),
@@ -244,7 +245,13 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
       .eq("id", occ.appointment.id)
       .select("*, participants:appointment_participants(*)")
       .single();
-    if (data) updateAppointment(occ.appointment.id, data);
+    if (error || !data) {
+      console.error("Termin konnte nicht verschoben werden.", error);
+      setMoveError("Termin konnte nicht verschoben werden.");
+      return;
+    }
+    setMoveError(null);
+    updateAppointment(occ.appointment.id, data);
   }
 
   if (isLoading) {
@@ -262,6 +269,17 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
       <div ref={scrollRef} className="h-full overflow-y-auto overflow-x-hidden">
         {/* Sticky top: date, navigation, conflicts, column names */}
         <div className="sticky top-0 z-40 bg-[var(--background)]/95 backdrop-blur px-2 sm:px-4 pt-3">
+          {moveError && (
+            <div
+              role="alert"
+              className="mb-2 flex items-center justify-between rounded-md border border-[var(--destructive)] px-3 py-1.5 text-sm text-[var(--destructive)]"
+            >
+              {moveError}
+              <button type="button" onClick={() => setMoveError(null)} aria-label="Meldung schließen">
+                ×
+              </button>
+            </div>
+          )}
           {/* pr-11 leaves room for the floating theme toggle */}
           <div className="flex items-center gap-2 pr-11">
             <div className="min-w-0 flex-1">

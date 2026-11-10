@@ -547,7 +547,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
         });
         const appointment = data as AppointmentWithParticipants | null;
         if (error || !appointment) {
-          setFormError(error?.message ?? "Termin konnte nicht gespeichert werden.");
+          console.error("Termin konnte nicht gespeichert werden.", error);
+          setFormError("Termin konnte nicht gespeichert werden.");
           return;
         }
         if (!(await endSeriesBefore(supabase, existingAppt, formOccurrenceStart))) {
@@ -574,7 +575,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
         });
         const appointment = data as AppointmentWithParticipants | null;
         if (error || !appointment) {
-          setFormError(error?.message ?? "Termin konnte nicht gespeichert werden.");
+          console.error("Termin konnte nicht gespeichert werden.", error);
+          setFormError("Termin konnte nicht gespeichert werden.");
           return;
         }
         addAppointment(appointment);
@@ -602,7 +604,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
         });
         const appointment = data as AppointmentWithParticipants | null;
         if (error || !appointment) {
-          setFormError(error?.message ?? "Termin konnte nicht gespeichert werden.");
+          console.error("Termin konnte nicht gespeichert werden.", error);
+          setFormError("Termin konnte nicht gespeichert werden.");
           return;
         }
         updateAppointment(existingAppt.id, appointment);
@@ -616,7 +619,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
         });
         const appointment = data as AppointmentWithParticipants | null;
         if (error || !appointment) {
-          setFormError(error?.message ?? "Termin konnte nicht erstellt werden.");
+          console.error("Termin konnte nicht erstellt werden.", error);
+          setFormError("Termin konnte nicht erstellt werden.");
           return;
         }
         addAppointment(appointment);

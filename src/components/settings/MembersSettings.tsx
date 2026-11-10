@@ -143,7 +143,8 @@ export default function MembersSettings() {
         .select();
       const rows = data as FamilyMember[] | null;
       if (saveError || !rows?.[0]) {
-        setError(saveError?.message ?? "Mitglied konnte nicht gespeichert werden.");
+        console.error("Mitglied konnte nicht gespeichert werden.", saveError);
+        setError("Mitglied konnte nicht gespeichert werden.");
         setSaving(false);
         return;
       }
@@ -162,7 +163,8 @@ export default function MembersSettings() {
         .select();
       const rows = data as FamilyMember[] | null;
       if (saveError || !rows?.[0]) {
-        setError(saveError?.message ?? "Mitglied konnte nicht erstellt werden.");
+        console.error("Mitglied konnte nicht erstellt werden.", saveError);
+        setError("Mitglied konnte nicht erstellt werden.");
         setSaving(false);
         return;
       }
@@ -180,7 +182,8 @@ export default function MembersSettings() {
     const supabase = createClient();
     const { error: deleteError } = await supabase.from("family_members").delete().eq("id", id);
     if (deleteError) {
-      setError(deleteError.message);
+      console.error("Fehler beim Löschen.", deleteError);
+      setError("Konnte nicht gelöscht werden.");
       return;
     }
     setMembers(members.filter((m) => m.id !== id));
@@ -200,7 +203,8 @@ export default function MembersSettings() {
       member_ids: orderedIds,
     });
     if (reorderError) {
-      setError(reorderError.message);
+      console.error("Fehler beim Sortieren.", reorderError);
+      setError("Reihenfolge konnte nicht gespeichert werden.");
       return;
     }
     reorderMembers(orderedIds);

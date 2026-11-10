@@ -57,7 +57,8 @@ export default function VehiclesSettings() {
         .select();
       const rows = data as Vehicle[] | null;
       if (saveError || !rows?.[0]) {
-        setError(saveError?.message ?? "Fahrzeug konnte nicht gespeichert werden.");
+        console.error("Fahrzeug konnte nicht gespeichert werden.", saveError);
+        setError("Fahrzeug konnte nicht gespeichert werden.");
         setSaving(false);
         return;
       }
@@ -69,7 +70,8 @@ export default function VehiclesSettings() {
         .select();
       const rows = data as Vehicle[] | null;
       if (saveError || !rows?.[0]) {
-        setError(saveError?.message ?? "Fahrzeug konnte nicht erstellt werden.");
+        console.error("Fahrzeug konnte nicht erstellt werden.", saveError);
+        setError("Fahrzeug konnte nicht erstellt werden.");
         setSaving(false);
         return;
       }
@@ -86,7 +88,8 @@ export default function VehiclesSettings() {
     const supabase = createClient();
     const { error: deleteError } = await supabase.from("vehicles").delete().eq("id", id);
     if (deleteError) {
-      setError(deleteError.message);
+      console.error("Fehler beim Löschen.", deleteError);
+      setError("Konnte nicht gelöscht werden.");
       return;
     }
     setVehicles(vehicles.filter((v) => v.id !== id));
