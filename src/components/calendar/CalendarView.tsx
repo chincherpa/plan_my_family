@@ -19,7 +19,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import AppointmentForm from "@/components/appointments/AppointmentForm";
 import MealEditDialog from "./MealEditDialog";
-import DayTimeline, { TIME_GUTTER, snapShiftMin } from "./DayTimeline";
+import DayTimeline, { HOLIDAY_GUTTER, TIME_GUTTER, snapShiftMin } from "./DayTimeline";
 import { DayBanner, MealsStrip, TodoDueStrip, UpcomingDay } from "./DayParts";
 import {
   ALL_COLUMN_COLOR,
@@ -411,6 +411,7 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
                 </div>
               ))}
             </div>
+            <div className={`${HOLIDAY_GUTTER} shrink-0`} />
           </div>
         </div>
 
