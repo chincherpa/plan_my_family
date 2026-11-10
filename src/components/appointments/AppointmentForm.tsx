@@ -1,6 +1,6 @@
 "use client";
 import { useState, useMemo, useRef } from "react";
-import { Trash2, Repeat, Car, Users, Clock, AlertTriangle } from "lucide-react";
+import { Trash2, Copy, Repeat, Car, Users, Clock, AlertTriangle } from "lucide-react";
 import { RRule, Weekday, type ByWeekday } from "rrule";
 import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
@@ -216,9 +216,14 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   const { formInitialDate, formMemberId, formOccurrenceStart, selectedAppointmentId } =
     useCalendarStore();
 
-  const existingAppt = selectedAppointmentId
-    ? appointments.find((a) => a.id === selectedAppointmentId)
+  const storedAppt = selectedAppointmentId
+    ? appointments.find((a) => a.id === selectedAppointmentId) ?? null
     : null;
+
+  // Duplicate mode: the form keeps all values of the source appointment but
+  // saves them as a new appointment / series (no update, no delete).
+  const [duplicating, setDuplicating] = useState(false);
+  const existingAppt = duplicating ? null : storedAppt;
 
   // Editing an occurrence of a recurring series (id points at the parent)
   const isSeriesInstance = !!existingAppt?.recurrence_rule;
@@ -392,7 +397,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   }, [appointments]);
   const suggestions = useMemo(() => {
     const q = title.trim().toLowerCase();
-    if (existingAppt || !titleFocused || !q) return [];
+    if (storedAppt || !titleFocused || !q) return [];
     return knownTitles
       .filter((a) => {
         const t = a.title.trim().toLowerCase();
@@ -404,7 +409,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
         return as - bs || a.title.localeCompare(b.title, "de");
       })
       .slice(0, 6);
-  }, [title, titleFocused, knownTitles, existingAppt]);
+  }, [title, titleFocused, knownTitles, storedAppt]);
 
   /** Take title + details of a known appointment; date/time of the new one stay */
   function applySuggestion(tpl: AppointmentWithParticipants) {
@@ -709,6 +714,41 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     onClose();
   }
 
+  /**
+   * Switch to duplicate mode. For a series the chosen scope decides what is
+   * copied: "Nur dieser" → a single appointment on the clicked date,
+   * "Dieser & folgende" → a series starting at the clicked date,
+   * "Alle" → a series starting at the original series start.
+   */
+  function handleDuplicate() {
+    if (!storedAppt) return;
+    if (isSeriesInstance) {
+      if (editScope === "single") {
+        setRecurrence("none");
+      } else if (editScope === "series") {
+        const seriesDate = toDatePart(new Date(storedAppt.start_time));
+        if (isAllDay) {
+          const days = Math.round(
+            (new Date(`${allDayEndDate}T00:00:00`).getTime() -
+              new Date(`${allDayStartDate}T00:00:00`).getTime()) /
+              86400000
+          );
+          const end = new Date(`${seriesDate}T00:00:00`);
+          end.setDate(end.getDate() + Math.max(days, 0));
+          setAllDayStartDate(seriesDate);
+          setAllDayEndDate(toDatePart(end));
+        }
+        handleStartChange(combine(seriesDate, startTime.split("T")[1] ?? "00:00"));
+      }
+    }
+    // Legacy endless rule: new series always get an end
+    if (recurrenceEnd === "none") setRecurrenceEnd("count");
+    setEditScope("single");
+    setConfirmDelete(false);
+    setFormError(null);
+    setDuplicating(true);
+  }
+
   async function handleDelete() {
     if (!existingAppt) return;
     const supabase = createClient();
@@ -805,10 +845,29 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-lg sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{existingAppt ? "Termin bearbeiten" : "Neuer Termin"}</DialogTitle>
+          <DialogTitle>
+            {duplicating
+              ? recurrence !== "none"
+                ? "Serie duplizieren"
+                : "Termin duplizieren"
+              : existingAppt
+              ? "Termin bearbeiten"
+              : "Neuer Termin"}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
+          {duplicating && storedAppt && (
+            <p className="flex items-start gap-2 rounded-md border border-[var(--primary)]/30 bg-[var(--primary)]/10 px-3 py-2 text-xs text-[var(--foreground)]">
+              <Copy className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--primary)]" />
+              <span>
+                Kopie von „{storedAppt.title}“. Passe Datum, Uhrzeit und Details an – beim
+                Speichern wird ein neuer {recurrence !== "none" ? "Serientermin" : "Termin"} angelegt,
+                das Original bleibt unverändert.
+              </span>
+            </p>
+          )}
+
           {/* Scope for recurring series: applies to saving and deleting */}
           {isSeriesInstance && (
             <div className="space-y-1">
@@ -1203,7 +1262,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
                   <SelectContent>
                     <SelectItem value="count">Nach Anzahl</SelectItem>
                     <SelectItem value="until">Bis Datum</SelectItem>
-                    {initialEnd.mode === "none" && (
+                    {initialEnd.mode === "none" && !duplicating && (
                       <SelectItem value="none">Unbegrenzt (bisher)</SelectItem>
                     )}
                   </SelectContent>
@@ -1282,6 +1341,22 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
               {existingAppt && (
                 <Button variant="destructive" size="icon" onClick={() => setConfirmDelete(true)} type="button">
                   <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+              {existingAppt && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleDuplicate}
+                  type="button"
+                  title={
+                    isSeriesInstance && editScope !== "single"
+                      ? "Serie duplizieren"
+                      : "Termin duplizieren"
+                  }
+                  aria-label="Duplizieren"
+                >
+                  <Copy className="w-4 h-4" />
                 </Button>
               )}
               <Button variant="outline" className="flex-1" onClick={onClose} type="button">
