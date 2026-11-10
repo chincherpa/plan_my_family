@@ -376,3 +376,19 @@ describe("Jahrestage im Kalenderformular (Befund 2)", () => {
     expect(occ).toHaveLength(6);
   });
 });
+
+describe("expandAppointments — Serien über Mitternacht", () => {
+  it("tägliche Serie 22:00–06:00 erscheint im Bereich des Folgetags zweimal", () => {
+    const appt = appointment({
+      start: "2026-11-01 22:00",
+      end: "2026-11-02 06:00",
+      recurrence_rule: buildRecurrenceRule({
+        freq: "daily",
+        start: d("2026-11-01 22:00"),
+        end: { mode: "none" },
+      }),
+    });
+    const result = expandAppointments([appt], d("2026-11-10 00:00"), d("2026-11-10 23:59"));
+    expect(result.map((o) => o.occurrenceStart)).toEqual([d("2026-11-09 22:00"), d("2026-11-10 22:00")]);
+  });
+});

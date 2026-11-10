@@ -92,7 +92,9 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
   const { members, vehicles, appointments, meals, isLoading, updateAppointment } = useDataStore();
 
   const now = useNow();
-  const today = useMemo(() => startOfDay(now), [now]);
+  // Nur der Tag zählt: ohne stabile Referenz würde jede Minute alles neu berechnet
+  const todayMs = startOfDay(now).getTime();
+  const today = useMemo(() => new Date(todayMs), [todayMs]);
   // null = follow today, so the wall tablet rolls over at midnight on its own
   const [pickedDay, setPickedDay] = useState<Date | null>(() => parseDayParam(initialDay));
   const heroDay = pickedDay ?? today;

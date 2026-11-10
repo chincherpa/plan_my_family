@@ -34,7 +34,14 @@ export function expandAppointments(
 
   // Collect exception/deleted dates per parent id
   const exceptions = new Map<string, Set<string>>();
+  // Ausnahmetermine (geänderte Vorkommen) je Serie, einmal gruppiert
+  const modifiedByParent = new Map<string, AppointmentWithParticipants[]>();
   for (const appt of appointments) {
+    if (appt.recurrence_parent_id && !appt.is_deleted) {
+      const list = modifiedByParent.get(appt.recurrence_parent_id) ?? [];
+      list.push(appt);
+      modifiedByParent.set(appt.recurrence_parent_id, list);
+    }
     if (appt.recurrence_parent_id && appt.exception_date) {
       const set = exceptions.get(appt.recurrence_parent_id) ?? new Set();
       set.add(appt.exception_date);
@@ -54,7 +61,14 @@ export function expandAppointments(
       // Expand recurring event
       try {
         const rule = RRule.fromString(appt.recurrence_rule);
-        const occurrenceDates = rule.between(rangeStart, rangeEnd, true);
+        // Früher suchen: ein Vorkommen kann vor dem Bereich starten und hineinragen
+        // (Nachtfahrt, Fahrzeit danach). Der Anker liegt auf Mittag, daher +1 Tag Puffer.
+        const lookbackMs = durationMs + appt.travel_after_min * 60_000 + 24 * 3600_000;
+        const occurrenceDates = rule.between(
+          new Date(rangeStart.getTime() - lookbackMs),
+          rangeEnd,
+          true
+        );
         const exceptedDates = exceptions.get(appt.id) ?? new Set();
 
         for (const occDate of occurrenceDates) {
@@ -65,6 +79,15 @@ export function expandAppointments(
 
           // Occurrence replaced or deleted via exception row?
           if (exceptedDates.has(occurrenceDateKey(occStart))) continue;
+
+          // Nur Vorkommen, die den Bereich überlappen (wie bei Einzelterminen)
+          if (
+            !(
+              addMinutes(occStart, -appt.travel_before_min) < rangeEnd &&
+              addMinutes(occEnd, appt.travel_after_min) > rangeStart
+            )
+          )
+            continue;
 
           results.push(buildOccurrence(appt, occStart, occEnd, true));
         }
@@ -82,9 +105,7 @@ export function expandAppointments(
     }
 
     // Add exceptions (modified instances)
-    const parentExceptions = appointments.filter(
-      (a) => a.recurrence_parent_id === appt.id && !a.is_deleted
-    );
+    const parentExceptions = modifiedByParent.get(appt.id) ?? [];
     for (const exc of parentExceptions) {
       const excStart = new Date(exc.start_time);
       const excEnd = new Date(exc.end_time);
