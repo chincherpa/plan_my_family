@@ -1,6 +1,7 @@
 import type { AppointmentWithParticipants } from "@/lib/supabase/types";
 import { addMinutes, startOfDay } from "@/lib/utils";
 import { expandAppointments, type AppointmentOccurrence } from "@/lib/utils/recurrence";
+import type { HolidayRange } from "@/lib/utils/schoolHolidays";
 
 export interface VehicleConflict {
   vehicleId: string;
@@ -61,7 +62,8 @@ export function checkVehicleConflict(
   travelBeforeMin: number,
   travelAfterMin: number,
   appointments: AppointmentWithParticipants[],
-  excludeId?: string
+  excludeId?: string,
+  holidays: HolidayRange[] = []
 ): AppointmentWithParticipants | null {
   if (isNaN(startTime.getTime()) || isNaN(endTime.getTime())) return null;
 
@@ -72,7 +74,7 @@ export function checkVehicleConflict(
   const windowStart = startOfDay(blockStart);
   const windowEnd = startOfDay(blockEnd);
   windowEnd.setDate(windowEnd.getDate() + 1);
-  const occurrences = expandAppointments(appointments, windowStart, windowEnd);
+  const occurrences = expandAppointments(appointments, windowStart, windowEnd, holidays);
 
   for (const occ of occurrences) {
     const appt = occ.appointment;

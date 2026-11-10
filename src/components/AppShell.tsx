@@ -16,6 +16,7 @@ import type {
   FamilyMember,
   Family,
   Vehicle,
+  SchoolHoliday,
   Meal,
   TodoWithItems,
 } from "@/lib/supabase/types";
@@ -29,6 +30,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setFamily,
     setMembers,
     setVehicles,
+    setSchoolHolidays,
     setAppointments,
     setMeals,
     setRecipes,
@@ -82,6 +84,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           apptRes,
           mealsRes,
           todosRes,
+          holidaysRes,
         ] = await Promise.all([
           supabase.from("families").select("*").eq("id", familyId).single(),
           supabase
@@ -100,6 +103,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             .select("*, items:todo_items(*)")
             .eq("family_id", familyId)
             .order("created_at"),
+          supabase.from("school_holidays").select("*").eq("family_id", familyId),
         ]);
 
         if (!isMounted || requestVersion !== loadVersion.current) return;
@@ -110,6 +114,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           apptRes,
           mealsRes,
           todosRes,
+          holidaysRes,
         ]
           .map((result) => result.error)
           .find(Boolean);
@@ -126,6 +131,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         setAppointments((apptRes.data ?? []) as AppointmentWithParticipants[]);
         setMeals((mealsRes.data ?? []) as Meal[]);
         setTodos((todosRes.data ?? []) as TodoWithItems[]);
+        setSchoolHolidays((holidaysRes.data ?? []) as SchoolHoliday[]);
         setLoadError(null);
       } catch (error) {
         console.error("loadData failed", error);
@@ -148,6 +154,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       .on("postgres_changes", { event: "*", schema: "public", table: "meals" }, handleChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "todos" }, handleChange)
       .on("postgres_changes", { event: "*", schema: "public", table: "todo_items" }, handleChange)
+      .on("postgres_changes", { event: "*", schema: "public", table: "school_holidays" }, handleChange)
       .subscribe();
 
     function handleChange(payload: { new: Record<string, unknown>; old: Record<string, unknown> }) {
@@ -174,6 +181,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     setFamily,
     setMembers,
     setVehicles,
+    setSchoolHolidays,
     setAppointments,
     setMeals,
     setTodos,

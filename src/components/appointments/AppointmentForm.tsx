@@ -1,7 +1,7 @@
 "use client";
 import { useState, useMemo, useRef } from "react";
-import { Trash2, Repeat, Car, Users, Clock, AlertTriangle } from "lucide-react";
-import { RRule } from "rrule";
+import { Trash2, Copy, Repeat, Car, Users, Clock, AlertTriangle } from "lucide-react";
+import { RRule, Weekday, type ByWeekday } from "rrule";
 import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useCalendarStore } from "@/lib/store/calendarStore";
@@ -21,6 +21,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import type { AppointmentWithParticipants } from "@/lib/supabase/types";
 import { hexToRgba, startOfDay } from "@/lib/utils";
 import { buildRecurrenceRule, occurrenceDateKey } from "@/lib/utils/recurrence";
+import { isSchoolHoliday } from "@/lib/utils/schoolHolidays";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type RecurrenceFreq =
   | "none"
@@ -30,12 +32,33 @@ type RecurrenceFreq =
   | "weekly"
   | "biweekly"
   | "monthly"
-  | "yearly";
+  | "yearly"
+  | "custom";
 
 const WEEKDAYS_DE = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
 /** rrule weekday numbers: Mon=0 … Sun=6 */
 const MON_TO_FRI = [0, 1, 2, 3, 4];
 const SAT_SUN = [5, 6];
+/** Checkboxes for "Benutzerdefiniert", in rrule numbering (Mon=0 … Sun=6) */
+const CUSTOM_WEEKDAYS: [number, string][] = [
+  [0, "Mo"],
+  [1, "Di"],
+  [2, "Mi"],
+  [3, "Do"],
+  [4, "Fr"],
+  [5, "Sa"],
+  [6, "So"],
+];
+
+/** Weekdays written explicitly into the rule (BYDAY), rrule numbering; null if none. */
+function explicitWeekdays(rule: RRule): number[] | null {
+  const raw = rule.origOptions.byweekday;
+  if (raw == null) return null;
+  const list: ByWeekday[] = Array.isArray(raw) ? raw : [raw];
+  return list.map((w) =>
+    typeof w === "number" ? w : typeof w === "string" ? Weekday.fromStr(w).weekday : w.weekday
+  );
+}
 
 function sameDays(a: number[], b: number[]): boolean {
   return a.length === b.length && [...a].sort().join() === [...b].sort().join();
@@ -169,14 +192,27 @@ interface AppointmentFormProps {
 }
 
 export default function AppointmentForm({ onClose }: AppointmentFormProps) {
-  const { members, vehicles, appointments, family, addAppointment, updateAppointment, removeAppointment } =
-    useDataStore();
+  const {
+    members,
+    vehicles,
+    appointments,
+    schoolHolidays,
+    family,
+    addAppointment,
+    updateAppointment,
+    removeAppointment,
+  } = useDataStore();
   const { formInitialDate, formMemberId, formOccurrenceStart, selectedAppointmentId } =
     useCalendarStore();
 
-  const existingAppt = selectedAppointmentId
-    ? appointments.find((a) => a.id === selectedAppointmentId)
+  const storedAppt = selectedAppointmentId
+    ? appointments.find((a) => a.id === selectedAppointmentId) ?? null
     : null;
+
+  // Duplicate mode: the form keeps all values of the source appointment but
+  // saves them as a new appointment / series (no update, no delete).
+  const [duplicating, setDuplicating] = useState(false);
+  const existingAppt = duplicating ? null : storedAppt;
 
   // Editing an occurrence of a recurring series (id points at the parent)
   const isSeriesInstance = !!existingAppt?.recurrence_rule;
@@ -249,24 +285,35 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   const [isEvent, setIsEvent] = useState(
     existingAppt ? existingAppt.is_event ?? false : formMemberId === "events"
   );
-  const [recurrence, setRecurrence] = useState<RecurrenceFreq>(() => {
-    if (!existingAppt?.recurrence_rule) return "none";
+  const [initialRecurrence] = useState<{ freq: RecurrenceFreq; days: number[] }>(() => {
+    const none = { freq: "none" as RecurrenceFreq, days: [] };
+    if (!existingAppt?.recurrence_rule) return none;
     try {
-      const { freq, interval, byweekday } = RRule.fromString(existingAppt.recurrence_rule).options;
-      if (freq === RRule.DAILY) return "daily";
+      const rule = RRule.fromString(existingAppt.recurrence_rule);
+      const { freq, interval, byweekday } = rule.options;
+      if (freq === RRule.DAILY) return { ...none, freq: "daily" };
       if (freq === RRule.WEEKLY) {
-        if (interval === 2) return "biweekly";
-        if (byweekday && sameDays(byweekday, MON_TO_FRI)) return "weekdays";
-        if (byweekday && sameDays(byweekday, SAT_SUN)) return "weekend";
-        return "weekly";
+        if (interval === 2) return { ...none, freq: "biweekly" };
+        if (byweekday && sameDays(byweekday, MON_TO_FRI)) return { ...none, freq: "weekdays" };
+        if (byweekday && sameDays(byweekday, SAT_SUN)) return { ...none, freq: "weekend" };
+        // Explicit BYDAY (e.g. Mo/Mi/Fr) → custom; plain weekly uses the start's weekday
+        const explicit = explicitWeekdays(rule);
+        if (explicit?.length) return { freq: "custom", days: [...new Set(explicit)].sort() };
+        return { ...none, freq: "weekly" };
       }
-      if (freq === RRule.MONTHLY) return "monthly";
-      if (freq === RRule.YEARLY) return "yearly";
-      return "none";
+      if (freq === RRule.MONTHLY) return { ...none, freq: "monthly" };
+      if (freq === RRule.YEARLY) return { ...none, freq: "yearly" };
+      return none;
     } catch {
-      return "none";
+      return none;
     }
   });
+  const [recurrence, setRecurrence] = useState<RecurrenceFreq>(initialRecurrence.freq);
+  /** Selected weekdays for "Benutzerdefiniert" (rrule numbering), all off by default */
+  const [customDays, setCustomDays] = useState<number[]>(initialRecurrence.days);
+  const [skipSchoolHolidays, setSkipSchoolHolidays] = useState(
+    existingAppt?.skip_school_holidays ?? false
+  );
   // End of the recurrence: after N occurrences or on a date
   const [initialEnd] = useState<{ mode: RecurrenceEnd; count: number; until: string }>(() => {
     const fallback = { mode: "count" as RecurrenceEnd, count: DEFAULT_COUNT, until: "" };
@@ -314,12 +361,13 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
         travelBefore,
         travelAfter,
         appointments,
-        existingAppt?.id
+        existingAppt?.id,
+        schoolHolidays
       );
       if (conflict) conflicts[v.id] = conflict;
     }
     return conflicts;
-  }, [startTime, endTime, travelBefore, travelAfter, appointments, existingAppt, vehicles]);
+  }, [startTime, endTime, travelBefore, travelAfter, appointments, existingAppt, vehicles, schoolHolidays]);
   const vehicleConflict = vehicleId !== "none" ? vehicleConflicts[vehicleId] ?? null : null;
 
   // Title suggestions from known appointments (new appointments only).
@@ -338,7 +386,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   }, [appointments]);
   const suggestions = useMemo(() => {
     const q = title.trim().toLowerCase();
-    if (existingAppt || !titleFocused || !q) return [];
+    if (storedAppt || !titleFocused || !q) return [];
     return knownTitles
       .filter((a) => {
         const t = a.title.trim().toLowerCase();
@@ -350,7 +398,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
         return as - bs || a.title.localeCompare(b.title, "de");
       })
       .slice(0, 6);
-  }, [title, titleFocused, knownTitles, existingAppt]);
+  }, [title, titleFocused, knownTitles, storedAppt]);
 
   /** Take title + details of a known appointment; date/time of the new one stay */
   function applySuggestion(tpl: AppointmentWithParticipants) {
@@ -400,16 +448,19 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     !isAllDay && !!startTime && !!endTime && new Date(endTime) <= new Date(startTime);
 
   const firstDatePart = isAllDay ? allDayStartDate : startTime.split("T")[0];
+  const customDaysMissing = recurrence === "custom" && customDays.length === 0;
   const recurrenceInvalid =
-    recurrence !== "none" &&
-    recurrenceEnd === "until" &&
-    (!recurrenceUntil || recurrenceUntil < firstDatePart);
+    customDaysMissing ||
+    (recurrence !== "none" &&
+      recurrenceEnd === "until" &&
+      (!recurrenceUntil || recurrenceUntil < firstDatePart));
 
   function buildRRule(freq: RecurrenceFreq, from: Date, countOverride?: number): string | null {
     if (freq === "none") return null;
     return buildRecurrenceRule({
       freq,
       start: from,
+      customDays,
       end:
         recurrenceEnd === "count"
           ? { mode: "count", count: Math.min(Math.max(countOverride ?? recurrenceCount, 1), MAX_COUNT) }
@@ -472,6 +523,10 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     if (!family || !title.trim()) return;
     if (isAllDay && !allDayStartDate) return;
     if (!isAllDay && (!startTime || !endTime || timesInvalid)) return;
+    if (customDaysMissing) {
+      setFormError("Bitte mindestens einen Wochentag für die Wiederholung wählen.");
+      return;
+    }
     if (recurrenceInvalid) {
       setFormError("Das Enddatum der Wiederholung muss am oder nach dem ersten Termin liegen.");
       return;
@@ -518,6 +573,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
       travel_after_min: isEvent || isAllDay ? 0 : travelAfter,
       vehicle_id: isAllDay || vehicleId === "none" ? null : vehicleId,
       recurrence_rule: buildRRule(recurrence, startDate),
+      // Only meaningful for series; a single appointment is never hidden
+      skip_school_holidays: recurrence !== "none" && skipSchoolHolidays,
     };
 
     try {
@@ -533,9 +590,15 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
           // Compare by local date: rrule works in UTC, so across a DST switch the
           // clicked occurrence's rrule date can lie an hour before formOccurrenceStart
           const cutKey = occurrenceDateKey(formOccurrenceStart);
+          // Occurrences in school holidays did not count for a skipping series
           const kept = RRule.fromString(existingAppt.recurrence_rule!)
-            .between(new Date(existingAppt.start_time), formOccurrenceStart, true)
-            .filter((d) => occurrenceDateKey(d) < cutKey).length;
+            .between(startOfDay(new Date(existingAppt.start_time)), formOccurrenceStart, true)
+            .map(occurrenceDateKey)
+            .filter(
+              (key) =>
+                key < cutKey &&
+                !(existingAppt.skip_school_holidays && isSchoolHoliday(key, schoolHolidays))
+            ).length;
           count = Math.max(recurrenceCount - kept, 1);
         }
         const { data, error } = await supabase.rpc("save_appointment_with_participants", {
@@ -630,6 +693,41 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     }
 
     onClose();
+  }
+
+  /**
+   * Switch to duplicate mode. For a series the chosen scope decides what is
+   * copied: "Nur dieser" → a single appointment on the clicked date,
+   * "Dieser & folgende" → a series starting at the clicked date,
+   * "Alle" → a series starting at the original series start.
+   */
+  function handleDuplicate() {
+    if (!storedAppt) return;
+    if (isSeriesInstance) {
+      if (editScope === "single") {
+        setRecurrence("none");
+      } else if (editScope === "series") {
+        const seriesDate = toDatePart(new Date(storedAppt.start_time));
+        if (isAllDay) {
+          const days = Math.round(
+            (new Date(`${allDayEndDate}T00:00:00`).getTime() -
+              new Date(`${allDayStartDate}T00:00:00`).getTime()) /
+              86400000
+          );
+          const end = new Date(`${seriesDate}T00:00:00`);
+          end.setDate(end.getDate() + Math.max(days, 0));
+          setAllDayStartDate(seriesDate);
+          setAllDayEndDate(toDatePart(end));
+        }
+        handleStartChange(combine(seriesDate, startTime.split("T")[1] ?? "00:00"));
+      }
+    }
+    // Legacy endless rule: new series always get an end
+    if (recurrenceEnd === "none") setRecurrenceEnd("count");
+    setEditScope("single");
+    setConfirmDelete(false);
+    setFormError(null);
+    setDuplicating(true);
   }
 
   async function handleDelete() {
@@ -728,10 +826,29 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-lg sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{existingAppt ? "Termin bearbeiten" : "Neuer Termin"}</DialogTitle>
+          <DialogTitle>
+            {duplicating
+              ? recurrence !== "none"
+                ? "Serie duplizieren"
+                : "Termin duplizieren"
+              : existingAppt
+              ? "Termin bearbeiten"
+              : "Neuer Termin"}
+          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
+          {duplicating && storedAppt && (
+            <p className="flex items-start gap-2 rounded-md border border-[var(--primary)]/30 bg-[var(--primary)]/10 px-3 py-2 text-xs text-[var(--foreground)]">
+              <Copy className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--primary)]" />
+              <span>
+                Kopie von „{storedAppt.title}“. Passe Datum, Uhrzeit und Details an – beim
+                Speichern wird ein neuer {recurrence !== "none" ? "Serientermin" : "Termin"} angelegt,
+                das Original bleibt unverändert.
+              </span>
+            </p>
+          )}
+
           {/* Scope for recurring series: applies to saving and deleting */}
           {isSeriesInstance && (
             <div className="space-y-1">
@@ -1069,8 +1186,42 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
                 </SelectItem>
                 <SelectItem value="monthly">Monatlich</SelectItem>
                 <SelectItem value="yearly">Jährlich</SelectItem>
+                <SelectItem value="custom">Benutzerdefiniert</SelectItem>
               </SelectContent>
             </Select>
+
+            {recurrence === "custom" && (
+              <div className="space-y-1 pt-1">
+                <div className="flex flex-wrap gap-x-4 gap-y-2">
+                  {CUSTOM_WEEKDAYS.map(([day, label]) => (
+                    <label key={day} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={customDays.includes(day)}
+                        onCheckedChange={(checked) =>
+                          setCustomDays((prev) =>
+                            checked ? [...prev, day].sort() : prev.filter((d) => d !== day)
+                          )
+                        }
+                        aria-label={label}
+                      />
+                      {label}
+                    </label>
+                  ))}
+                </div>
+                {customDaysMissing && (
+                  <p className="text-xs text-[var(--destructive)]">
+                    Mindestens einen Wochentag wählen.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {recurrence !== "none" && (
+              <label className="flex items-center gap-2 pt-1 text-sm cursor-pointer">
+                <Checkbox checked={skipSchoolHolidays} onCheckedChange={setSkipSchoolHolidays} />
+                Findet nicht in Schulferien statt
+              </label>
+            )}
 
             {recurrence !== "none" && (
               <div className="grid grid-cols-2 gap-3 pt-1">
@@ -1092,7 +1243,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
                   <SelectContent>
                     <SelectItem value="count">Nach Anzahl</SelectItem>
                     <SelectItem value="until">Bis Datum</SelectItem>
-                    {initialEnd.mode === "none" && (
+                    {initialEnd.mode === "none" && !duplicating && (
                       <SelectItem value="none">Unbegrenzt (bisher)</SelectItem>
                     )}
                   </SelectContent>
@@ -1171,6 +1322,22 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
               {existingAppt && (
                 <Button variant="destructive" size="icon" onClick={() => setConfirmDelete(true)} type="button">
                   <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+              {existingAppt && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={handleDuplicate}
+                  type="button"
+                  title={
+                    isSeriesInstance && editScope !== "single"
+                      ? "Serie duplizieren"
+                      : "Termin duplizieren"
+                  }
+                  aria-label="Duplizieren"
+                >
+                  <Copy className="w-4 h-4" />
                 </Button>
               )}
               <Button variant="outline" className="flex-1" onClick={onClose} type="button">

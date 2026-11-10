@@ -1,6 +1,7 @@
 import { RRule } from "rrule";
 import type { AppointmentWithParticipants } from "@/lib/supabase/types";
 import { addMinutes, localDateStr } from "@/lib/utils";
+import { occurrencesSkippingHolidays, type HolidayRange } from "@/lib/utils/schoolHolidays";
 
 /**
  * Local "YYYY-MM-DD" key used for `exception_date` matching.
@@ -24,11 +25,15 @@ export interface AppointmentOccurrence {
 /**
  * Expand appointments (including recurring ones) into occurrences
  * within the given date range.
+ *
+ * Series flagged `skip_school_holidays` drop occurrences on days inside
+ * `holidays`; with COUNT those days do not count towards the total.
  */
 export function expandAppointments(
   appointments: AppointmentWithParticipants[],
   rangeStart: Date,
-  rangeEnd: Date
+  rangeEnd: Date,
+  holidays: HolidayRange[] = []
 ): AppointmentOccurrence[] {
   const results: AppointmentOccurrence[] = [];
 
@@ -64,11 +69,11 @@ export function expandAppointments(
         // Früher suchen: ein Vorkommen kann vor dem Bereich starten und hineinragen
         // (Nachtfahrt, Fahrzeit danach). Der Anker liegt auf Mittag, daher +1 Tag Puffer.
         const lookbackMs = durationMs + appt.travel_after_min * 60_000 + 24 * 3600_000;
-        const occurrenceDates = rule.between(
-          new Date(rangeStart.getTime() - lookbackMs),
-          rangeEnd,
-          true
-        );
+        const searchStart = new Date(rangeStart.getTime() - lookbackMs);
+        const occurrenceDates =
+          appt.skip_school_holidays && holidays.length > 0
+            ? occurrencesSkippingHolidays(rule, searchStart, rangeEnd, holidays)
+            : rule.between(searchStart, rangeEnd, true);
         const exceptedDates = exceptions.get(appt.id) ?? new Set();
 
         for (const occDate of occurrenceDates) {
@@ -155,7 +160,8 @@ export type RecurrenceFreqKey =
   | "weekly"
   | "biweekly"
   | "monthly"
-  | "yearly";
+  | "yearly"
+  | "custom";
 
 export type RecurrenceEndSpec =
   | { mode: "none" }
@@ -171,8 +177,10 @@ export function buildRecurrenceRule(opts: {
   freq: RecurrenceFreqKey;
   start: Date;
   end: RecurrenceEndSpec;
+  /** Wochentage (rrule: 0 = Montag) für freq "custom" */
+  customDays?: number[];
 }): string {
-  const { freq, start, end } = opts;
+  const { freq, start, end, customDays = [] } = opts;
   const freqMap = {
     daily: RRule.DAILY,
     weekdays: RRule.WEEKLY,
@@ -181,6 +189,7 @@ export function buildRecurrenceRule(opts: {
     biweekly: RRule.WEEKLY,
     monthly: RRule.MONTHLY,
     yearly: RRule.YEARLY,
+    custom: RRule.WEEKLY,
   };
   const leapDay = freq === "yearly" && start.getMonth() === 1 && start.getDate() === 29;
   return new RRule({
@@ -189,6 +198,7 @@ export function buildRecurrenceRule(opts: {
     ...(freq === "biweekly" && { interval: 2 }),
     ...(freq === "weekdays" && { byweekday: [RRule.MO, RRule.TU, RRule.WE, RRule.TH, RRule.FR] }),
     ...(freq === "weekend" && { byweekday: [RRule.SA, RRule.SU] }),
+    ...(freq === "custom" && { byweekday: [...customDays].sort() }),
     ...(leapDay && { bymonth: 2, bymonthday: -1 }),
     ...(end.mode === "count" && { count: end.count }),
     ...(end.mode === "until" && { until: end.date }),

@@ -2,13 +2,14 @@
 import { AlertTriangle, ChevronRight, ListTodo, Plus, UtensilsCrossed } from "lucide-react";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useTodoStore } from "@/lib/store/todoStore";
-import { formatTime, hexToRgba, readableTextColor } from "@/lib/utils";
+import { formatTime, hexToRgba, localDateStr, readableTextColor } from "@/lib/utils";
+import { holidaysOn } from "@/lib/utils/schoolHolidays";
 import { todosDueByColumn } from "@/lib/utils/todoCalendar";
 import type { AppointmentOccurrence } from "@/lib/utils/recurrence";
 import type { Meal, TodoWithItems } from "@/lib/supabase/types";
 import { TIME_GUTTER } from "./DayTimeline";
 import { anniversaryBadge } from "@/lib/anniversaries";
-import { ALL_COLUMN_COLOR, EVENT_COLOR, placementsFor, type Column, type DayData } from "./model";
+import { ALL_COLUMN_COLOR, EVENT_COLOR, HOLIDAY_COLOR, placementsFor, type Column, type DayData } from "./model";
 
 /** Chips for todos due ("Endtermin") on a day, shown inside one calendar column. */
 export function TodoDueChips({ todos, color }: { todos: TodoWithItems[]; color: string }) {
@@ -87,9 +88,28 @@ export function DayBanner({
   compact?: boolean;
 }) {
   const colorOf = useOccurrenceColor();
-  if (data.banner.length === 0 && !onAddEvent) return null;
+  const schoolHolidays = useDataStore((s) => s.schoolHolidays);
+  const holidays = holidaysOn(localDateStr(data.day), schoolHolidays);
+  if (data.banner.length === 0 && holidays.length === 0 && !onAddEvent) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5">
+      {holidays.map((h) => (
+        <span
+          key={`holiday-${h.id}`}
+          className={`flex items-center gap-1 rounded-full font-medium ${
+            compact ? "px-2 py-0.5 text-[11px]" : "px-3 py-1 text-xs"
+          }`}
+          style={{
+            backgroundColor: hexToRgba(HOLIDAY_COLOR, 0.18),
+            color: HOLIDAY_COLOR,
+            boxShadow: `inset 0 0 0 1px ${hexToRgba(HOLIDAY_COLOR, 0.4)}`,
+          }}
+          title={`Schulferien: ${h.name}`}
+        >
+          <span>🏖️</span>
+          <span className="truncate max-w-[14rem]">{h.name}</span>
+        </span>
+      ))}
       {data.banner.map((occ) => {
         const color = colorOf(occ);
         const appt = occ.appointment;
