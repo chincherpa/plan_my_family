@@ -7,7 +7,8 @@ import { useDataStore } from "@/lib/store/dataStore";
 import { assignLanes } from "@/lib/utils/lanes";
 import { formatTime, hexToRgba, localDateStr, readableTextColor } from "@/lib/utils";
 import type { AppointmentOccurrence } from "@/lib/utils/recurrence";
-import { placementsFor, type Column, type DayData } from "./model";
+import { holidaysOn } from "@/lib/utils/schoolHolidays";
+import { HOLIDAY_COLOR, placementsFor, type Column, type DayData } from "./model";
 
 const noopSubscribe = () => () => {};
 
@@ -142,6 +143,47 @@ export default function DayTimeline({
           </div>
         )}
       </div>
+
+      <HolidayBar dayKey={localDateStr(data.day)} />
+    </div>
+  );
+}
+
+/** Right-hand gutter reserved for the school-holiday bar (keeps columns aligned). */
+export const HOLIDAY_GUTTER = "w-6 sm:w-7";
+
+/**
+ * Vertical bar at the far right of a day, shown on every school-holiday day.
+ * Always renders the gutter so column widths don't change between days.
+ */
+export function HolidayBar({ dayKey, compact = false }: { dayKey: string; compact?: boolean }) {
+  const schoolHolidays = useDataStore((s) => s.schoolHolidays);
+  const holidays = holidaysOn(dayKey, schoolHolidays);
+  const name = holidays.map((h) => h.name).join(" · ");
+  return (
+    <div className={`${HOLIDAY_GUTTER} shrink-0 pl-1`}>
+      {holidays.length > 0 && (
+        <div
+          className={`flex h-full min-h-0 items-center justify-center overflow-hidden rounded-lg ${
+            compact ? "" : "py-2"
+          }`}
+          style={{
+            backgroundColor: hexToRgba(HOLIDAY_COLOR, 0.22),
+            color: HOLIDAY_COLOR,
+            boxShadow: `inset 0 0 0 1px ${hexToRgba(HOLIDAY_COLOR, 0.45)}`,
+          }}
+          title={`Schulferien: ${name}`}
+        >
+          {!compact && (
+            <span
+              className="text-[11px] font-semibold leading-none tracking-wider"
+              style={{ writingMode: "vertical-rl", textOrientation: "upright" }}
+            >
+              {name}
+            </span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

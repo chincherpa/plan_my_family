@@ -7,7 +7,7 @@ import { holidaysOn } from "@/lib/utils/schoolHolidays";
 import { todosDueByColumn } from "@/lib/utils/todoCalendar";
 import type { AppointmentOccurrence } from "@/lib/utils/recurrence";
 import type { Meal, TodoWithItems } from "@/lib/supabase/types";
-import { TIME_GUTTER } from "./DayTimeline";
+import { HOLIDAY_GUTTER, HolidayBar, TIME_GUTTER } from "./DayTimeline";
 import { anniversaryBadge } from "@/lib/anniversaries";
 import { ALL_COLUMN_COLOR, EVENT_COLOR, HOLIDAY_COLOR, placementsFor, type Column, type DayData } from "./model";
 
@@ -61,6 +61,7 @@ export function TodoDueStrip({ day, columns }: { day: Date; columns: Column[] })
           </div>
         ))}
       </div>
+      <div className={`${HOLIDAY_GUTTER} shrink-0`} />
     </div>
   );
 }
@@ -89,7 +90,9 @@ export function DayBanner({
 }) {
   const colorOf = useOccurrenceColor();
   const schoolHolidays = useDataStore((s) => s.schoolHolidays);
-  const holidays = holidaysOn(localDateStr(data.day), schoolHolidays);
+  // Full-size days show holidays as a vertical bar at the right edge of the
+  // timeline; the compact (collapsed) rows keep the chip next to the date.
+  const holidays = compact ? holidaysOn(localDateStr(data.day), schoolHolidays) : [];
   if (data.banner.length === 0 && holidays.length === 0 && !onAddEvent) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -334,6 +337,7 @@ export function UpcomingDay({
             );
           })}
         </div>
+        <HolidayBar dayKey={localDateStr(day)} compact />
       </div>
       )}
     </section>
