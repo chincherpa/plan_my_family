@@ -38,3 +38,15 @@ Jedes Login gehört zu genau einem Mitglied. Die App selbst kann `user_id` nicht
 
 Unter **Authentication → Users** den Nutzer löschen. Das Familienmitglied mit
 seinen Terminen bleibt erhalten, es hat nur kein Login mehr.
+
+## Mitglied mit Login löschen
+
+Ein Mitglied mit Login lässt sich in der App nicht löschen (Schutz per Policy
+`members_delete`, Migration 020). Erst das Login entfernen (siehe oben) oder
+`user_id` im SQL Editor auf `null` setzen:
+
+```sql
+update family_members set user_id = null where name = 'Clara';
+```
+
+Danach ist das Mitglied wie jedes andere löschbar.

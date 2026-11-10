@@ -78,14 +78,20 @@ function SortableMemberRow({
       <Button variant="ghost" size="icon" onClick={() => onEdit(member)}>
         <Pencil className="w-4 h-4" />
       </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        onClick={() => onDelete(member.id)}
-        className="text-[var(--destructive)] hover:text-[var(--destructive)]"
-      >
-        <Trash2 className="w-4 h-4" />
-      </Button>
+      {member.user_id ? (
+        <span className="text-xs text-[var(--muted-foreground)] px-2" title="Mit Login verknüpft – erst nach Entfernen des Logins löschbar">
+          Login-Konto
+        </span>
+      ) : (
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => onDelete(member.id)}
+          className="text-[var(--destructive)] hover:text-[var(--destructive)]"
+        >
+          <Trash2 className="w-4 h-4" />
+        </Button>
+      )}
     </div>
   );
 }
@@ -168,6 +174,7 @@ export default function MembersSettings() {
   }
 
   async function handleDelete(id: string) {
+    if (members.find((m) => m.id === id)?.user_id) return;
     if (!confirm("Mitglied wirklich löschen?")) return;
     setError(null);
     const supabase = createClient();
