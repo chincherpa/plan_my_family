@@ -343,7 +343,9 @@ export function UpcomingDay({
                           : { backgroundColor: hexToRgba(color, 0.14), border: `1.5px dashed ${color}` }
                       }
                     >
-                      <span className="tabular opacity-80">{formatTime(occ.occurrenceStart)}</span>
+                      <span className="truncate tabular opacity-80">
+                        {formatTime(occ.occurrenceStart)}–{formatTime(occ.occurrenceEnd)}
+                      </span>
                       <span className="truncate font-semibold">{occ.appointment.title}</span>
                     </button>
                   );
