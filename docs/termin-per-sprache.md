@@ -20,6 +20,7 @@ Angemeldete Sitzung (Supabase-Cookies) und JSON-Body:
 | Feld | Typ | Regeln |
 | --- | --- | --- |
 | `text` | string | Pflicht, nach Trimmen 1–2000 Zeichen |
+| `preview` | boolean | optional. `true`: nur auswerten, nichts speichern (Antwort `200`, siehe unten) |
 
 ## Was Claude zurückgeben muss
 
@@ -73,6 +74,14 @@ nennt der Text einen unbekannten Namen, steht das in `warnings`.
 }
 ```
 
+**200 OK** (nur mit `"preview": true`) — nichts gespeichert. `preview.appointment` ist die Zeile im
+Format der RPC `save_appointment_with_participants`; die Oberfläche zeigt sie an und speichert sie
+nach Bestätigung selbst mit der Nutzersitzung:
+
+```json
+{ "preview": { "appointment": { "title": "Zahnarzt", "…": "…" }, "extracted": { "…": "…" }, "warnings": [] } }
+```
+
 **422 Unprocessable Entity** — Angaben fehlen oder sind ungültig. `extracted` enthält die Rohantwort,
 damit der Client gezielt nachfragen kann („Um wie viel Uhr?“):
 
@@ -115,3 +124,14 @@ curl -X POST http://localhost:3000/api/appointments/from-text \
   -H 'Cookie: <Supabase-Session-Cookies>' \
   -d '{"text":"Freitag 17 Uhr Elternabend, dauert anderthalb Stunden"}'
 ```
+
+## Oberfläche
+
+Der schwebende Mikrofon-Button (`src/components/voice/VoiceAppointment.tsx`, unten rechts in
+jeder Ansicht) öffnet einen Dialog: sprechen oder tippen → **Auswerten** (Vorschau über
+`preview: true`) → **Speichern** oder **Ändern**. Fehlt etwas, nennt der Dialog das Fehlende und
+behält den Text zum Ergänzen.
+
+Spracherkennung läuft im Browser über die Web Speech API (`de-DE`): Chrome, Edge, Safari.
+Firefox hat sie nicht — dort fehlt der „Sprechen“-Knopf, das Textfeld funktioniert unverändert
+(auch mit der Diktierfunktion der Tastatur auf Handy und Tablet).

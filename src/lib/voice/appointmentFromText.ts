@@ -29,6 +29,8 @@ export const RequestBodySchema = z.object({
     .trim()
     .min(1, '"text" darf nicht leer sein.')
     .max(MAX_TEXT_LENGTH, `"text" darf höchstens ${MAX_TEXT_LENGTH} Zeichen lang sein.`),
+  /** true: nur auswerten und Vorschau liefern, nichts speichern. */
+  preview: z.boolean({ error: '"preview" muss true oder false sein.' }).optional(),
 });
 
 export type RequestBody = z.infer<typeof RequestBodySchema>;
