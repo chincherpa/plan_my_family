@@ -29,6 +29,8 @@ export const RequestBodySchema = z.object({
     .trim()
     .min(1, '"text" darf nicht leer sein.')
     .max(MAX_TEXT_LENGTH, `"text" darf höchstens ${MAX_TEXT_LENGTH} Zeichen lang sein.`),
+  /** true: nur auswerten und Vorschau liefern, nichts speichern. */
+  preview: z.boolean({ error: '"preview" muss true oder false sein.' }).optional(),
 });
 
 export type RequestBody = z.infer<typeof RequestBodySchema>;
@@ -195,6 +197,121 @@ export function checkExtraction(raw: Extraction): CheckResult {
       notes: blankToNull(raw.notes),
       start,
       end,
+    },
+  };
+}
+
+// ── Fragen an den Kalender ──────────────────────────────────────────────────
+
+/**
+ * - appointment: normale Termine (kein Ereignis, kein Jahrestag)
+ * - event: Ereignisse wie Feiertage oder Ferien
+ * - birthday: Jahrestage der Art „Geburtstag“
+ * - anniversary: die übrigen Jahrestage (Hochzeitstag, Gedenktag, …)
+ * - any: alles
+ */
+export const QUERY_CATEGORIES = ["any", "appointment", "event", "birthday", "anniversary"] as const;
+export type QueryCategory = (typeof QUERY_CATEGORIES)[number];
+
+export const MAX_QUERY_LIMIT = 10;
+const DEFAULT_QUERY_LIMIT = 5;
+
+export const QuerySchema = z.object({
+  category: z
+    .enum(QUERY_CATEGORIES)
+    .describe(
+      "birthday = Geburtstage, anniversary = andere Jahrestage (Hochzeitstag, Gedenktag), appointment = normale Termine, event = Ereignisse (Feiertage, Ferien), any = allgemein ('Was steht an?')."
+    ),
+  person: z
+    .string()
+    .nullable()
+    .describe("Familienmitglied, auf das sich die Frage bezieht — exakt aus der Liste. Sonst null."),
+  search: z
+    .string()
+    .nullable()
+    .describe("Stichwort aus dem Titel ('Zahnarzt') oder Name außerhalb der Liste ('Oma Erika'). Sonst null."),
+  from_date: z.string().nullable().describe("Beginn des gefragten Zeitraums als JJJJ-MM-TT. null = ab jetzt."),
+  to_date: z.string().nullable().describe("Ende des gefragten Zeitraums (inklusive) als JJJJ-MM-TT. null = offen."),
+  // Bewusst ohne .int(): das SDK hängt dann riesige Min/Max-Grenzen an die Beschreibung.
+  // checkQuery macht eine Ganzzahl im Bereich 1–10 daraus.
+  limit: z.number().describe("Anzahl Treffer als ganze Zahl von 1 bis 10: 1 bei 'der nächste …', sonst 5 bis 10."),
+});
+
+/** Was Claude bei jedem Satz liefert: Absicht, Termin-Felder und Frage. */
+export const InterpretationSchema = z.object({
+  intent: z
+    .enum(["create", "query", "unclear"])
+    .describe(
+      "create = neuen Termin anlegen, query = nach bestehenden Einträgen fragen, unclear = weder noch."
+    ),
+  ...ExtractionSchema.shape,
+  query: QuerySchema.nullable().describe("Nur bei intent 'query', sonst null."),
+});
+
+export type Interpretation = z.infer<typeof InterpretationSchema>;
+
+/** Geprüfte Frage, so wie sie an den Client geht. */
+export interface VoiceQuery {
+  category: QueryCategory;
+  /** Name des Familienmitglieds, auf das sich die Frage bezieht. */
+  person: string | null;
+  person_id: string | null;
+  /** Stichwort im Titel (auch ein Name, der kein Familienmitglied ist). */
+  search: string | null;
+  /** JJJJ-MM-TT; null = ab jetzt. */
+  from_date: string | null;
+  /** JJJJ-MM-TT, inklusive; null = offen. */
+  to_date: string | null;
+  limit: number;
+}
+
+export type QueryCheckResult =
+  | { ok: true; query: VoiceQuery }
+  | { ok: false; invalid: { field: string; message: string }[] };
+
+/** Prüft die Frage von Claude und ordnet den Personennamen einem Familienmitglied zu. */
+export function checkQuery(
+  raw: z.infer<typeof QuerySchema> | null,
+  members: { id: string; name: string }[]
+): QueryCheckResult {
+  if (!raw) {
+    return { ok: false, invalid: [{ field: "query", message: "Die Frage konnte nicht ausgewertet werden." }] };
+  }
+
+  const invalid: { field: string; message: string }[] = [];
+  const fromDate = blankToNull(raw.from_date);
+  const toDate = blankToNull(raw.to_date);
+  for (const [field, value] of [["from_date", fromDate], ["to_date", toDate]] as const) {
+    if (value && !isRealDate(value)) {
+      invalid.push({ field, message: `"${value}" ist kein gültiges Datum (JJJJ-MM-TT).` });
+    }
+  }
+  if (invalid.length === 0 && fromDate && toDate && toDate < fromDate) {
+    invalid.push({ field: "to_date", message: `Das Ende ${toDate} liegt vor dem Beginn ${fromDate}.` });
+  }
+  if (invalid.length > 0) return { ok: false, invalid };
+
+  // Ein Name, der kein Familienmitglied ist (Oma Erika), wird zum Suchbegriff im Titel.
+  const personName = blankToNull(raw.person);
+  const member = personName
+    ? members.find((m) => m.name.localeCompare(personName, "de", { sensitivity: "base" }) === 0)
+    : undefined;
+  const search = blankToNull(raw.search) ?? (personName && !member ? personName : null);
+
+  const limit = Number.isFinite(raw.limit)
+    ? Math.min(MAX_QUERY_LIMIT, Math.max(1, Math.trunc(raw.limit)))
+    : DEFAULT_QUERY_LIMIT;
+
+  return {
+    ok: true,
+    query: {
+      category: raw.category,
+      person: member?.name ?? null,
+      person_id: member?.id ?? null,
+      search,
+      from_date: fromDate,
+      to_date: toDate,
+      limit,
     },
   };
 }

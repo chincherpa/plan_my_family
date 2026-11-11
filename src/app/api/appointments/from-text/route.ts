@@ -2,14 +2,18 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { AppointmentWithParticipants, FamilyMember } from "@/lib/supabase/types";
-import { RequestBodySchema, checkExtraction } from "@/lib/voice/appointmentFromText";
-import { ExtractionFailedError, extractAppointment } from "@/lib/voice/extractAppointment";
+import { RequestBodySchema, checkExtraction, checkQuery } from "@/lib/voice/appointmentFromText";
+import { ExtractionFailedError, interpretText } from "@/lib/voice/extractAppointment";
 
 /**
  * POST /api/appointments/from-text
  *
- * Body:    { "text": "Morgen um 15 Uhr Zahnarzt mit Ben" }
+ * Body:    { "text": "Morgen um 15 Uhr Zahnarzt mit Ben", "preview"?: boolean }
  * Antwort: 201 { appointment, extracted, warnings }
+ *          200 { preview: { appointment, extracted, warnings } }  (nur mit preview: true, nichts gespeichert;
+ *              `appointment` ist die Zeile im Format der RPC save_appointment_with_participants)
+ *          200 { query }  der Satz war eine Frage nach Terminen; nichts gespeichert, `query` beschreibt,
+ *              was der Client im Kalender suchen soll (siehe VoiceQuery)
  *          400 Body ungültig · 401 nicht angemeldet · 422 Angaben fehlen
  *          502 Claude nicht erreichbar · 500 Speichern fehlgeschlagen
  *
@@ -73,7 +77,7 @@ export async function POST(request: NextRequest) {
   // 3. Claude extrahiert die Termindaten
   let extracted;
   try {
-    extracted = await extractAppointment(
+    extracted = await interpretText(
       getAnthropic(),
       body.data.text,
       members.map((m) => m.name)
@@ -92,7 +96,24 @@ export async function POST(request: NextRequest) {
     throw e;
   }
 
-  // 4. Pflichtfelder und Formate prüfen
+  // 4a. Frage an den Kalender: nichts speichern, die geprüfte Frage geht an den Client,
+  // der sie gegen seine geladenen Termine auswertet (Serien, Ausnahmen, Ferien inklusive).
+  if (extracted.intent === "query") {
+    const checkedQuery = checkQuery(extracted.query, members);
+    if (!checkedQuery.ok) {
+      return error(422, "invalid_query", "Die Frage ließ sich nicht auswerten.", { invalid: checkedQuery.invalid });
+    }
+    return NextResponse.json({ query: checkedQuery.query });
+  }
+  if (extracted.intent === "unclear") {
+    return error(
+      422,
+      "not_understood",
+      "Das habe ich nicht verstanden. Sag einen Termin an („Morgen um 15 Uhr Zahnarzt“) oder frag nach Terminen („Wann ist der nächste Geburtstag?“)."
+    );
+  }
+
+  // 4b. Termin: Pflichtfelder und Formate prüfen
   const checked = checkExtraction(extracted);
   if (!checked.ok) {
     return error(422, "incomplete_appointment", "Aus dem Text ließ sich kein vollständiger Termin ablesen.", {
@@ -112,23 +133,41 @@ export async function POST(request: NextRequest) {
     warnings.push(`"${appt.person}" ist kein Familienmitglied; der Termin wurde für alle angelegt.`);
   }
 
-  // 6. Speichern über dieselbe RPC wie Formular und Import
+  const extractedOut = {
+    title: appt.title,
+    date: appt.date,
+    start_time: appt.startTime,
+    end_time: appt.endTime,
+    all_day: appt.allDay,
+    person: owner?.name ?? null,
+    notes: appt.notes,
+  };
+  const appointmentData = {
+    family_id: me.family_id,
+    title: appt.title,
+    notes: appt.notes,
+    owner_id: owner?.id ?? null,
+    is_all_family: !owner,
+    is_event: false,
+    is_all_day: appt.allDay,
+    start_time: appt.start.toISOString(),
+    end_time: appt.end.toISOString(),
+    travel_before_min: 0,
+    travel_after_min: 0,
+    vehicle_id: null,
+    recurrence_rule: null,
+  };
+
+  // 6. Nur Vorschau: nichts speichern, der Client bestätigt danach selbst
+  if (body.data.preview) {
+    return NextResponse.json({
+      preview: { appointment: appointmentData, extracted: extractedOut, warnings },
+    });
+  }
+
+  // 7. Speichern über dieselbe RPC wie Formular und Import
   const { data: saved, error: saveError } = await supabase.rpc("save_appointment_with_participants", {
-    appointment_data: {
-      family_id: me.family_id,
-      title: appt.title,
-      notes: appt.notes,
-      owner_id: owner?.id ?? null,
-      is_all_family: !owner,
-      is_event: false,
-      is_all_day: appt.allDay,
-      start_time: appt.start.toISOString(),
-      end_time: appt.end.toISOString(),
-      travel_before_min: 0,
-      travel_after_min: 0,
-      vehicle_id: null,
-      recurrence_rule: null,
-    },
+    appointment_data: appointmentData,
     participant_data: [],
   });
   if (saveError || !saved) {
@@ -139,15 +178,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json(
     {
       appointment: saved as unknown as AppointmentWithParticipants,
-      extracted: {
-        title: appt.title,
-        date: appt.date,
-        start_time: appt.startTime,
-        end_time: appt.endTime,
-        all_day: appt.allDay,
-        person: owner?.name ?? null,
-        notes: appt.notes,
-      },
+      extracted: extractedOut,
       warnings,
     },
     { status: 201 }
