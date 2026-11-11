@@ -1,9 +1,16 @@
-# Termin per Sprache
+# Sprachassistent: Termine anlegen und erfragen
 
-`POST /api/appointments/from-text` nimmt einen transkribierten Text entgegen, lässt Claude
-Titel, Datum und Uhrzeit daraus lesen, prüft das Ergebnis und speichert den Termin in
-`appointments` — über dieselbe RPC `save_appointment_with_participants` wie Formular und
-CSV-Import.
+`POST /api/appointments/from-text` nimmt einen transkribierten Text entgegen. Claude entscheidet
+zuerst die **Absicht**:
+
+- **create** — ein neuer Termin („Morgen um 15 Uhr Zahnarzt“): Claude liest Titel, Datum und
+  Uhrzeit, der Endpunkt prüft sie und speichert den Termin in `appointments` — über dieselbe RPC
+  `save_appointment_with_participants` wie Formular und CSV-Import.
+- **query** — eine Frage („Wann ist der nächste Geburtstag?“, „Nächster Termin für Jack“): Claude
+  versteht nur die Frage (`query`, siehe unten). Die Antwort rechnet der Client aus den geladenen
+  Terminen (`src/lib/voice/queryAppointments.ts`), mit aufgelösten Serien, Ausnahmen und
+  Schulferien wie im Kalender. So steht nur Echtes in der Antwort, nichts Erfundenes.
+- **unclear** — weder noch: `422 not_understood`.
 
 Voraussetzung: `ANTHROPIC_API_KEY` lokal in `.env.local`, in Produktion als Environment Variable
 im Vercel-Projekt (siehe README → Deployment).
@@ -58,6 +65,32 @@ Server-Zeitzone nach UTC umgerechnet (inkl. Sommer-/Winterzeit).
 **Spalte im Kalender:** Wird `person` einem Familienmitglied zugeordnet (Groß-/Kleinschreibung
 egal), ist es der Besitzer. Sonst landet der Termin in der Spalte „Alle“ (`is_all_family`) —
 nennt der Text einen unbekannten Namen, steht das in `warnings`.
+
+## Fragen: das `query`-Objekt
+
+Bei einer Frage antwortet der Endpunkt mit `200 { "query": { … } }` und speichert nichts
+(unabhängig von `preview`):
+
+```json
+{ "query": { "category": "appointment", "person": "Jack", "person_id": "…", "search": null,
+             "from_date": null, "to_date": null, "limit": 1 } }
+```
+
+| Feld | Bedeutung |
+| --- | --- |
+| `category` | `birthday` Geburtstage · `anniversary` andere Jahrestage (Hochzeitstag, Gedenktag) · `appointment` normale Termine · `event` Ereignisse (Feiertage, Ferien) · `any` alles |
+| `person`, `person_id` | Familienmitglied, auf das sich die Frage bezieht. Ein Name, der keins ist („Oma Erika“), wird zum `search` |
+| `search` | Stichwort in Titel oder Notizen („Zahnarzt“) |
+| `from_date`, `to_date` | Zeitraum `JJJJ-MM-TT` (inklusive); `null` = ab jetzt / offen |
+| `limit` | Anzahl Treffer, 1–10 |
+
+Auswertung im Client: Ab jetzt zählen Termine, die noch nicht begonnen haben, und ganztägige
+Einträge von heute. Mit Zeitraum wird der ganze Tag ab `from_date` einbezogen. Bei `person`
+gelten Termine, bei denen die Person Besitzer oder Teilnehmer ist, dazu Familientermine;
+Geburtstage und Jahrestage werden über den Namen im Titel zugeordnet. Jahrestage erscheinen nur
+mit ihrem nächsten Vorkommen. Gesucht wird bis zu 400 Tage voraus (explizite Zeiträume bis 800).
+
+Weitere Fehler der Frage: `422 invalid_query` (ungültiges oder verdrehtes Datum).
 
 ## Antworten
 
@@ -127,10 +160,13 @@ curl -X POST http://localhost:3000/api/appointments/from-text \
 
 ## Oberfläche
 
-Der schwebende Mikrofon-Button (`src/components/voice/VoiceAppointment.tsx`, unten rechts in
-jeder Ansicht) öffnet einen Dialog: sprechen oder tippen → **Auswerten** (Vorschau über
-`preview: true`) → **Speichern** oder **Ändern**. Fehlt etwas, nennt der Dialog das Fehlende und
-behält den Text zum Ergänzen.
+Der schwebende Mikrofon-Button („Sprachassistent“) (`src/components/voice/VoiceAppointment.tsx`, unten rechts in
+jeder Ansicht) öffnet einen Dialog: sprechen oder tippen → **Los**.
+
+- **Termin:** Vorschau (über `preview: true`) → **Speichern** oder **Ändern**. Fehlt etwas, nennt der
+  Dialog das Fehlende und behält den Text zum Ergänzen.
+- **Frage:** Trefferliste mit Datum, Uhrzeit, „in 3 Tagen“ und Personen (bei Geburtstagen das
+  Alter: „wird 36“). Ein Klick auf einen Treffer öffnet den Tag im Kalender.
 
 Spracherkennung läuft im Browser über die Web Speech API (`de-DE`): Chrome, Edge, Safari.
 Firefox hat sie nicht — dort fehlt der „Sprechen“-Knopf, das Textfeld funktioniert unverändert

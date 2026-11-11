@@ -8,10 +8,13 @@ import { useCalendarStore } from "@/lib/store/calendarStore";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSpeechRecognition } from "@/lib/voice/useSpeechRecognition";
+import { describeQuery, runVoiceQuery, type QueryHit } from "@/lib/voice/queryAppointments";
+import type { VoiceQuery } from "@/lib/voice/appointmentFromText";
+import { ANNIVERSARY_KINDS, formatDaysUntil } from "@/lib/anniversaries";
 import { formatTime } from "@/lib/utils";
 import type { AppointmentWithParticipants, Json } from "@/lib/supabase/types";
 
-/** Antwort von POST /api/appointments/from-text mit `preview: true`. */
+/** Antwort von POST /api/appointments/from-text: Vorschau eines Termins (`preview: true`) oder eine Frage. */
 interface PreviewResponse {
   preview: {
     appointment: {
@@ -36,12 +39,30 @@ interface ErrorResponse {
 
 const FIELD_LABELS: Record<string, string> = { title: "Titel", date: "Datum", start_time: "Uhrzeit" };
 
-type Phase = "input" | "loading" | "preview" | "saving";
+type Phase = "input" | "loading" | "preview" | "saving" | "answer";
 
-/** Schwebender Mikrofon-Button: Termin sprechen oder tippen, Vorschau prüfen, speichern. */
+function describeHit(hit: QueryHit): string {
+  const now = new Date();
+  const date = hit.start.toLocaleDateString("de-DE", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    ...(hit.start.getFullYear() !== now.getFullYear() && { year: "numeric" }),
+  });
+  const time = hit.allDay ? "" : `, ${formatTime(hit.start)}–${formatTime(hit.end)} Uhr`;
+  return `${date}${time} · ${formatDaysUntil(hit.daysUntil)}`;
+}
+
+/**
+ * Schwebender Mikrofon-Button: Termin sprechen oder tippen (Vorschau prüfen, speichern)
+ * oder nach Terminen und Geburtstagen fragen.
+ */
 export default function VoiceAppointment() {
   const router = useRouter();
   const addAppointment = useDataStore((s) => s.addAppointment);
+  const appointments = useDataStore((s) => s.appointments);
+  const members = useDataStore((s) => s.members);
+  const schoolHolidays = useDataStore((s) => s.schoolHolidays);
   const setFocusedDate = useCalendarStore((s) => s.setFocusedDate);
   const speech = useSpeechRecognition();
 
@@ -49,6 +70,7 @@ export default function VoiceAppointment() {
   const [phase, setPhase] = useState<Phase>("input");
   const [text, setText] = useState("");
   const [preview, setPreview] = useState<PreviewResponse["preview"] | null>(null);
+  const [answer, setAnswer] = useState<{ query: VoiceQuery; hits: QueryHit[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   function handleOpenChange(next: boolean) {
@@ -58,6 +80,7 @@ export default function VoiceAppointment() {
       setPhase("input");
       setText("");
       setPreview(null);
+      setAnswer(null);
       setError(null);
     }
   }
@@ -83,23 +106,29 @@ export default function VoiceAppointment() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: trimmed, preview: true }),
       });
-      const data = (await res.json().catch(() => null)) as (PreviewResponse & ErrorResponse) | null;
+      const data = (await res.json().catch(() => null)) as (PreviewResponse & ErrorResponse & { query?: VoiceQuery }) | null;
 
       if (res.ok && data?.preview) {
         setPreview(data.preview);
         setPhase("preview");
         return;
       }
+      if (res.ok && data?.query) {
+        // Frage: Claude hat sie nur verstanden, die Antwort kommt aus den geladenen Terminen.
+        setAnswer({
+          query: data.query,
+          hits: runVoiceQuery(data.query, { appointments, members, schoolHolidays }),
+        });
+        setPhase("answer");
+        return;
+      }
       if (res.status === 422 && data) {
-        const parts = [
-          ...(data.missing ?? []).map((f) => FIELD_LABELS[f] ?? f),
-          ...(data.invalid ?? []).map((p) => p.message),
-        ];
-        const missing = (data.missing ?? []).length > 0;
+        const missing = (data.missing ?? []).map((f) => FIELD_LABELS[f] ?? f);
+        const invalid = (data.invalid ?? []).map((p) => p.message);
         setError(
-          missing
-            ? `Es fehlt noch: ${parts.join(", ")}. Ergänze den Text und versuche es erneut.`
-            : parts.join(" ") || "Der Termin ist nicht vollständig."
+          missing.length > 0
+            ? `Es fehlt noch: ${[...missing, ...invalid].join(", ")}. Ergänze den Text und versuche es erneut.`
+            : invalid.join(" ") || data.message || "Der Termin ist nicht vollständig."
         );
       } else if (res.status === 401) {
         setError("Du bist nicht mehr angemeldet. Bitte die Seite neu laden.");
@@ -134,6 +163,12 @@ export default function VoiceAppointment() {
     router.push("/calendar");
   }
 
+  function showInCalendar(hit: QueryHit) {
+    setFocusedDate(hit.start);
+    handleOpenChange(false);
+    router.push("/calendar");
+  }
+
   const appt = preview?.appointment;
   const start = appt ? new Date(appt.start_time) : null;
   const end = appt ? new Date(appt.end_time) : null;
@@ -143,8 +178,8 @@ export default function VoiceAppointment() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label="Termin per Sprache anlegen"
-        title="Termin per Sprache anlegen"
+        aria-label="Sprachassistent"
+        title="Sprachassistent: Termin ansagen oder nach Terminen fragen"
         className="fixed bottom-24 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--primary)] text-[var(--primary-foreground)] shadow-lg transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ring)] md:bottom-6"
       >
         <Mic className="h-6 w-6" />
@@ -153,7 +188,7 @@ export default function VoiceAppointment() {
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent aria-describedby={undefined}>
           <DialogHeader>
-            <DialogTitle>Termin per Sprache</DialogTitle>
+            <DialogTitle>Sprachassistent</DialogTitle>
           </DialogHeader>
 
           {(phase === "input" || phase === "loading") && (
@@ -164,7 +199,7 @@ export default function VoiceAppointment() {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) analyze();
                 }}
-                placeholder="z. B. „Morgen um halb vier Zahnarzt mit Ben“"
+                placeholder="Termin ansagen („Morgen um halb vier Zahnarzt mit Ben“) oder fragen („Wann ist der nächste Geburtstag?“)"
                 rows={3}
                 maxLength={2000}
                 autoFocus
@@ -201,7 +236,71 @@ export default function VoiceAppointment() {
                   disabled={!text.trim() || phase === "loading"}
                 >
                   {phase === "loading" && <Loader2 className="h-4 w-4 animate-spin" />}
-                  Auswerten
+                  Los
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {phase === "answer" && answer && (
+            <div className="space-y-4">
+              <p className="text-sm text-[var(--muted-foreground)]">„{text.trim()}“</p>
+              <div className="space-y-2">
+                <p className="font-semibold">{describeQuery(answer.query)}</p>
+                {answer.hits.length === 0 ? (
+                  <p className="rounded-xl border border-[var(--border)] bg-[var(--background)] p-4 text-sm">
+                    Dazu habe ich im Kalender nichts gefunden.
+                  </p>
+                ) : (
+                  <ul className="space-y-2">
+                    {answer.hits.map((hit) => (
+                      <li key={hit.key}>
+                        <button
+                          type="button"
+                          onClick={() => showInCalendar(hit)}
+                          title="Im Kalender anzeigen"
+                          className="flex w-full items-start gap-3 rounded-xl border border-[var(--border)] bg-[var(--background)] p-3 text-left transition-colors hover:bg-[var(--accent)]"
+                        >
+                          <span className="mt-0.5 w-6 shrink-0 text-center text-lg leading-none">
+                            {hit.emoji ?? <CalendarClock className="mx-auto h-5 w-5 text-[var(--muted-foreground)]" />}
+                          </span>
+                          <span className="min-w-0 space-y-0.5">
+                            <span className="block font-medium">
+                              {hit.title}
+                              {hit.anniversaryKind && hit.count !== null && (
+                                <span className="font-normal text-[var(--muted-foreground)]">
+                                  {" "}
+                                  – {ANNIVERSARY_KINDS[hit.anniversaryKind].countLabel(hit.count)}
+                                </span>
+                              )}
+                            </span>
+                            <span className="block text-sm text-[var(--muted-foreground)]">{describeHit(hit)}</span>
+                            {(hit.allFamily || hit.people.length > 0) && !hit.anniversaryKind && (
+                              <span className="block text-xs text-[var(--muted-foreground)]">
+                                {hit.allFamily ? "Alle" : hit.people.join(", ")}
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => setPhase("input")}>
+                  Frage ändern
+                </Button>
+                <Button
+                  type="button"
+                  className="ml-auto"
+                  onClick={() => {
+                    setText("");
+                    setAnswer(null);
+                    setPhase("input");
+                  }}
+                >
+                  Neue Eingabe
                 </Button>
               </div>
             </div>

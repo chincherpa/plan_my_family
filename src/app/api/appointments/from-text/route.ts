@@ -2,8 +2,8 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { AppointmentWithParticipants, FamilyMember } from "@/lib/supabase/types";
-import { RequestBodySchema, checkExtraction } from "@/lib/voice/appointmentFromText";
-import { ExtractionFailedError, extractAppointment } from "@/lib/voice/extractAppointment";
+import { RequestBodySchema, checkExtraction, checkQuery } from "@/lib/voice/appointmentFromText";
+import { ExtractionFailedError, interpretText } from "@/lib/voice/extractAppointment";
 
 /**
  * POST /api/appointments/from-text
@@ -12,6 +12,8 @@ import { ExtractionFailedError, extractAppointment } from "@/lib/voice/extractAp
  * Antwort: 201 { appointment, extracted, warnings }
  *          200 { preview: { appointment, extracted, warnings } }  (nur mit preview: true, nichts gespeichert;
  *              `appointment` ist die Zeile im Format der RPC save_appointment_with_participants)
+ *          200 { query }  der Satz war eine Frage nach Terminen; nichts gespeichert, `query` beschreibt,
+ *              was der Client im Kalender suchen soll (siehe VoiceQuery)
  *          400 Body ungültig · 401 nicht angemeldet · 422 Angaben fehlen
  *          502 Claude nicht erreichbar · 500 Speichern fehlgeschlagen
  *
@@ -75,7 +77,7 @@ export async function POST(request: NextRequest) {
   // 3. Claude extrahiert die Termindaten
   let extracted;
   try {
-    extracted = await extractAppointment(
+    extracted = await interpretText(
       getAnthropic(),
       body.data.text,
       members.map((m) => m.name)
@@ -94,7 +96,24 @@ export async function POST(request: NextRequest) {
     throw e;
   }
 
-  // 4. Pflichtfelder und Formate prüfen
+  // 4a. Frage an den Kalender: nichts speichern, die geprüfte Frage geht an den Client,
+  // der sie gegen seine geladenen Termine auswertet (Serien, Ausnahmen, Ferien inklusive).
+  if (extracted.intent === "query") {
+    const checkedQuery = checkQuery(extracted.query, members);
+    if (!checkedQuery.ok) {
+      return error(422, "invalid_query", "Die Frage ließ sich nicht auswerten.", { invalid: checkedQuery.invalid });
+    }
+    return NextResponse.json({ query: checkedQuery.query });
+  }
+  if (extracted.intent === "unclear") {
+    return error(
+      422,
+      "not_understood",
+      "Das habe ich nicht verstanden. Sag einen Termin an („Morgen um 15 Uhr Zahnarzt“) oder frag nach Terminen („Wann ist der nächste Geburtstag?“)."
+    );
+  }
+
+  // 4b. Termin: Pflichtfelder und Formate prüfen
   const checked = checkExtraction(extracted);
   if (!checked.ok) {
     return error(422, "incomplete_appointment", "Aus dem Text ließ sich kein vollständiger Termin ablesen.", {
