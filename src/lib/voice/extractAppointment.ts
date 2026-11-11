@@ -41,7 +41,7 @@ export async function extractAppointment(
   const members = memberNames.length > 0 ? memberNames.join(", ") : "(keine)";
 
   const response = await client.beta.messages.parse({
-    model: "claude-opus-5-5",
+    model: "claude-sonnet-5-5",
     max_tokens: 16000,
     // Einfache Extraktion: niedriger Aufwand reicht und hält die Antwort schnell.
     output_config: { effort: "low", format: betaZodOutputFormat(ExtractionSchema) },
