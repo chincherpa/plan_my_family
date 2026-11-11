@@ -8,7 +8,9 @@ import { useCalendarStore } from "@/lib/store/calendarStore";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useSpeechRecognition } from "@/lib/voice/useSpeechRecognition";
-import { describeQuery, runVoiceQuery, type QueryHit } from "@/lib/voice/queryAppointments";
+import { describeQuery, runVoiceQuery, spokenAnswer, type QueryHit } from "@/lib/voice/queryAppointments";
+import { useSpeechSynthesis } from "@/lib/voice/useSpeechSynthesis";
+import { Checkbox } from "@/components/ui/checkbox";
 import type { VoiceQuery } from "@/lib/voice/appointmentFromText";
 import { ANNIVERSARY_KINDS, formatDaysUntil } from "@/lib/anniversaries";
 import { formatTime } from "@/lib/utils";
@@ -35,6 +37,16 @@ interface ErrorResponse {
   message?: string;
   missing?: string[];
   invalid?: { message: string }[];
+}
+
+const READ_ALOUD_KEY = "voice-read-aloud";
+
+function loadReadAloud(): boolean {
+  try {
+    return localStorage.getItem(READ_ALOUD_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 const FIELD_LABELS: Record<string, string> = { title: "Titel", date: "Datum", start_time: "Uhrzeit" };
@@ -65,6 +77,9 @@ export default function VoiceAppointment() {
   const schoolHolidays = useDataStore((s) => s.schoolHolidays);
   const setFocusedDate = useCalendarStore((s) => s.setFocusedDate);
   const speech = useSpeechRecognition();
+  const synth = useSpeechSynthesis();
+  // Standardmäßig aus; die Wahl bleibt im Browser gespeichert.
+  const [readAloud, setReadAloud] = useState(loadReadAloud);
 
   const [open, setOpen] = useState(false);
   const [phase, setPhase] = useState<Phase>("input");
@@ -77,11 +92,22 @@ export default function VoiceAppointment() {
     setOpen(next);
     if (!next) {
       speech.abort();
+      synth.cancel();
       setPhase("input");
       setText("");
       setPreview(null);
       setAnswer(null);
       setError(null);
+    }
+  }
+
+  function changeReadAloud(checked: boolean) {
+    setReadAloud(checked);
+    if (!checked) synth.cancel();
+    try {
+      localStorage.setItem(READ_ALOUD_KEY, checked ? "1" : "0");
+    } catch {
+      // Ohne Speicher bleibt die Wahl nur für diese Sitzung.
     }
   }
 
@@ -115,11 +141,10 @@ export default function VoiceAppointment() {
       }
       if (res.ok && data?.query) {
         // Frage: Claude hat sie nur verstanden, die Antwort kommt aus den geladenen Terminen.
-        setAnswer({
-          query: data.query,
-          hits: runVoiceQuery(data.query, { appointments, members, schoolHolidays }),
-        });
+        const hits = runVoiceQuery(data.query, { appointments, members, schoolHolidays });
+        setAnswer({ query: data.query, hits });
         setPhase("answer");
+        if (readAloud) synth.speak(spokenAnswer(data.query, hits));
         return;
       }
       if (res.status === 422 && data) {
@@ -229,6 +254,12 @@ export default function VoiceAppointment() {
                     {speech.listening ? "Stopp" : "Sprechen"}
                   </Button>
                 )}
+                {synth.supported && (
+                  <label className="flex cursor-pointer select-none items-center gap-2 text-sm">
+                    <Checkbox checked={readAloud} onCheckedChange={changeReadAloud} aria-label="Antworten vorlesen" />
+                    Vorlesen
+                  </label>
+                )}
                 <Button
                   type="button"
                   className="ml-auto"
@@ -288,13 +319,21 @@ export default function VoiceAppointment() {
                 )}
               </div>
               <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => setPhase("input")}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    synth.cancel();
+                    setPhase("input");
+                  }}
+                >
                   Frage ändern
                 </Button>
                 <Button
                   type="button"
                   className="ml-auto"
                   onClick={() => {
+                    synth.cancel();
                     setText("");
                     setAnswer(null);
                     setPhase("input");

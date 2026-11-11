@@ -3,7 +3,7 @@ import { anniversaryRecord, type AnniversaryInput } from "@/lib/anniversaries";
 import { appointment, d, member, participant } from "@/lib/utils/__fixtures__/calendar";
 import { buildRecurrenceRule } from "@/lib/utils/recurrence";
 import type { AppointmentWithParticipants } from "@/lib/supabase/types";
-import { describeQuery, runVoiceQuery, type QueryData } from "./queryAppointments";
+import { describeQuery, runVoiceQuery, spokenAnswer, type QueryData } from "./queryAppointments";
 import { checkQuery, type VoiceQuery } from "./appointmentFromText";
 
 // Mittwoch, 11. November 2026, 10:00
@@ -184,5 +184,29 @@ describe("checkQuery", () => {
 
   it("weist eine fehlende Frage ab", () => {
     expect(checkQuery(null, members).ok).toBe(false);
+  });
+});
+
+describe("spokenAnswer", () => {
+  it("liest einen Geburtstag mit Alter vor", () => {
+    const q = query({ category: "birthday" });
+    const hits = runVoiceQuery(q, data(birthday("Jack", 20, 11, 1990)), NOW);
+    expect(spokenAnswer(q, hits, NOW)).toBe("Nächster Geburtstag. Jack wird 36, am Freitag, 20. November.");
+  });
+
+  it("nennt Tag, Uhrzeit und Personen eines Termins", () => {
+    const q = query({ category: "appointment", limit: 2 });
+    const appts = [
+      appointment({ title: "Zahnarzt", start: "2026-11-12 09:05", end: "2026-11-12 10:00", owner_id: jack.id }),
+      appointment({ title: "Familienessen", start: "2026-11-11 18:00", end: "2026-11-11 20:00", is_all_family: true }),
+    ];
+    const hits = runVoiceQuery(q, data(...appts), NOW);
+    expect(spokenAnswer(q, hits, NOW)).toBe(
+      "Nächste Termine. Familienessen, heute um 18:00 Uhr, für alle. Zahnarzt, morgen um 09:05 Uhr, für Jack."
+    );
+  });
+
+  it("sagt, wenn nichts gefunden wurde", () => {
+    expect(spokenAnswer(query(), [], NOW)).toBe("Dazu habe ich im Kalender nichts gefunden.");
   });
 });

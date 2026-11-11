@@ -167,6 +167,11 @@ jeder Ansicht) öffnet einen Dialog: sprechen oder tippen → **Los**.
   Dialog das Fehlende und behält den Text zum Ergänzen.
 - **Frage:** Trefferliste mit Datum, Uhrzeit, „in 3 Tagen“ und Personen (bei Geburtstagen das
   Alter: „wird 36“). Ein Klick auf einen Treffer öffnet den Tag im Kalender.
+- **Vorlesen:** Die Checkbox „Vorlesen“ neben dem Sprechen-Knopf ist standardmäßig aus (die Wahl
+  bleibt im Browser gespeichert). Ist sie an, wird die Antwort auf eine Frage vorgelesen
+  (Speech Synthesis API, deutsch; auch in Firefox) — z. B. „Nächster Geburtstag. Jack wird 36,
+  am Freitag, 20. November.“ (`spokenAnswer` in `queryAppointments.ts`). Beim Schließen des Dialogs
+  oder Abwählen endet das Vorlesen.
 
 Spracherkennung läuft im Browser über die Web Speech API (`de-DE`): Chrome, Edge, Safari.
 Firefox hat sie nicht — dort fehlt der „Sprechen“-Knopf, das Textfeld funktioniert unverändert

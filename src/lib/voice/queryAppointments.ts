@@ -184,3 +184,41 @@ export function describeQuery(query: VoiceQuery): string {
   if (hasRange) text += `, ${rangeLabel(query)}`;
   return text;
 }
+
+// ── Vorlesen ────────────────────────────────────────────────────────────────
+
+function dayPhrase(hit: QueryHit, now: Date): string {
+  if (hit.daysUntil === 0) return "heute";
+  if (hit.daysUntil === 1) return "morgen";
+  if (hit.daysUntil === 2) return "übermorgen";
+  const date = hit.start.toLocaleDateString("de-DE", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    ...(hit.start.getFullYear() !== now.getFullYear() && { year: "numeric" }),
+  });
+  return `am ${date}`;
+}
+
+function joinNames(names: string[]): string {
+  return names.length < 2 ? (names[0] ?? "") : `${names.slice(0, -1).join(", ")} und ${names[names.length - 1]}`;
+}
+
+/** Die Antwort als Text zum Vorlesen: „Nächster Geburtstag. Jack wird 36, am Freitag, 20. November.“ */
+export function spokenAnswer(query: VoiceQuery, hits: QueryHit[], now = new Date()): string {
+  if (hits.length === 0) return "Dazu habe ich im Kalender nichts gefunden.";
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const sentences = hits.map((hit) => {
+    let what = hit.title;
+    if (hit.anniversaryKind && hit.count !== null) {
+      const label = ANNIVERSARY_KINDS[hit.anniversaryKind].countLabel(hit.count);
+      what += hit.anniversaryKind === "birthday" ? ` ${label}` : `, ${label}`;
+    }
+    let when = dayPhrase(hit, now);
+    if (!hit.allDay) when += ` um ${pad(hit.start.getHours())}:${pad(hit.start.getMinutes())} Uhr`;
+    const who = hit.anniversaryKind ? "" : hit.allFamily ? ", für alle" : hit.people.length ? `, für ${joinNames(hit.people)}` : "";
+    return `${what}, ${when}${who}.`;
+  });
+  return `${describeQuery(query)}. ${sentences.join(" ")}`;
+}
