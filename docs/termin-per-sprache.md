@@ -5,7 +5,8 @@ Titel, Datum und Uhrzeit daraus lesen, prüft das Ergebnis und speichert den Ter
 `appointments` — über dieselbe RPC `save_appointment_with_participants` wie Formular und
 CSV-Import.
 
-Voraussetzung: `ANTHROPIC_API_KEY` in der Server-Umgebung (siehe `.env.example`).
+Voraussetzung: `ANTHROPIC_API_KEY` lokal in `.env.local`, in Produktion als Environment Variable
+im Vercel-Projekt (siehe README → Deployment).
 Code: `src/app/api/appointments/from-text/route.ts`, `src/lib/voice/`.
 
 ## Anfrage
