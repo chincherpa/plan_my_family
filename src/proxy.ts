@@ -33,7 +33,10 @@ export async function proxy(request: NextRequest) {
 
   const isAuthPage = request.nextUrl.pathname.startsWith("/login");
 
-  if (!user && !isAuthPage) {
+  // API-Routen prüfen die Anmeldung selbst und antworten mit 401 statt Redirect.
+  const isApi = request.nextUrl.pathname.startsWith("/api/");
+
+  if (!user && !isAuthPage && !isApi) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
