@@ -39,13 +39,15 @@ export default function ShortcutSettings() {
     const request = ++latestRequest.current;
     setFamily({ ...family, keyboard_shortcuts: next });
     setError(null);
-    const { error: updateError } = await createClient()
+    const { data: updated, error: updateError } = await createClient()
       .from("families")
       .update({ keyboard_shortcuts: next })
-      .eq("id", family.id);
+      .eq("id", family.id)
+      .select("id");
     if (request !== latestRequest.current) return;
     const latest = useDataStore.getState().family;
-    if (updateError) {
+    // Keine Zeile zurück → RLS hat das Update still verworfen
+    if (updateError || !updated?.length) {
       if (latest) setFamily({ ...latest, keyboard_shortcuts: fallback });
       setNotice(null);
       setError("Shortcuts konnten nicht gespeichert werden.");
