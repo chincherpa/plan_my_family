@@ -13,7 +13,9 @@ zuerst die **Absicht**:
 - **unclear** — weder noch: `422 not_understood`.
 
 Voraussetzung: `ANTHROPIC_API_KEY` lokal in `.env.local`, in Produktion als Environment Variable
-im Vercel-Projekt (siehe README → Deployment).
+im Vercel-Projekt (siehe README → Deployment). Im Anthropic-Konto (Console → Limits) ein
+monatliches Ausgabenlimit setzen, damit ein Fehler oder Missbrauch die Kosten nicht hochtreibt;
+jede Anfrage ist zusätzlich auf `max_tokens: 4000` begrenzt.
 Code: `src/app/api/appointments/from-text/route.ts`, `src/lib/voice/`.
 
 ## Anfrage
@@ -137,8 +139,9 @@ Weitere Fehler haben dieselbe Form `{ error, message }`:
 | 400 | `invalid_json` / `invalid_body` | Body kein JSON bzw. `text` fehlt/leer/zu lang (`issues` mit Details) |
 | 401 | `unauthorized` | nicht angemeldet (API-Routen werden vom Proxy nicht auf `/login` umgeleitet) |
 | 403 | `no_family` | Nutzer gehört zu keiner Familie |
-| 502 | `extraction_failed` / `ai_unavailable` | Claude hat nichts Auswertbares geliefert bzw. API-Fehler |
+| 502 | `extraction_failed` / `ai_unavailable` | Claude hat nichts Auswertbares geliefert bzw. API-Fehler, Schlüssel fehlt oder unerwarteter Fehler |
 | 503 | `ai_rate_limited` | Rate-Limit der Anthropic-API |
+| 500 | `load_failed` | Familiendaten konnten nicht geladen werden |
 | 500 | `save_failed` | RPC/Datenbank hat den Termin abgelehnt |
 
 ## Sicherheit

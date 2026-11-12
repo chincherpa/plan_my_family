@@ -58,7 +58,9 @@ export async function interpretText(
 
   const response = await client.beta.messages.parse({
     model: "claude-sonnet-5-5",
-    max_tokens: 16000,
+    // Obergrenze gegen ausufernde Kosten. Sonnet 5.5 denkt auch ohne `thinking`
+    // adaptiv, und die Denk-Tokens zählen zu max_tokens — daher nicht knapper.
+    max_tokens: 4000,
     // Einfache Extraktion: niedriger Aufwand reicht und hält die Antwort schnell.
     output_config: { effort: "low", format: betaZodOutputFormat(InterpretationSchema) },
     // Lehnt das Modell ab, beantwortet das Fallback-Modell dieselbe Anfrage.

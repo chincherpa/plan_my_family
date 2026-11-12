@@ -15,7 +15,7 @@ import { ExtractionFailedError, interpretText } from "@/lib/voice/extractAppoint
  *          200 { query }  der Satz war eine Frage nach Terminen; nichts gespeichert, `query` beschreibt,
  *              was der Client im Kalender suchen soll (siehe VoiceQuery)
  *          400 Body ungültig · 401 nicht angemeldet · 422 Angaben fehlen
- *          502 Claude nicht erreichbar · 500 Speichern fehlgeschlagen
+ *          502 Claude nicht erreichbar oder nicht eingerichtet · 500 Laden/Speichern fehlgeschlagen
  *
  * Gespeichert wird mit der Sitzung des angemeldeten Nutzers (Publishable Key +
  * Cookies), nicht mit einem Service-Key: Die Row Level Security entscheidet,
@@ -59,19 +59,27 @@ export async function POST(request: NextRequest) {
   } = await supabase.auth.getUser();
   if (!user) return error(401, "unauthorized", "Nicht angemeldet.");
 
-  const { data: meRaw } = await supabase
+  const { data: meRaw, error: meError } = await supabase
     .from("family_members")
     .select("*")
     .eq("user_id", user.id)
     .maybeSingle();
+  if (meError) {
+    console.error("Familienmitglied konnte nicht geladen werden.", meError);
+    return error(500, "load_failed", "Familiendaten konnten nicht geladen werden.");
+  }
   const me = meRaw as FamilyMember | null;
   if (!me) return error(403, "no_family", "Kein Familienkonto gefunden.");
 
-  const { data: membersRaw } = await supabase
+  const { data: membersRaw, error: membersError } = await supabase
     .from("family_members")
     .select("*")
     .eq("family_id", me.family_id)
     .order("sort_order");
+  if (membersError) {
+    console.error("Familienmitglieder konnten nicht geladen werden.", membersError);
+    return error(500, "load_failed", "Familiendaten konnten nicht geladen werden.");
+  }
   const members = (membersRaw ?? []) as FamilyMember[];
 
   // 3. Claude extrahiert die Termindaten
@@ -93,7 +101,9 @@ export async function POST(request: NextRequest) {
       console.error("Anthropic-API-Fehler", e.status, e.message);
       return error(502, "ai_unavailable", "Die Texterkennung ist nicht erreichbar.");
     }
-    throw e;
+    // z. B. fehlender ANTHROPIC_API_KEY oder eine nicht auswertbare Antwort
+    console.error("Texterkennung fehlgeschlagen", e);
+    return error(502, "ai_unavailable", "Die Texterkennung ist nicht eingerichtet oder nicht erreichbar.");
   }
 
   // 4a. Frage an den Kalender: nichts speichern, die geprüfte Frage geht an den Client,
