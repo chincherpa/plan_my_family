@@ -81,7 +81,7 @@ describe("runVoiceQuery", () => {
     expect(hits.map((h) => h.title)).toEqual(["Jack"]);
   });
 
-  it("lässt Vergangenes, Gelöschtes und bereits Begonnenes weg", () => {
+  it("lässt Vergangenes und Gelöschtes weg", () => {
     const appts = [
       appointment({ title: "Gestern", start: "2026-11-10 09:00", end: "2026-11-10 10:00" }),
       appointment({ title: "Heute früh", start: "2026-11-11 08:00", end: "2026-11-11 09:00" }),
@@ -101,6 +101,36 @@ describe("runVoiceQuery", () => {
     ];
     const hits = runVoiceQuery(query({ from_date: "2026-11-12", to_date: "2026-11-12", limit: 10 }), data(...appts), NOW);
     expect(hits.map((h) => h.title)).toEqual(["Früh", "Spät"]);
+  });
+
+  it("findet mehrtägige Termine an einem Tag mittendrin", () => {
+    const trip = appointment({ title: "Reise", start: "2026-11-12 18:00", end: "2026-11-15 12:00" });
+    const hits = runVoiceQuery(query({ from_date: "2026-11-13", to_date: "2026-11-13", limit: 5 }), data(trip), NOW);
+    expect(hits.map((h) => h.title)).toEqual(["Reise"]);
+  });
+
+  it("nennt einen laufenden Termin zuerst und als heute", () => {
+    const now = d("2026-11-11 10:30");
+    const appts = [
+      appointment({ title: "Später", start: "2026-11-11 15:00", end: "2026-11-11 16:00" }),
+      appointment({ title: "Läuft", start: "2026-11-11 10:00", end: "2026-11-11 12:00" }),
+    ];
+    const hits = runVoiceQuery(query({ limit: 5 }), data(...appts), now);
+    expect(hits.map((h) => h.title)).toEqual(["Läuft", "Später"]);
+    expect(hits[0].daysUntil).toBe(0);
+  });
+
+  it("lässt einen gerade beendeten Termin weg", () => {
+    const now = d("2026-11-11 10:30");
+    const done = appointment({ title: "Vorbei", start: "2026-11-11 09:00", end: "2026-11-11 10:00" });
+    expect(runVoiceQuery(query({ limit: 5 }), data(done), now)).toEqual([]);
+  });
+
+  it("zählt einen laufenden mehrtägigen Termin nicht negativ", () => {
+    const trip = appointment({ title: "Reise", start: "2026-11-09 18:00", end: "2026-11-13 12:00" });
+    const [hit] = runVoiceQuery(query(), data(trip), NOW);
+    expect(hit.daysUntil).toBe(0);
+    expect(spokenAnswer(query(), [hit], NOW)).toContain("heute");
   });
 
   it("löst Serien auf", () => {

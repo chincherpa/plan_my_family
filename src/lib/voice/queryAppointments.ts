@@ -105,9 +105,8 @@ export function runVoiceQuery(query: VoiceQuery, data: QueryData, now = new Date
     const appt = occ.appointment;
     if (appt.is_deleted) continue;
 
-    // Ganztägige Einträge gelten den ganzen Tag, auch wenn „jetzt“ schon später ist.
-    const notOver = appt.is_all_day ? occ.occurrenceEnd > rangeStart : occ.occurrenceStart >= rangeStart;
-    if (!notOver || occ.occurrenceStart > rangeEnd) continue;
+    // Alles, was den Zeitraum berührt — auch laufende und mehrtägige Termine.
+    if (occ.occurrenceEnd <= rangeStart || occ.occurrenceStart > rangeEnd) continue;
 
     const category = categoryOf(appt);
     if (query.category !== "any" && query.category !== category) continue;
@@ -132,7 +131,8 @@ export function runVoiceQuery(query: VoiceQuery, data: QueryData, now = new Date
       people,
       allFamily: appt.is_all_family,
       notes: appt.notes,
-      daysUntil: daysBetween(now, occ.occurrenceStart),
+      // Laufende Termine haben schon begonnen; sie zählen als „heute“.
+      daysUntil: Math.max(0, daysBetween(now, occ.occurrenceStart)),
     });
   }
 
