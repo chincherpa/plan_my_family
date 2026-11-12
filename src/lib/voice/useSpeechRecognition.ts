@@ -79,7 +79,10 @@ export function useSpeechRecognition(lang = "de-DE") {
         if (e.error === "no-speech" || e.error === "aborted") return;
         setError(ERROR_MESSAGES[e.error] ?? "Die Spracherkennung ist fehlgeschlagen.");
       };
-      recognition.onend = () => setListening(false);
+      // Eine abgelöste Aufnahme endet später; sie darf die neue nicht als beendet melden.
+      recognition.onend = () => {
+        if (recognitionRef.current === recognition) setListening(false);
+      };
 
       recognitionRef.current = recognition;
       setError(null);
@@ -99,5 +102,8 @@ export function useSpeechRecognition(lang = "de-DE") {
     setListening(false);
   }, []);
 
-  return { supported, listening, error, start, stop, abort };
+  /** Fehlermeldung ausblenden, z. B. sobald getippt wird. */
+  const clearError = useCallback(() => setError(null), []);
+
+  return { supported, listening, error, start, stop, abort, clearError };
 }

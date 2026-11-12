@@ -230,7 +230,10 @@ export default function VoiceAppointment() {
             <div className="space-y-3">
               <textarea
                 value={text}
-                onChange={(e) => setText(e.target.value)}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  speech.clearError();
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) analyze();
                 }}
