@@ -474,6 +474,22 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
     : startTime && new Date(startTime);
   const weekdayName =
     formStart && !isNaN(formStart.getTime()) ? WEEKDAYS_DE[formStart.getDay()] : null;
+  /** Wochentag des Startdatums in rrule-Zählung (0 = Montag), null ohne gültigen Start. */
+  const startRuleDay =
+    formStart && !isNaN(formStart.getTime()) ? (formStart.getDay() + 6) % 7 : null;
+  const startOffCustomDays =
+    recurrence === "custom" &&
+    customDays.length > 0 &&
+    startRuleDay !== null &&
+    !customDays.includes(startRuleDay);
+
+  function changeRecurrence(next: RecurrenceFreq) {
+    // Benutzerdefiniert ohne Auswahl: mit dem Wochentag des Starts beginnen
+    if (next === "custom" && customDays.length === 0 && startRuleDay !== null) {
+      setCustomDays([startRuleDay]);
+    }
+    setRecurrence(next);
+  }
 
   async function handleSave() {
     if (!family || !title.trim()) return;
@@ -1052,7 +1068,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
               <Repeat className="w-3.5 h-3.5" />
               Wiederholung
             </Label>
-            <Select value={recurrence} onValueChange={(v) => setRecurrence(v as RecurrenceFreq)}>
+            <Select value={recurrence} onValueChange={(v) => changeRecurrence(v as RecurrenceFreq)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
@@ -1094,6 +1110,11 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
                 {customDaysMissing && (
                   <p className="text-xs text-[var(--destructive)]">
                     Mindestens einen Wochentag wählen.
+                  </p>
+                )}
+                {startOffCustomDays && (
+                  <p className="text-xs text-[var(--muted-foreground)]">
+                    Erster Termin am nächsten gewählten Wochentag.
                   </p>
                 )}
               </div>
