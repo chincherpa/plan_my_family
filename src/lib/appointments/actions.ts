@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
 import type { AppointmentWithParticipants } from "@/lib/supabase/types";
 import { startOfDay } from "@/lib/utils";
-import { expandAppointments, occurrenceDateKey, ruleAnchor } from "@/lib/utils/recurrence";
+import { allDayEnd, expandAppointments, occurrenceDateKey, ruleAnchor } from "@/lib/utils/recurrence";
 import { isSchoolHoliday, type HolidayRange } from "@/lib/utils/schoolHolidays";
 
 /** single = this one, following = this and all later ones, series = all */
@@ -337,7 +337,8 @@ export async function moveOccurrence(
   const timed = (day: Date) => {
     const s = new Date(day);
     s.setHours(target.start.getHours(), target.start.getMinutes(), 0, 0);
-    return { start: s, end: new Date(s.getTime() + durationMs) };
+    const e = appt.is_all_day ? allDayEnd(s, target.start, target.end) : new Date(s.getTime() + durationMs);
+    return { start: s, end: e };
   };
 
   const { appointments, schoolHolidays } = useDataStore.getState();

@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { RRule } from "rrule";
 import {
+  allDayEnd,
   buildRecurrenceRule,
   expandAppointments,
   occurrenceDateKey,
@@ -390,5 +391,39 @@ describe("expandAppointments — Serien über Mitternacht", () => {
     });
     const result = expandAppointments([appt], d("2026-11-10 00:00"), d("2026-11-10 23:59"));
     expect(result.map((o) => o.occurrenceStart)).toEqual([d("2026-11-09 22:00"), d("2026-11-10 22:00")]);
+  });
+});
+
+describe("allDayEnd", () => {
+  const p = (n: number) => String(n).padStart(2, "0");
+  const fmt = (x: Date) =>
+    `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())} ${p(x.getHours())}:${p(x.getMinutes())}:${p(x.getSeconds())}`;
+  const oneDay = [d("2026-06-01 00:00"), new Date(2026, 5, 1, 23, 59, 59)] as const;
+
+  it("endet am Tag der Zeitumstellung im März (23 Stunden) am selben Tag", () => {
+    expect(fmt(allDayEnd(d("2027-03-28 00:00"), ...oneDay))).toBe("2027-03-28 23:59:59");
+  });
+
+  it("endet am Tag der Zeitumstellung im Oktober (25 Stunden) am selben Tag", () => {
+    expect(fmt(allDayEnd(d("2026-10-25 00:00"), ...oneDay))).toBe("2026-10-25 23:59:59");
+  });
+
+  it("behält die Zahl der Folgetage über die Umstellung", () => {
+    const twoDays = [d("2026-06-01 00:00"), new Date(2026, 5, 2, 23, 59, 59)] as const;
+    expect(fmt(allDayEnd(d("2027-03-28 00:00"), ...twoDays))).toBe("2027-03-29 23:59:59");
+  });
+
+  it("lässt eine ganztägige Sonntagsserie am Umstellungstag am selben Tag enden", () => {
+    const start = d("2027-03-07 00:00");
+    const series = appointment({
+      start: "2027-03-07 00:00",
+      end: "2027-03-07 23:59",
+      is_all_day: true,
+      recurrence_rule: buildRecurrenceRule({ freq: "weekly", start, end: { mode: "none" } }),
+    });
+    const occs = expandAppointments([series], d("2027-03-28 00:00"), d("2027-03-28 23:00"));
+    expect(occs).toHaveLength(1);
+    expect(fmt(occs[0].occurrenceStart)).toBe("2027-03-28 00:00:00");
+    expect(fmt(occs[0].occurrenceEnd)).toBe("2027-03-28 23:59:59");
   });
 });

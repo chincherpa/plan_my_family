@@ -1,6 +1,6 @@
 import { RRule } from "rrule";
 import type { AppointmentWithParticipants } from "@/lib/supabase/types";
-import { addMinutes, localDateStr } from "@/lib/utils";
+import { addMinutes, localDateStr, startOfDay } from "@/lib/utils";
 import { occurrencesSkippingHolidays, type HolidayRange } from "@/lib/utils/schoolHolidays";
 
 /**
@@ -10,6 +10,17 @@ import { occurrencesSkippingHolidays, type HolidayRange } from "@/lib/utils/scho
  */
 export function occurrenceDateKey(date: Date): string {
   return localDateStr(date);
+}
+
+/**
+ * Ende eines ganztägigen Termins: 23:59:59 am Starttag + Anzahl Folgetage.
+ * Die Zahl der Folgetage kommt aus dem ursprünglichen Termin. Nicht über die
+ * Dauer in Millisekunden rechnen: Am Tag der Zeitumstellung hat der Tag
+ * 23 bzw. 25 Stunden, das Ende fiele sonst auf den Folgetag oder davor.
+ */
+export function allDayEnd(start: Date, origStart: Date, origEnd: Date): Date {
+  const days = Math.round((startOfDay(origEnd).getTime() - startOfDay(origStart).getTime()) / 86_400_000);
+  return new Date(start.getFullYear(), start.getMonth(), start.getDate() + days, 23, 59, 59, 0);
 }
 
 export interface AppointmentOccurrence {
@@ -80,7 +91,9 @@ export function expandAppointments(
           const occStart = new Date(occDate);
           // Preserve original time if rule doesn't include time
           occStart.setHours(start.getHours(), start.getMinutes(), 0, 0);
-          const occEnd = new Date(occStart.getTime() + durationMs);
+          const occEnd = appt.is_all_day
+            ? allDayEnd(occStart, start, end)
+            : new Date(occStart.getTime() + durationMs);
 
           // Occurrence replaced or deleted via exception row?
           if (exceptedDates.has(occurrenceDateKey(occStart))) continue;

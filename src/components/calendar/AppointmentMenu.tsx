@@ -15,7 +15,7 @@ import {
   type EditScope,
   type UndoFn,
 } from "@/lib/appointments/actions";
-import type { AppointmentOccurrence } from "@/lib/utils/recurrence";
+import { allDayEnd, type AppointmentOccurrence } from "@/lib/utils/recurrence";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -343,7 +343,7 @@ function MoveDialog({
   const start = allDay ? new Date(`${date}T00:00:00`) : new Date(`${date}T${startT}`);
   let end: Date;
   if (allDay) {
-    end = new Date(start.getTime() + durationMs);
+    end = allDayEnd(start, occ.occurrenceStart, occ.occurrenceEnd);
   } else {
     end = new Date(`${date}T${endT}`);
     // End before start → ends on the next day (overnight appointment)
