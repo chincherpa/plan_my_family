@@ -82,11 +82,20 @@ describe("checkExtraction", () => {
     expect(result.invalid.map((p) => p.field)).toEqual(["date", "start_time"]);
   });
 
-  it("lehnt ein Ende vor dem Beginn ab", () => {
-    const result = checkExtraction({ ...base, end_time: "14:00" });
+  it("lehnt ein Ende gleich dem Beginn ab", () => {
+    const result = checkExtraction({ ...base, end_time: "15:00" });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.invalid[0].field).toBe("end_time");
+  });
+
+  it("legt ein Ende vor dem Beginn auf den Folgetag", () => {
+    const result = checkExtraction({ ...base, date: "2026-11-14", start_time: "22:00", end_time: "01:00" });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    // 14.11. 22:00 bis 15.11. 01:00 Ortszeit (MEZ, UTC+1)
+    expect(result.appointment.start.toISOString()).toBe("2026-11-14T21:00:00.000Z");
+    expect(result.appointment.end.toISOString()).toBe("2026-11-15T00:00:00.000Z");
   });
 
   it("braucht bei ganztägigen Terminen keine Uhrzeit", () => {

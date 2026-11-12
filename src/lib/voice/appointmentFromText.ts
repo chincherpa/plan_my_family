@@ -176,12 +176,18 @@ export function checkExtraction(raw: Extraction): CheckResult {
   } else {
     start = zonedToUtc(date!, startTime!);
     end = endTime ? zonedToUtc(date!, endTime) : new Date(start.getTime() + DEFAULT_DURATION_MIN * 60_000);
-    if (end <= start) {
+    if (endTime === startTime) {
       return {
         ok: false,
         missing: [],
         invalid: [{ field: "end_time", message: `Ende ${endTime} liegt nicht nach dem Beginn ${startTime}.` }],
       };
+    }
+    if (endTime && end <= start) {
+      // Ende vor dem Beginn → über Mitternacht, endet am Folgetag („22 bis 1 Uhr“).
+      const [y, m, d] = date!.split("-").map(Number);
+      const nextDay = new Date(Date.UTC(y, m - 1, d + 1)).toISOString().slice(0, 10);
+      end = zonedToUtc(nextDay, endTime);
     }
   }
 
