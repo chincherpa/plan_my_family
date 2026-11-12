@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Keyboard, RotateCcw } from "lucide-react";
+import Link from "next/link";
+import { ChevronLeft, RotateCcw } from "lucide-react";
 import { useDataStore } from "@/lib/store/dataStore";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -107,25 +108,20 @@ export default function ShortcutSettings() {
   }
 
   return (
-    <div
-      id="shortcuts"
-      className="scroll-mt-4 p-4 rounded-xl border border-[var(--border)] bg-[var(--card)] space-y-3"
-    >
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-[var(--primary)]/10 flex items-center justify-center shrink-0">
-          <Keyboard className="w-5 h-5 text-[var(--primary)]" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="font-medium">Tastatur-Shortcuts</p>
-          <p className="text-sm text-[var(--muted-foreground)]">
-            Gilt für alle Familienmitglieder · <Kbd combo={keymap.showHelp ?? "?"} className="align-middle" /> zeigt
-            die Übersicht
-          </p>
-        </div>
+    <div className="h-full overflow-y-auto">
+    <div className="max-w-2xl mx-auto px-3 py-5 sm:p-6 space-y-4">
+      <div className="flex items-center gap-2">
+        <Link href="/settings">
+          <Button variant="ghost" size="icon">
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+        </Link>
+        <h1 className="text-3xl font-bold tracking-tight">Tastatur-Shortcuts</h1>
         {hasOverrides && (
           <Button
             variant="ghost"
             size="sm"
+            className="ml-auto"
             disabled={!family}
             onClick={() => {
               setNotice(null);
@@ -137,8 +133,13 @@ export default function ShortcutSettings() {
         )}
       </div>
 
+      <p className="text-sm text-[var(--muted-foreground)]">
+        Gilt für alle Familienmitglieder · <Kbd combo={keymap.showHelp ?? "?"} className="align-middle" /> zeigt die
+        Übersicht
+      </p>
+
       {SHORTCUT_GROUPS.map((group) => (
-        <section key={group} className="sm:pl-13">
+        <section key={group}>
           <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
             {group}
           </h3>
@@ -194,13 +195,14 @@ export default function ShortcutSettings() {
       ))}
 
       {recording && (
-        <p className="text-xs text-[var(--muted-foreground)] sm:pl-13">
+        <p className="text-xs text-[var(--muted-foreground)]">
           <Kbd combo="Escape" className="align-middle" /> bricht ab ·{" "}
           <Kbd combo="Backspace" className="align-middle" /> deaktiviert den Shortcut
         </p>
       )}
-      {notice && <p className="text-sm text-[var(--muted-foreground)] sm:pl-13">{notice}</p>}
-      {error && <p className="text-sm text-[var(--destructive)] sm:pl-13">{error}</p>}
+      {notice && <p className="text-sm text-[var(--muted-foreground)]">{notice}</p>}
+      {error && <p className="text-sm text-[var(--destructive)]">{error}</p>}
+    </div>
     </div>
   );
 }

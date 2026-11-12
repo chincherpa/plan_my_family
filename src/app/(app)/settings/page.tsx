@@ -1,9 +1,8 @@
 import Link from "next/link";
-import { Users, Car, UtensilsCrossed, FileUp, ArrowRight, TreePalm } from "lucide-react";
+import { Users, Car, UtensilsCrossed, FileUp, ArrowRight, TreePalm, Keyboard } from "lucide-react";
 import CalendarDisplaySettings from "@/components/settings/CalendarDisplaySettings";
 import ThemeSettings from "@/components/settings/ThemeSettings";
 import MealWeekdaySettings from "@/components/settings/MealWeekdaySettings";
-import ShortcutSettings from "@/components/settings/ShortcutSettings";
 
 export default function SettingsPage() {
   return (
@@ -31,7 +30,21 @@ export default function SettingsPage() {
 
       <CalendarDisplaySettings />
 
-      <ShortcutSettings />
+      <Link
+        href="/settings/shortcuts"
+        className="flex items-center justify-between p-4 rounded-xl border border-[var(--border)] bg-[var(--card)] hover:bg-[var(--accent)] transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-[var(--primary)]/10 flex items-center justify-center">
+            <Keyboard className="w-5 h-5 text-[var(--primary)]" />
+          </div>
+          <div>
+            <p className="font-medium">Tastatur-Shortcuts</p>
+            <p className="text-sm text-[var(--muted-foreground)]">Tasten für alle Familienmitglieder anpassen</p>
+          </div>
+        </div>
+        <ArrowRight className="w-4 h-4 text-[var(--muted-foreground)]" />
+      </Link>
 
       <Link
         href="/settings/vehicles"
