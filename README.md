@@ -83,6 +83,21 @@ anlegen, bearbeiten, löschen; Kategorien (Icon, Farbe) verwalten – Umbenennen
 Gerichte mit; Gerichte auswählen und als PDF-Rezeptkärtchen exportieren (A4 quer, 4 Karten à
 120×90 mm, Layout identisch zur Rezepte-App, `src/lib/recipes/pdf.ts`).
 
+## Deployment
+
+Die App läuft auf **Vercel**.
+Die Umgebungsvariablen stehen im Vercel-Projekt unter **Settings → Environment Variables**
+(Vorlage: `.env.example`):
+
+| Variable | Wofür |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase (werden in den Build eingebettet) |
+| `FAMILY_LOGIN_EMAIL` | gemeinsames Familien-Login (nur Server) |
+| `RECIPES_NEXT_PUBLIC_SUPABASE_URL`, `RECIPES_NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY` | Rezepte-App (nur Server) |
+| `ANTHROPIC_API_KEY` | Termin per Sprache, `docs/termin-per-sprache.md` (nur Server) |
+
+Nach dem Ändern einer Variable neu deployen (Deployments → Redeploy), sonst greift sie nicht.
+
 ## Prüfen
 
 ```bash

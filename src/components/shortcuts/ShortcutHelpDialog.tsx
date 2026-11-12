@@ -49,7 +49,7 @@ export default function ShortcutHelpDialog() {
         </div>
 
         <Link
-          href="/settings#shortcuts"
+          href="/settings/shortcuts"
           onClick={() => setHelpOpen(false)}
           className="text-sm font-medium text-[var(--primary)] hover:underline"
         >

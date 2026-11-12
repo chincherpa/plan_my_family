@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import ThemeToggle, { toggleTheme } from "@/components/ThemeToggle";
 import TodoSheet from "@/components/todos/TodoSheet";
 import ShortcutHelpDialog from "@/components/shortcuts/ShortcutHelpDialog";
+import VoiceAppointment from "@/components/voice/VoiceAppointment";
 import { useKeymap, useShortcut, useShortcutListener } from "@/lib/shortcuts/useShortcuts";
 import { withShortcutHint, type ShortcutActionId } from "@/lib/shortcuts/keymap";
 import { useShortcutStore } from "@/lib/store/shortcutStore";
@@ -331,6 +332,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <ThemeToggle />
       <TodoSheet />
       <ShortcutHelpDialog />
+      <VoiceAppointment />
     </div>
   );
 }

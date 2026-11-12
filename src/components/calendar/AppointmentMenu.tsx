@@ -2,7 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { ArrowRightLeft, ChevronRight, Copy, MoveRight, Pencil, Trash2 } from "lucide-react";
+import { ArrowRightLeft, ChevronRight, Copy, MoveRight, Pencil, Trash2, Users } from "lucide-react";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useCalendarStore } from "@/lib/store/calendarStore";
 import {
@@ -15,7 +15,7 @@ import {
   type EditScope,
   type UndoFn,
 } from "@/lib/appointments/actions";
-import type { AppointmentOccurrence } from "@/lib/utils/recurrence";
+import { allDayEnd, type AppointmentOccurrence } from "@/lib/utils/recurrence";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -31,7 +31,11 @@ export function useAppointmentMenu(): MenuHandler | undefined {
   return useContext(AppointmentMenuContext) ?? undefined;
 }
 
-type PendingAction = { kind: "delete" } | { kind: "move" } | { kind: "owner"; ownerId: string };
+/** Select value in the move dialog: hand over to the whole family */
+const ALL_FAMILY = "all-family";
+
+/** ownerId null = hand over to the whole family */
+type PendingAction = { kind: "delete" } | { kind: "move" } | { kind: "owner"; ownerId: string | null };
 
 interface Toast {
   message: string;
@@ -53,6 +57,8 @@ const contentClass =
  */
 export function AppointmentMenuProvider({ children }: { children: React.ReactNode }) {
   const members = useDataStore((s) => s.members);
+  const appointments = useDataStore((s) => s.appointments);
+  const schoolHolidays = useDataStore((s) => s.schoolHolidays);
   const openForm = useCalendarStore((s) => s.openForm);
 
   const [menu, setMenu] = useState<{ occ: AppointmentOccurrence; x: number; y: number } | null>(null);
@@ -99,11 +105,23 @@ export function AppointmentMenuProvider({ children }: { children: React.ReactNod
       const result = await moveOccurrence(
         appt,
         occ.occurrenceStart,
-        { start: occ.occurrenceStart, end: occ.occurrenceEnd, ownerId: action.ownerId },
+        {
+          start: occ.occurrenceStart,
+          end: occ.occurrenceEnd,
+          ownerId: action.ownerId,
+          allFamily: action.ownerId === null,
+        },
         scope
       );
-      const name = members.find((m) => m.id === action.ownerId)?.name ?? "Mitglied";
-      report(result, `„${appt.title}“ an ${name} übergeben`);
+      const name =
+        action.ownerId === null
+          ? "die ganze Familie"
+          : members.find((m) => m.id === action.ownerId)?.name ?? "Mitglied";
+      // moveOccurrence meldet „verschoben“; hier geht es ums Übergeben
+      report(
+        result.ok ? result : { ok: false, error: "Termin konnte nicht übergeben werden." },
+        `„${appt.title}“ an ${name} übergeben`
+      );
       return;
     }
     const { result, undo } = await deleteOccurrence(appt, occ.occurrenceStart, scope);
@@ -160,7 +178,7 @@ export function AppointmentMenuProvider({ children }: { children: React.ReactNod
                     </DropdownMenu.Item>
                     <DropdownMenu.Sub>
                       <DropdownMenu.SubTrigger className={itemClass}>
-                        <ArrowRightLeft className="h-4 w-4" /> An Mitglied
+                        <ArrowRightLeft className="h-4 w-4" /> Übergeben an
                         <ChevronRight className="ml-auto h-4 w-4" />
                       </DropdownMenu.SubTrigger>
                       <DropdownMenu.Portal>
@@ -179,6 +197,14 @@ export function AppointmentMenuProvider({ children }: { children: React.ReactNod
                               {m.name}
                             </DropdownMenu.Item>
                           ))}
+                          <DropdownMenu.Item
+                            className={itemClass}
+                            disabled={appt.is_all_family}
+                            onSelect={() => start(occ, { kind: "owner", ownerId: null })}
+                          >
+                            <Users className="h-3 w-3 shrink-0" />
+                            Ganze Familie
+                          </DropdownMenu.Item>
                         </DropdownMenu.SubContent>
                       </DropdownMenu.Portal>
                     </DropdownMenu.Sub>
@@ -203,7 +229,7 @@ export function AppointmentMenuProvider({ children }: { children: React.ReactNod
       {target && scopeFor && (
         <SeriesScopeDialog
           action={scopeFor}
-          first={isFirstOccurrence(target.appointment, target.occurrenceStart)}
+          first={isFirstOccurrence(target.appointment, target.occurrenceStart, appointments, schoolHolidays)}
           onCancel={() => setScopeFor(null)}
           onChoose={(scope) => {
             const action = scopeFor;
@@ -341,7 +367,7 @@ function MoveDialog({
   const start = allDay ? new Date(`${date}T00:00:00`) : new Date(`${date}T${startT}`);
   let end: Date;
   if (allDay) {
-    end = new Date(start.getTime() + durationMs);
+    end = allDayEnd(start, occ.occurrenceStart, occ.occurrenceEnd);
   } else {
     end = new Date(`${date}T${endT}`);
     // End before start → ends on the next day (overnight appointment)
@@ -355,7 +381,9 @@ function MoveDialog({
     const result = await moveOccurrence(
       appt,
       occ.occurrenceStart,
-      { start, end, ownerId: ownerId || null },
+      ownerId === ALL_FAMILY
+        ? { start, end, ownerId: null, allFamily: true }
+        : { start, end, ownerId: ownerId || null },
       scope
     );
     setSaving(false);
@@ -428,6 +456,7 @@ function MoveDialog({
                 {!ownerOrig && (
                   <SelectItem value="keep">{appt.is_all_family ? "Ganze Familie" : "Unverändert"}</SelectItem>
                 )}
+                {!appt.is_all_family && <SelectItem value={ALL_FAMILY}>Ganze Familie</SelectItem>}
                 {members.map((m) => (
                   <SelectItem key={m.id} value={m.id}>
                     <span className="flex items-center gap-2">

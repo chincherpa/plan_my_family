@@ -156,7 +156,7 @@ export function nextOccurrence(a: Anniversary, today: Date): Date {
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-function daysBetween(from: Date, to: Date): number {
+export function daysBetween(from: Date, to: Date): number {
   // Runden fängt die Stunde bei Sommer-/Winterzeitwechseln ab.
   return Math.round((startOfDay(to).getTime() - startOfDay(from).getTime()) / MS_PER_DAY);
 }
