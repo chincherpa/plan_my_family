@@ -177,5 +177,8 @@ jeder Ansicht) öffnet einen Dialog: sprechen oder tippen → **Los**.
   oder Abwählen endet das Vorlesen.
 
 Spracherkennung läuft im Browser über die Web Speech API (`de-DE`): Chrome, Edge, Safari.
+Die Aufnahme bleibt bei Sprechpausen offen: Dauer-Modus mit automatischem Neustart, wenn der Browser
+von sich aus abbricht, und Ende nach `SILENCE_TIMEOUT_MS` (6 Sekunden Stille,
+`src/lib/voice/useSpeechRecognition.ts`) oder per „Stopp“.
 Firefox hat sie nicht — dort fehlt der „Sprechen“-Knopf, das Textfeld funktioniert unverändert
 (auch mit der Diktierfunktion der Tastatur auf Handy und Tablet).
