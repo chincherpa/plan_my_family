@@ -2,7 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { ArrowRightLeft, ChevronRight, Copy, MoveRight, Pencil, Trash2 } from "lucide-react";
+import { ArrowRightLeft, ChevronRight, Copy, MoveRight, Pencil, Trash2, Users } from "lucide-react";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useCalendarStore } from "@/lib/store/calendarStore";
 import {
@@ -34,7 +34,8 @@ export function useAppointmentMenu(): MenuHandler | undefined {
 /** Select value in the move dialog: hand over to the whole family */
 const ALL_FAMILY = "all-family";
 
-type PendingAction = { kind: "delete" } | { kind: "move" } | { kind: "owner"; ownerId: string };
+/** ownerId null = hand over to the whole family */
+type PendingAction = { kind: "delete" } | { kind: "move" } | { kind: "owner"; ownerId: string | null };
 
 interface Toast {
   message: string;
@@ -104,10 +105,18 @@ export function AppointmentMenuProvider({ children }: { children: React.ReactNod
       const result = await moveOccurrence(
         appt,
         occ.occurrenceStart,
-        { start: occ.occurrenceStart, end: occ.occurrenceEnd, ownerId: action.ownerId },
+        {
+          start: occ.occurrenceStart,
+          end: occ.occurrenceEnd,
+          ownerId: action.ownerId,
+          allFamily: action.ownerId === null,
+        },
         scope
       );
-      const name = members.find((m) => m.id === action.ownerId)?.name ?? "Mitglied";
+      const name =
+        action.ownerId === null
+          ? "die ganze Familie"
+          : members.find((m) => m.id === action.ownerId)?.name ?? "Mitglied";
       // moveOccurrence meldet „verschoben“; hier geht es ums Übergeben
       report(
         result.ok ? result : { ok: false, error: "Termin konnte nicht übergeben werden." },
@@ -169,7 +178,7 @@ export function AppointmentMenuProvider({ children }: { children: React.ReactNod
                     </DropdownMenu.Item>
                     <DropdownMenu.Sub>
                       <DropdownMenu.SubTrigger className={itemClass}>
-                        <ArrowRightLeft className="h-4 w-4" /> An Mitglied
+                        <ArrowRightLeft className="h-4 w-4" /> Übergeben an
                         <ChevronRight className="ml-auto h-4 w-4" />
                       </DropdownMenu.SubTrigger>
                       <DropdownMenu.Portal>
@@ -188,6 +197,14 @@ export function AppointmentMenuProvider({ children }: { children: React.ReactNod
                               {m.name}
                             </DropdownMenu.Item>
                           ))}
+                          <DropdownMenu.Item
+                            className={itemClass}
+                            disabled={appt.is_all_family}
+                            onSelect={() => start(occ, { kind: "owner", ownerId: null })}
+                          >
+                            <Users className="h-3 w-3 shrink-0" />
+                            Ganze Familie
+                          </DropdownMenu.Item>
                         </DropdownMenu.SubContent>
                       </DropdownMenu.Portal>
                     </DropdownMenu.Sub>
