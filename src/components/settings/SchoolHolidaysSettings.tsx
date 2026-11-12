@@ -40,6 +40,13 @@ export default function SchoolHolidaysSettings() {
 
   const today = localDateStr(new Date());
   const pastCount = schoolHolidays.filter((h) => h.end_date < today).length;
+  // Ferien sind bundeslandabhängig und werden von Hand gepflegt → erinnern, wenn nichts ansteht
+  const inOneYear = useMemo(() => {
+    const d = new Date();
+    d.setFullYear(d.getFullYear() + 1);
+    return localDateStr(d);
+  }, []);
+  const noUpcoming = !schoolHolidays.some((h) => h.end_date >= today && h.start_date <= inOneYear);
   const visible = useMemo(
     () => (showPast ? schoolHolidays : schoolHolidays.filter((h) => h.end_date >= today)),
     [schoolHolidays, showPast, today]
@@ -132,6 +139,13 @@ export default function SchoolHolidaysSettings() {
           Ferien erscheinen im Kalender als ganztägiger Hinweis. Serientermine mit „Findet nicht in
           Schulferien statt“ entfallen an diesen Tagen und zählen dort nicht mit.
         </p>
+
+        {noUpcoming && (
+          <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-200">
+            Für die nächsten 12 Monate sind keine Ferien eingetragen. Ohne sie finden Serien mit
+            „Findet nicht in Schulferien statt“ auch in den Ferien statt.
+          </p>
+        )}
 
         {pastCount > 0 && (
           <div className="flex items-center gap-2">
