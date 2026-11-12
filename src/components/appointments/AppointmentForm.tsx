@@ -19,12 +19,13 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import type { AppointmentWithParticipants } from "@/lib/supabase/types";
-import { hexToRgba, startOfDay } from "@/lib/utils";
+import { hexToRgba } from "@/lib/utils";
 import { buildRecurrenceRule, occurrenceDateKey } from "@/lib/utils/recurrence";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   deleteOccurrence,
   endSeriesBefore,
+  isFirstOccurrence as isFirstVisibleOccurrence,
   occurrencesBefore,
   type EditScope,
 } from "@/lib/appointments/actions";
@@ -335,18 +336,13 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   const [editScope, setEditScope] = useState<EditScope>("single");
 
   // Clicked occurrence is the first of its series → "following" equals "series"
-  const isFirstOccurrence = useMemo(() => {
-    if (!existingAppt?.recurrence_rule || !formOccurrenceStart) return true;
-    try {
-      // Regeln sind auf lokalen Mittag verankert → nach lokalem Tag vergleichen
-      return !RRule.fromString(existingAppt.recurrence_rule).before(
-        startOfDay(formOccurrenceStart),
-        false
-      );
-    } catch {
-      return true;
-    }
-  }, [existingAppt, formOccurrenceStart]);
+  const isFirstOccurrence = useMemo(
+    () =>
+      !existingAppt ||
+      !formOccurrenceStart ||
+      isFirstVisibleOccurrence(existingAppt, formOccurrenceStart, appointments, schoolHolidays),
+    [existingAppt, formOccurrenceStart, appointments, schoolHolidays]
+  );
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -547,7 +543,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
           recurrenceCount === initialEnd.count
         ) {
           // Count untouched → keep the total, minus what stays in the old series
-          const kept = occurrencesBefore(existingAppt, formOccurrenceStart);
+          const kept = occurrencesBefore(existingAppt, formOccurrenceStart, schoolHolidays);
           count = Math.max(recurrenceCount - kept, 1);
         }
         const { data, error } = await supabase.rpc("save_appointment_with_participants", {

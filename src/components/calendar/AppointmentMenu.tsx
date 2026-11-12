@@ -53,6 +53,8 @@ const contentClass =
  */
 export function AppointmentMenuProvider({ children }: { children: React.ReactNode }) {
   const members = useDataStore((s) => s.members);
+  const appointments = useDataStore((s) => s.appointments);
+  const schoolHolidays = useDataStore((s) => s.schoolHolidays);
   const openForm = useCalendarStore((s) => s.openForm);
 
   const [menu, setMenu] = useState<{ occ: AppointmentOccurrence; x: number; y: number } | null>(null);
@@ -203,7 +205,7 @@ export function AppointmentMenuProvider({ children }: { children: React.ReactNod
       {target && scopeFor && (
         <SeriesScopeDialog
           action={scopeFor}
-          first={isFirstOccurrence(target.appointment, target.occurrenceStart)}
+          first={isFirstOccurrence(target.appointment, target.occurrenceStart, appointments, schoolHolidays)}
           onCancel={() => setScopeFor(null)}
           onChoose={(scope) => {
             const action = scopeFor;

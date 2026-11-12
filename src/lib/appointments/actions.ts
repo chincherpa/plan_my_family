@@ -3,8 +3,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
 import type { AppointmentWithParticipants } from "@/lib/supabase/types";
 import { startOfDay } from "@/lib/utils";
-import { occurrenceDateKey, ruleAnchor } from "@/lib/utils/recurrence";
-import { isSchoolHoliday } from "@/lib/utils/schoolHolidays";
+import { expandAppointments, occurrenceDateKey, ruleAnchor } from "@/lib/utils/recurrence";
+import { isSchoolHoliday, type HolidayRange } from "@/lib/utils/schoolHolidays";
 
 /** single = this one, following = this and all later ones, series = all */
 export type EditScope = "single" | "following" | "series";
@@ -68,15 +68,32 @@ export function isSeriesOccurrence(appt: AppointmentWithParticipants): boolean {
   return !!appt.recurrence_rule;
 }
 
-/** Clicked occurrence is the first of its series → "following" equals "series". */
-export function isFirstOccurrence(appt: AppointmentWithParticipants, occStart: Date): boolean {
+/**
+ * Clicked occurrence is the first *visible* one of its series → "following"
+ * equals "series". Occurrences skipped for school holidays or deleted via a
+ * marker do not count; moved occurrences count on their new date.
+ */
+export function isFirstOccurrence(
+  appt: AppointmentWithParticipants,
+  occStart: Date,
+  all: AppointmentWithParticipants[],
+  holidays: HolidayRange[]
+): boolean {
   if (!appt.recurrence_rule) return true;
   try {
-    // Rules are anchored at local noon → compare by local day
-    return !RRule.fromString(appt.recurrence_rule).before(startOfDay(occStart), false);
+    RRule.fromString(appt.recurrence_rule);
   } catch {
     return true;
   }
+  const exceptions = all.filter((a) => a.recurrence_parent_id === appt.id);
+  const cutKey = occurrenceDateKey(occStart);
+  // Rules are anchored at local noon → compare by local day
+  return !expandAppointments(
+    [appt, ...exceptions],
+    startOfDay(new Date(appt.start_time)),
+    startOfDay(occStart),
+    holidays
+  ).some((occ) => occurrenceDateKey(occ.occurrenceStart) < cutKey);
 }
 
 /**
@@ -125,17 +142,23 @@ export async function endSeriesBefore(
  * Occurrences of `parent` before `occStart` that counted towards its COUNT
  * (occurrences skipped for school holidays did not count).
  */
-export function occurrencesBefore(parent: AppointmentWithParticipants, occStart: Date): number {
-  const { schoolHolidays } = useDataStore.getState();
+export function occurrencesBefore(
+  parent: AppointmentWithParticipants,
+  occStart: Date,
+  holidays: HolidayRange[]
+): number {
   const cutKey = occurrenceDateKey(occStart);
+  // Without COUNT: holidays stretch the series, the original COUNT would end
+  // the enumeration too early. `between` is bounded by occStart.
+  const rule = RRule.fromString(parent.recurrence_rule!);
+  const open = new RRule({ ...rule.origOptions, count: null });
   // Compare by local date: rrule works in UTC, so across a DST switch the
   // clicked occurrence's rrule date can lie an hour before occStart
-  return RRule.fromString(parent.recurrence_rule!)
+  return open
     .between(startOfDay(new Date(parent.start_time)), occStart, true)
     .map(occurrenceDateKey)
-    .filter(
-      (key) => key < cutKey && !(parent.skip_school_holidays && isSchoolHoliday(key, schoolHolidays))
-    ).length;
+    .filter((key) => key < cutKey && !(parent.skip_school_holidays && isSchoolHoliday(key, holidays)))
+    .length;
 }
 
 /**
@@ -207,7 +230,12 @@ export async function deleteOccurrence(
   }
 
   // This and all following occurrences → end the series the day before
-  if (series && scope === "following" && occStart && !isFirstOccurrence(appt, occStart)) {
+  if (
+    series &&
+    scope === "following" &&
+    occStart &&
+    !isFirstOccurrence(appt, occStart, appointments, useDataStore.getState().schoolHolidays)
+  ) {
     if (!(await endSeriesBefore(supabase, appt, occStart))) {
       return { result: fail("Termine konnten nicht gelöscht werden."), undo: null };
     }
@@ -312,14 +340,15 @@ export async function moveOccurrence(
     return { start: s, end: new Date(s.getTime() + durationMs) };
   };
 
-  if (scope === "following" && !isFirstOccurrence(appt, occStart)) {
+  const { appointments, schoolHolidays } = useDataStore.getState();
+  if (scope === "following" && !isFirstOccurrence(appt, occStart, appointments, schoolHolidays)) {
     const rule = RRule.fromString(appt.recurrence_rule!);
     const { count } = rule.origOptions;
     const { start, end } = timed(occStart);
     const newRule = new RRule({
       ...rule.origOptions,
       dtstart: ruleAnchor(start),
-      ...(count && { count: Math.max(count - occurrencesBefore(appt, occStart), 1) }),
+      ...(count && { count: Math.max(count - occurrencesBefore(appt, occStart, schoolHolidays), 1) }),
     }).toString();
     const saved = await saveViaRpc(
       supabase,
