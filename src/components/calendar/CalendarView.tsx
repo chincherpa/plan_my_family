@@ -15,7 +15,7 @@ import { expandAppointments, type AppointmentOccurrence } from "@/lib/utils/recu
 import { checkGuardianWarnings } from "@/lib/utils/guardianCheck";
 import { findVehicleConflicts } from "@/lib/utils/conflicts";
 import { formatDate, formatTime, getISOWeek, localDateStr, readableTextColor, startOfDay } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { moveOccurrence } from "@/lib/appointments/actions";
 import { Button } from "@/components/ui/button";
 import { useKeymap, useShortcut } from "@/lib/shortcuts/useShortcuts";
 import { withShortcutHint } from "@/lib/shortcuts/keymap";
@@ -94,8 +94,7 @@ function parseDayParam(value: string | undefined): Date | null {
 
 export default function CalendarView({ initialDay }: { initialDay?: string } = {}) {
   const { isFormOpen, openForm, closeForm, startHour, endHour } = useCalendarStore();
-  const { members, vehicles, appointments, meals, schoolHolidays, isLoading, updateAppointment } =
-    useDataStore();
+  const { members, vehicles, appointments, meals, schoolHolidays, isLoading } = useDataStore();
 
   const [moveError, setMoveError] = useState<string | null>(null);
   const now = useNow();
@@ -271,30 +270,23 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
     if (!occ) return;
     const overColumn = (event.over?.data.current as { columnId?: string } | undefined)?.columnId;
     const shiftMin = snapShiftMin(event.delta.y, hourHeight);
-    const newOwnerId =
-      !overColumn || overColumn === ALL_COLUMN_ID ? occ.appointment.owner_id : overColumn;
-    if (shiftMin === 0 && newOwnerId === occ.appointment.owner_id) return;
+    // "Alle" keeps the current owner (withOwner has no way back to all family)
+    const ownerId = overColumn && overColumn !== ALL_COLUMN_ID ? overColumn : null;
+    const ownerUnchanged =
+      ownerId === null || (ownerId === occ.appointment.owner_id && !occ.appointment.is_all_family);
+    if (shiftMin === 0 && ownerUnchanged) return;
 
     const newStart = new Date(occ.occurrenceStart.getTime() + shiftMin * 60000);
     const newEnd = new Date(occ.occurrenceEnd.getTime() + shiftMin * 60000);
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("appointments")
-      .update({
-        start_time: newStart.toISOString(),
-        end_time: newEnd.toISOString(),
-        owner_id: newOwnerId,
-      })
-      .eq("id", occ.appointment.id)
-      .select("*, participants:appointment_participants(*)")
-      .single();
-    if (error || !data) {
-      console.error("Termin konnte nicht verschoben werden.", error);
-      setMoveError("Termin konnte nicht verschoben werden.");
-      return;
-    }
-    setMoveError(null);
-    updateAppointment(occ.appointment.id, data);
+    // Same path as the context menu: owner change also ends "all family"
+    // and drops the new owner from the participants
+    const result = await moveOccurrence(
+      occ.appointment,
+      occ.occurrenceStart,
+      { start: newStart, end: newEnd, ownerId },
+      "single"
+    );
+    setMoveError(result.ok ? null : result.error);
   }
 
   if (isLoading) {

@@ -274,8 +274,8 @@ export interface MoveTarget {
 }
 
 /** Owner change: the new owner is no extra participant, "all family" ends. */
-function withOwner(appt: AppointmentWithParticipants, ownerId: string | null) {
-  if (!ownerId || ownerId === appt.owner_id) {
+export function withOwner(appt: AppointmentWithParticipants, ownerId: string | null) {
+  if (!ownerId || (ownerId === appt.owner_id && !appt.is_all_family)) {
     return { owner: { owner_id: appt.owner_id, is_all_family: appt.is_all_family }, participants: participantData(appt) };
   }
   return {

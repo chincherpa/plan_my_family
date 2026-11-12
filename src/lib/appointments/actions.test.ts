@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { appointment, d } from "@/lib/utils/__fixtures__/calendar";
+import { appointment, d, member, participant } from "@/lib/utils/__fixtures__/calendar";
 import { buildRecurrenceRule, type RecurrenceEndSpec } from "@/lib/utils/recurrence";
 import type { HolidayRange } from "@/lib/utils/schoolHolidays";
-import { isFirstOccurrence, occurrencesBefore } from "./actions";
+import { isFirstOccurrence, occurrencesBefore, withOwner } from "./actions";
 
 /** Weekly series starting at `start` (local time, "YYYY-MM-DD HH:mm"), one hour long. */
 function weekly(start: string, end: RecurrenceEndSpec = { mode: "none" }, skipHolidays = false) {
@@ -72,5 +72,35 @@ describe("isFirstOccurrence", () => {
   it("gilt für Einzeltermine immer", () => {
     const single = appointment();
     expect(isFirstOccurrence(single, d("2026-06-01 09:00"), [single], [])).toBe(true);
+  });
+});
+
+describe("withOwner", () => {
+  const x = member({ name: "X" });
+  const y = member({ name: "Y" });
+
+  it("macht aus einem Familientermin einen Termin des neuen Besitzers", () => {
+    const appt = appointment({ is_all_family: true });
+    expect(withOwner(appt, x.id).owner).toEqual({ owner_id: x.id, is_all_family: false });
+  });
+
+  it("beendet „Alle“ auch, wenn der Besitzer schon eingetragen war", () => {
+    const appt = appointment({ owner_id: x.id, is_all_family: true });
+    expect(withOwner(appt, x.id).owner).toEqual({ owner_id: x.id, is_all_family: false });
+  });
+
+  it("nimmt den neuen Besitzer aus den Teilnehmern", () => {
+    const appt = appointment({ owner_id: y.id, participants: [participant(x.id), participant(y.id, true)] });
+    const { owner, participants } = withOwner(appt, x.id);
+    expect(owner.owner_id).toBe(x.id);
+    expect(participants.map((p) => p.member_id)).toEqual([y.id]);
+  });
+
+  it("lässt ohne neuen Besitzer alles unverändert", () => {
+    const appt = appointment({ owner_id: y.id, participants: [participant(x.id)] });
+    expect(withOwner(appt, null)).toEqual({
+      owner: { owner_id: y.id, is_all_family: false },
+      participants: [{ member_id: x.id, is_supervisor: false }],
+    });
   });
 });
