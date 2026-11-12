@@ -41,7 +41,7 @@ die Spracherkennung auf echten Geräten, der Aufruf der Anthropic-API und `pnpm 
 
 ---
 
-## 1. Sprachfrage übersieht laufende und mehrtägige Termine (mittel)
+## 1. Sprachfrage übersieht laufende und mehrtägige Termine (mittel) — ✅ erledigt
 
 `src/lib/voice/queryAppointments.ts:109` lässt Termine mit Uhrzeit nur durch, wenn sie
 im gefragten Zeitraum **beginnen** (`occurrenceStart >= rangeStart`). Ganztägige Termine
@@ -60,7 +60,7 @@ Grenze gilt. Die Antwort hängt also von der Formulierung ab.
 **Empfehlung:** Für alle Termine `occurrenceEnd > rangeStart` prüfen. Soll „der nächste
 Termin" laufende Termine bewusst auslassen, dann nur bei `limit === 1` ohne Zeitraum.
 
-## 2. „Dieser & folgende" bei Anzahl plus Ferienpause (mittel)
+## 2. „Dieser & folgende" bei Anzahl plus Ferienpause (mittel) — ✅ erledigt
 
 `occurrencesBefore` (`src/lib/appointments/actions.ts:133`) zählt, wie viele Termine in
 der alten Serie bleiben, und fragt dazu `rule.between(...)` mit der Originalregel. Die
@@ -79,7 +79,7 @@ Formular (`AppointmentForm.tsx:550`).
 **Empfehlung:** Wie in `occurrencesSkippingHolidays` die Regel ohne `COUNT` durchlaufen
 (`new RRule({ ...rule.origOptions, count: null })`) und bis zum angeklickten Tag zählen.
 
-## 3. Sprachdialog schließen, während die Auswertung läuft (mittel)
+## 3. Sprachdialog schließen, während die Auswertung läuft (mittel) — ✅ erledigt
 
 `analyze` in `src/components/voice/VoiceAppointment.tsx:123` wartet auf die Antwort der
 Route und setzt danach Vorschau oder Antwort, ohne zu prüfen, ob der Dialog noch offen
@@ -96,7 +96,7 @@ Folgen, wenn man während „Los" mit Esc oder × schließt:
 Schließen abbrechen; Ergebnisse überholter Anfragen verwerfen. Das Muster gibt es schon
 in `AppShell` (`loadVersion`).
 
-## 4. Erster sichtbarer Termin gilt nicht als erster (niedrig)
+## 4. Erster sichtbarer Termin gilt nicht als erster (niedrig) — ✅ erledigt
 
 `isFirstOccurrence` (`actions.ts:76`, ebenso `AppointmentForm.tsx:338`) fragt nur die
 Regel. Fällt der Serienbeginn in die Ferien oder wurde der erste Termin gelöscht, ist
@@ -110,7 +110,7 @@ sich aber über die Oberfläche auch nicht mehr löschen.
 **Empfehlung:** Nach dem Teilen prüfen, ob die gekürzte Serie noch Termine hat, und sie
 sonst löschen. Alternativ „erster" über die tatsächlich angezeigten Vorkommen bestimmen.
 
-## 5. Drag & Drop nutzt `moveOccurrence` nicht (niedrig)
+## 5. Drag & Drop nutzt `moveOccurrence` nicht (niedrig) — ✅ erledigt
 
 `src/lib/appointments/actions.ts` enthält jetzt die eine Stelle für Verschieben und
 Übergeben. `withOwner` (Zeile 249) setzt beim Besitzerwechsel `is_all_family = false`
@@ -124,7 +124,7 @@ zieht, behält `is_all_family = true`.
 **Empfehlung:** `handleDragEnd` auf `moveOccurrence` umstellen. Das behebt den alten
 Punkt und entfernt die zweite Implementierung.
 
-## 6. Serie teilen: Ausnahmen gehen bei einem Fehler verloren (niedrig)
+## 6. Serie teilen: Ausnahmen gehen bei einem Fehler verloren (niedrig) — ⏳ offen
 
 `moveOccurrence` mit „Dieser & folgende" (`actions.ts:315–341`) legt die neue Serie an
 und ruft dann `endSeriesBefore`. Das löscht zuerst die späteren Ausnahmezeilen
@@ -140,7 +140,10 @@ Ausnahmen einer ganzen Serie prüft den Fehler nicht; der Fremdschlüssel mit
 **Empfehlung:** Eine Postgres-Funktion `split_series(...)`, die Anlegen, Löschen und
 Kürzen in einer Transaktion erledigt.
 
-## 7. API-Route: Fehlerpfade und Kosten (niedrig)
+## 7. API-Route: Fehlerpfade und Kosten (niedrig) — ✅ erledigt (Code)
+
+> Offen außerhalb des Codes: Ausgabenlimit im Anthropic-Konto setzen; einmal gegen die
+> echte API testen (`max_tokens` jetzt 4000).
 
 `src/app/api/appointments/from-text/route.ts`:
 
@@ -161,7 +164,7 @@ Kürzen in einer Transaktion erledigt.
 ein allgemeines `catch` mit 502 und klarer Meldung („Texterkennung nicht eingerichtet").
 `max_tokens` auf etwa 1000–2000 senken.
 
-## 8. Ganztägigen Termin auf den Tag der Zeitumstellung verschieben (niedrig)
+## 8. Ganztägigen Termin auf den Tag der Zeitumstellung verschieben (niedrig) — ✅ erledigt
 
 Der Verschieben-Dialog (`src/components/calendar/AppointmentMenu.tsx:344`) und `timed`
 (`actions.ts:312`) rechnen das Ende als `start + Dauer in Millisekunden`. Ein ganztägiger
@@ -174,7 +177,10 @@ an zwei Tagen. `expandAppointments` rechnet für ganztägige Serien genauso
 **Empfehlung:** Für ganztägige Termine das Ende über Kalendertage setzen (gleicher Tag
 bzw. Starttag + n Tage, 23:59:59 Ortszeit), nicht über Millisekunden.
 
-## 9. Keine Tests für `actions.ts` und die Route (niedrig)
+## 9. Keine Tests für `actions.ts` und die Route (niedrig) — ✅ erledigt für `actions.ts`
+
+> `src/lib/appointments/actions.test.ts` deckt `occurrencesBefore`, `isFirstOccurrence`
+> und `withOwner` ab. Für die Route gibt es weiterhin keinen Test.
 
 Die reine Logik des Sprachassistenten ist gut getestet (`appointmentFromText`,
 `queryAppointments`). `src/lib/appointments/actions.ts` mit 380 Zeilen hat keinen Test,
@@ -188,30 +194,32 @@ bekommen.
 - **Benutzerdefinierte Wochentage:** Liegt das Startdatum nicht auf einem der gewählten
   Tage, erscheint am Startdatum kein Termin (reproduziert: Start Mi 11.11., Tage Mo/Fr →
   erster Termin Fr 13.11.). Das Formular sagt das nicht. Ein Hinweis oder das
-  automatische Vorbelegen des Start-Wochentags würde reichen.
+  automatische Vorbelegen des Start-Wochentags würde reichen. — ✅ erledigt (beides)
 - **Termin über Mitternacht per Sprache:** „Party von 22 bis 1 Uhr" wird mit „Ende
   liegt nicht nach dem Beginn" abgelehnt (`src/lib/voice/appointmentFromText.ts:179`).
-  Der Verschieben-Dialog legt das Ende in diesem Fall auf den Folgetag.
+  Der Verschieben-Dialog legt das Ende in diesem Fall auf den Folgetag. — ✅ erledigt
 - **Schulferien 2026/27 fehlen:** Migration 019 legt Ferien erst ab Sommer 2027 an.
   Bis dahin überspringt „Findet nicht in Schulferien statt" nichts, solange die Ferien
   des laufenden Schuljahrs nicht von Hand eingetragen sind. Auf der Einstellungsseite
   fehlt ein Hinweis, wenn für die nächsten Monate keine Ferien hinterlegt sind.
+  — ✅ Hinweis erledigt; die Ferien 2026/27 müssen noch von Hand eingetragen werden.
 - **Kontextmenü nur per Rechtsklick** (`src/components/calendar/DayTimeline.tsx:394`):
   Safari auf iPhone und iPad löst `contextmenu` nicht aus; auf Android konkurriert das
   lange Drücken mit dem Ziehen (300 ms). Nicht auf Geräten getestet. Verschieben,
   Übergeben und Duplizieren mit Rückgängig gibt es am Touch-Gerät damit vermutlich
-  nicht.
+  nicht. — ⏳ offen (erst auf Geräten prüfen)
 - **Spracherkennung:** `speech.error` bleibt stehen, bis man erneut „Sprechen" drückt,
   auch wenn man inzwischen getippt hat (`VoiceAppointment.tsx:240`). Startet man direkt
   nach „Stopp" neu, kann das `onend` der alten Aufnahme `listening` der neuen
-  zurücksetzen (`src/lib/voice/useSpeechRecognition.ts:82`).
+  zurücksetzen (`src/lib/voice/useSpeechRecognition.ts:82`). — ✅ erledigt
 - **Zeitzonen im Sprachassistenten:** Der Server löst „morgen" in Europe/Berlin auf, der
   Client wertet `from_date`/`to_date` in der Zeitzone des Geräts aus. Für eine Familie
   an einem Ort gleich; gehört zum Zeitzonen-Punkt aus Review 1.
 - **Shortcuts speichern** (`src/components/settings/ShortcutSettings.tsx:42`): Das
   `update` kommt ohne `.select()`. Greift die RLS nicht, meldet Supabase keinen Fehler
   und die Änderung gilt als gespeichert. `families` ist weiterhin nicht per Realtime
-  abonniert, andere Geräte sehen neue Shortcuts erst nach dem Neuladen.
+  abonniert, andere Geräte sehen neue Shortcuts erst nach dem Neuladen. — ✅ erledigt
+  (`.select("id")`; Realtime für `families` weiterhin nicht)
 - **Dialog bleibt offen** (`src/components/ui/dialog.tsx:40`): Jede `DialogContent`
   hängt einen eigenen `pointerdown`-Listener ans Dokument und sucht nach
   `[role="listbox"]`. Solange die Vorschlagsliste im Terminformular sichtbar ist,
@@ -219,7 +227,7 @@ bekommen.
   Rollen-Selektor ist leicht zu übersehen, wenn später eine dauerhaft gerenderte Liste
   dazukommt.
 - **Meldung beim Übergeben:** Schlägt „An Mitglied" fehl, lautet der Fehler „Termin
-  konnte nicht verschoben werden" (`actions.ts:282`).
+  konnte nicht verschoben werden" (`actions.ts:282`). — ✅ erledigt
 
 ---
 
