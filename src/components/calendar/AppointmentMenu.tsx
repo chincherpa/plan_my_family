@@ -31,6 +31,9 @@ export function useAppointmentMenu(): MenuHandler | undefined {
   return useContext(AppointmentMenuContext) ?? undefined;
 }
 
+/** Select value in the move dialog: hand over to the whole family */
+const ALL_FAMILY = "all-family";
+
 type PendingAction = { kind: "delete" } | { kind: "move" } | { kind: "owner"; ownerId: string };
 
 interface Toast {
@@ -361,7 +364,9 @@ function MoveDialog({
     const result = await moveOccurrence(
       appt,
       occ.occurrenceStart,
-      { start, end, ownerId: ownerId || null },
+      ownerId === ALL_FAMILY
+        ? { start, end, ownerId: null, allFamily: true }
+        : { start, end, ownerId: ownerId || null },
       scope
     );
     setSaving(false);
@@ -434,6 +439,7 @@ function MoveDialog({
                 {!ownerOrig && (
                   <SelectItem value="keep">{appt.is_all_family ? "Ganze Familie" : "Unverändert"}</SelectItem>
                 )}
+                {!appt.is_all_family && <SelectItem value={ALL_FAMILY}>Ganze Familie</SelectItem>}
                 {members.map((m) => (
                   <SelectItem key={m.id} value={m.id}>
                     <span className="flex items-center gap-2">

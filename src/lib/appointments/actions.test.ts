@@ -96,6 +96,19 @@ describe("withOwner", () => {
     expect(participants.map((p) => p.member_id)).toEqual([y.id]);
   });
 
+  it("gibt einen Termin an die ganze Familie zurück", () => {
+    const appt = appointment({ owner_id: x.id, participants: [participant(y.id)] });
+    expect(withOwner(appt, null, true)).toEqual({
+      owner: { owner_id: null, is_all_family: true },
+      participants: [{ member_id: y.id, is_supervisor: false }],
+    });
+  });
+
+  it("lässt „Alle“ Vorrang vor einem Besitzer", () => {
+    const appt = appointment({ owner_id: x.id });
+    expect(withOwner(appt, y.id, true).owner).toEqual({ owner_id: null, is_all_family: true });
+  });
+
   it("lässt ohne neuen Besitzer alles unverändert", () => {
     const appt = appointment({ owner_id: y.id, participants: [participant(x.id)] });
     expect(withOwner(appt, null)).toEqual({

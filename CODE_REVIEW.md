@@ -445,7 +445,8 @@ Rückfahrt) nach vorn ziehen und anschließend auf Überlappung filtern.
 - **Drag auf andere Spalte:** Zieht man einen „Alle"-Termin in eine Mitgliedsspalte,
   wird `owner_id` gesetzt, `is_all_family` bleibt `true` (`CalendarView.tsx:228`). Das
   Formular schreibt in diesem Fall `owner_id = null`. — ✅ erledigt (Review 2, Befund 5:
-  Drag & Drop läuft über `moveOccurrence`, ein Besitzerwechsel beendet „Alle")
+  Drag & Drop läuft über `moveOccurrence`, ein Besitzerwechsel beendet „Alle"; Ziehen in
+  die Spalte „Alle" macht den Termin wieder zum Familientermin)
 - **Serie auf „keine Wiederholung" umstellen:** Ausnahme-Zeilen bleiben stehen und
   werden weiter angezeigt.
 - **Fahrzeugprüfung im Formular** betrachtet nur das erste Vorkommen einer neuen Serie.

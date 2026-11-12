@@ -270,20 +270,22 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
     if (!occ) return;
     const overColumn = (event.over?.data.current as { columnId?: string } | undefined)?.columnId;
     const shiftMin = snapShiftMin(event.delta.y, hourHeight);
-    // "Alle" keeps the current owner (withOwner has no way back to all family)
-    const ownerId = overColumn && overColumn !== ALL_COLUMN_ID ? overColumn : null;
-    const ownerUnchanged =
-      ownerId === null || (ownerId === occ.appointment.owner_id && !occ.appointment.is_all_family);
+    // Column "Alle" hands the appointment to the whole family
+    const allFamily = overColumn === ALL_COLUMN_ID;
+    const ownerId = overColumn && !allFamily ? overColumn : null;
+    const ownerUnchanged = allFamily
+      ? occ.appointment.is_all_family
+      : ownerId === null || (ownerId === occ.appointment.owner_id && !occ.appointment.is_all_family);
     if (shiftMin === 0 && ownerUnchanged) return;
 
     const newStart = new Date(occ.occurrenceStart.getTime() + shiftMin * 60000);
     const newEnd = new Date(occ.occurrenceEnd.getTime() + shiftMin * 60000);
-    // Same path as the context menu: owner change also ends "all family"
+    // Same path as the context menu: a member column ends "all family"
     // and drops the new owner from the participants
     const result = await moveOccurrence(
       occ.appointment,
       occ.occurrenceStart,
-      { start: newStart, end: newEnd, ownerId },
+      { start: newStart, end: newEnd, ownerId, allFamily },
       "single"
     );
     setMoveError(result.ok ? null : result.error);

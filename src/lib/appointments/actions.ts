@@ -271,10 +271,22 @@ export interface MoveTarget {
   end: Date;
   /** New owner; null keeps the current one */
   ownerId: string | null;
+  /** Hand the appointment to the whole family (wins over `ownerId`) */
+  allFamily?: boolean;
 }
 
-/** Owner change: the new owner is no extra participant, "all family" ends. */
-export function withOwner(appt: AppointmentWithParticipants, ownerId: string | null) {
+/**
+ * Owner change: the new owner is no extra participant, "all family" ends.
+ * `allFamily` does the reverse: no owner, "all family" on (like the form).
+ */
+export function withOwner(
+  appt: AppointmentWithParticipants,
+  ownerId: string | null,
+  allFamily = false
+) {
+  if (allFamily) {
+    return { owner: { owner_id: null, is_all_family: true }, participants: participantData(appt) };
+  }
   if (!ownerId || (ownerId === appt.owner_id && !appt.is_all_family)) {
     return { owner: { owner_id: appt.owner_id, is_all_family: appt.is_all_family }, participants: participantData(appt) };
   }
@@ -297,7 +309,7 @@ export async function moveOccurrence(
 ): Promise<ActionResult> {
   const supabase = createClient();
   const { addAppointment, updateAppointment } = useDataStore.getState();
-  const { owner, participants } = withOwner(appt, target.ownerId);
+  const { owner, participants } = withOwner(appt, target.ownerId, target.allFamily);
   const base = { ...appointmentData(appt), ...owner };
 
   if (!isSeriesOccurrence(appt)) {
