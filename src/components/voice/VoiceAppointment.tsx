@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CalendarClock, Loader2, Mic, MicOff, User } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
@@ -87,10 +87,13 @@ export default function VoiceAppointment() {
   const [preview, setPreview] = useState<PreviewResponse["preview"] | null>(null);
   const [answer, setAnswer] = useState<{ query: VoiceQuery; hits: QueryHit[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Laufende Auswertung; wird beim Schließen abgebrochen. */
+  const requestRef = useRef<AbortController | null>(null);
 
   function handleOpenChange(next: boolean) {
     setOpen(next);
     if (!next) {
+      requestRef.current?.abort();
       speech.abort();
       synth.cancel();
       setPhase("input");
@@ -126,13 +129,19 @@ export default function VoiceAppointment() {
     speech.abort();
     setError(null);
     setPhase("loading");
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     try {
       const res = await fetch("/api/appointments/from-text", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: trimmed, preview: true }),
+        signal: controller.signal,
       });
       const data = (await res.json().catch(() => null)) as (PreviewResponse & ErrorResponse & { query?: VoiceQuery }) | null;
+      // Dialog inzwischen geschlossen oder neu gefragt → Ergebnis verwerfen
+      if (controller.signal.aborted) return;
 
       if (res.ok && data?.preview) {
         setPreview(data.preview);
@@ -161,6 +170,7 @@ export default function VoiceAppointment() {
         setError(data?.message ?? "Der Text konnte nicht ausgewertet werden.");
       }
     } catch {
+      if (controller.signal.aborted) return;
       setError("Keine Verbindung zum Server.");
     }
     setPhase("input");
@@ -275,7 +285,7 @@ export default function VoiceAppointment() {
 
           {phase === "answer" && answer && (
             <div className="space-y-4">
-              <p className="text-sm text-[var(--muted-foreground)]">„{text.trim()}“</p>
+              {text.trim() && <p className="text-sm text-[var(--muted-foreground)]">„{text.trim()}“</p>}
               <div className="space-y-2">
                 <p className="font-semibold">{describeQuery(answer.query)}</p>
                 {answer.hits.length === 0 ? (
