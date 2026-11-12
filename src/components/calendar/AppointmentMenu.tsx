@@ -105,7 +105,11 @@ export function AppointmentMenuProvider({ children }: { children: React.ReactNod
         scope
       );
       const name = members.find((m) => m.id === action.ownerId)?.name ?? "Mitglied";
-      report(result, `„${appt.title}“ an ${name} übergeben`);
+      // moveOccurrence meldet „verschoben“; hier geht es ums Übergeben
+      report(
+        result.ok ? result : { ok: false, error: "Termin konnte nicht übergeben werden." },
+        `„${appt.title}“ an ${name} übergeben`
+      );
       return;
     }
     const { result, undo } = await deleteOccurrence(appt, occ.occurrenceStart, scope);
