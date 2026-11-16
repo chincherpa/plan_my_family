@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, ExternalLink } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
 import { listIngredientsFor } from "@/lib/recipes/actions";
@@ -12,6 +12,7 @@ import {
   type Slot,
 } from "@/lib/recipes/shoppingList";
 import type { Ingredient, Recipe } from "@/lib/recipes/types";
+import { bringDeeplink, bringItem } from "@/lib/recipes/bring";
 import { cn } from "@/lib/utils";
 
 const slotLabel = ({ date, type }: Slot) => {
@@ -158,6 +159,14 @@ export default function ShoppingListDialog({
 
   const doneCount = checked ? lines.filter((l) => checked.has(l.key)).length : 0;
 
+  // Nur was noch nicht abgehakt ist, landet in Bring
+  const bringLink = useMemo(() => {
+    if (!checked) return null;
+    const items = lines.filter((l) => !checked.has(l.key)).map(bringItem);
+    if (items.length === 0) return null;
+    return bringDeeplink(window.location.origin, { title, items });
+  }, [checked, lines, title]);
+
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
       <DialogContent className="max-h-[85dvh] gap-3 overflow-y-auto sm:max-w-md">
@@ -282,6 +291,22 @@ export default function ShoppingListDialog({
           <p className="text-xs text-[var(--muted-foreground)]">
             Ohne Rezept, daher ohne Zutaten: {list.unmatched.join(", ")}
           </p>
+        )}
+
+        {list && checked && lines.length > 0 && (
+          <a
+            href={bringLink ?? undefined}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-disabled={!bringLink}
+            className={cn(
+              "flex items-center justify-center gap-2 rounded-xl bg-[#ee524f] px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90",
+              !bringLink && "pointer-events-none opacity-40"
+            )}
+          >
+            <ExternalLink className="h-4 w-4" />
+            {bringLink ? `${lines.length - doneCount} Zutaten an Bring! senden` : "Alles eingekauft"}
+          </a>
         )}
       </DialogContent>
     </Dialog>
