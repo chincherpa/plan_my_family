@@ -5,6 +5,7 @@ import { useDataStore } from "@/lib/store/dataStore";
 import { getISOWeek, localDateStr, startOfDay } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import MealEditDialog from "@/components/calendar/MealEditDialog";
+import MealDishDialog from "@/components/calendar/MealDishDialog";
 import ShoppingListDialog from "./ShoppingListDialog";
 import { weekStartOf, type PlannedDish } from "@/lib/recipes/shoppingList";
 import type { Meal } from "@/lib/supabase/types";
@@ -23,6 +24,8 @@ const DAYS_AHEAD = 31;
 export default function MealOverview() {
   const { family, meals, recipes, upsertMeal } = useDataStore();
   const [edit, setEdit] = useState<{ date: string; type: MealType } | null>(null);
+  /** Getipptes Gericht: fragt „Ändern“ oder „Rezept anzeigen“ */
+  const [tap, setTap] = useState<{ date: string; type: MealType } | null>(null);
   const [shopping, setShopping] = useState<{ kw: number; weekStart: string; planned: PlannedDish[] } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [dragKey, setDragKey] = useState<string | null>(null);
@@ -144,7 +147,7 @@ export default function MealOverview() {
     return (
       <div className="flex items-center gap-1">
         <button
-          onClick={() => setEdit({ date: dateStr, type: mealType })}
+          onClick={() => (dish ? setTap : setEdit)({ date: dateStr, type: mealType })}
           disabled={isPast}
           draggable={!isPast && !!dish}
           onDragStart={(e) => {
@@ -206,7 +209,7 @@ export default function MealOverview() {
 
   return (
     <div className="space-y-6">
-      <p className="-mt-2 text-sm text-[var(--muted-foreground)]">Tippen zum Bearbeiten · Ziehen zum Tauschen</p>
+      <p className="-mt-2 text-sm text-[var(--muted-foreground)]">Tippen zum Bearbeiten oder Rezept anzeigen · Ziehen zum Tauschen</p>
 
       {groups.map(({ kw, year, days: groupDays }) => (
         <div key={`${year}-${kw}`}>
@@ -292,6 +295,19 @@ export default function MealOverview() {
           planned={shopping.planned}
           recipes={recipes}
           onClose={() => setShopping(null)}
+        />
+      )}
+
+      {tap && (
+        <MealDishDialog
+          date={tap.date}
+          type={tap.type}
+          meal={mealsByDate.get(tap.date)}
+          onEdit={() => {
+            setEdit(tap);
+            setTap(null);
+          }}
+          onClose={() => setTap(null)}
         />
       )}
 

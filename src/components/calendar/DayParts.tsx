@@ -10,6 +10,7 @@ import type { Meal, TodoWithItems } from "@/lib/supabase/types";
 import { SideBars, SideGutter, TIME_GUTTER } from "./DayTimeline";
 import { useAppointmentMenu } from "./AppointmentMenu";
 import { anniversaryBadge } from "@/lib/anniversaries";
+import type { MealType } from "@/lib/recipes/stats";
 import {
   ALL_COLUMN_COLOR,
   EVENT_COLOR,
@@ -172,48 +173,72 @@ export function DayBanner({
   );
 }
 
-/** Lunch + dinner for a day; tapping opens the meal editor. */
+/**
+ * Lunch + dinner for a day. Tapping the strip opens the meal editor; with
+ * `onDish`, tapping a planned dish reports that slot instead (e.g. to ask
+ * whether to change it or show the recipe).
+ */
 export function MealsStrip({
   meal,
   onEdit,
+  onDish,
   compact = false,
 }: {
   meal: Meal | undefined;
   onEdit: () => void;
+  onDish?: (type: MealType) => void;
   compact?: boolean;
 }) {
   const hasAny = !!(meal?.lunch || meal?.dinner);
+  const dish = (type: MealType, label: string, name: string) => {
+    const content = (
+      <>
+        <span className="text-[var(--muted-foreground)]">{label}</span>{" "}
+        <span className="font-medium">{name}</span>
+      </>
+    );
+    if (!onDish) return <span className="truncate">{content}</span>;
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onDish(type);
+        }}
+        className="-mx-1 truncate rounded-md px-1 text-left underline-offset-2 hover:bg-[var(--primary)]/10 hover:underline"
+      >
+        {content}
+      </button>
+    );
+  };
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={(e) => {
         e.stopPropagation();
         onEdit();
       }}
-      className={`flex min-w-0 items-center gap-2 rounded-lg text-left transition-colors hover:bg-[var(--accent)] ${
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget || (e.key !== "Enter" && e.key !== " ")) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onEdit();
+      }}
+      className={`flex min-w-0 cursor-pointer items-center gap-2 rounded-lg text-left transition-colors hover:bg-[var(--accent)] ${
         compact ? "px-1.5 py-0.5 text-xs" : "w-full bg-[var(--card)] px-3 py-2.5 text-sm"
       }`}
     >
       <UtensilsCrossed className={`${compact ? "w-3 h-3" : "w-4 h-4"} shrink-0 text-[var(--muted-foreground)]`} />
       {hasAny ? (
         <span className="flex min-w-0 flex-wrap gap-x-4 gap-y-0.5">
-          {meal?.lunch && (
-            <span className="truncate">
-              <span className="text-[var(--muted-foreground)]">Mittag</span>{" "}
-              <span className="font-medium">{meal.lunch}</span>
-            </span>
-          )}
-          {meal?.dinner && (
-            <span className="truncate">
-              <span className="text-[var(--muted-foreground)]">Abend</span>{" "}
-              <span className="font-medium">{meal.dinner}</span>
-            </span>
-          )}
+          {meal?.lunch && dish("lunch", "Mittag", meal.lunch)}
+          {meal?.dinner && dish("dinner", "Abend", meal.dinner)}
         </span>
       ) : (
         <span className="text-[var(--muted-foreground)]/70">{compact ? "Essen …" : "Essensplan hinzufügen …"}</span>
       )}
-    </button>
+    </div>
   );
 }
 
@@ -230,6 +255,7 @@ export function UpcomingDay({
   onOpen,
   onCellClick,
   onEditMeal,
+  onDish,
 }: {
   data: DayData;
   columns: Column[];
@@ -243,6 +269,7 @@ export function UpcomingDay({
   onOpen: (occ: AppointmentOccurrence) => void;
   onCellClick: (columnId: string) => void;
   onEditMeal: () => void;
+  onDish?: (type: MealType) => void;
 }) {
   const colorOf = useOccurrenceColor();
   const openMenu = useAppointmentMenu();
@@ -296,7 +323,7 @@ export function UpcomingDay({
         </span>
         <DayBanner data={data} onOpen={onOpen} compact />
         <div className="ml-auto min-w-0">
-          <MealsStrip meal={meal} onEdit={onEditMeal} compact />
+          <MealsStrip meal={meal} onEdit={onEditMeal} onDish={onDish} compact />
         </div>
       </div>
 

@@ -21,6 +21,8 @@ import { useKeymap, useShortcut } from "@/lib/shortcuts/useShortcuts";
 import { withShortcutHint } from "@/lib/shortcuts/keymap";
 import AppointmentForm from "@/components/appointments/AppointmentForm";
 import MealEditDialog from "./MealEditDialog";
+import MealDishDialog from "./MealDishDialog";
+import type { MealType } from "@/lib/recipes/stats";
 import { AppointmentMenuProvider } from "./AppointmentMenu";
 import DayTimeline, { SideGutter, TIME_GUTTER, snapShiftMin } from "./DayTimeline";
 import { DayBanner, MealsStrip, TodoDueStrip, UpcomingDay } from "./DayParts";
@@ -108,6 +110,9 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
 
   const [upcomingCount, setUpcomingCount] = useState(UPCOMING_BATCH);
   const [mealEditDate, setMealEditDate] = useState<string | null>(null);
+  const [mealEditType, setMealEditType] = useState<MealType | undefined>(undefined);
+  /** Tapped dish: asks „Ändern“ or „Rezept anzeigen“ */
+  const [mealTap, setMealTap] = useState<{ date: string; type: MealType } | null>(null);
   const [conflictsOpen, setConflictsOpen] = useState(false);
   /** Upcoming day shown as full timeline in place ("YYYY-MM-DD") */
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
@@ -478,7 +483,11 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
             />
           </div>
           <div className="mt-3 pl-11 sm:pl-14">
-            <MealsStrip meal={mealsByDate.get(heroKey)} onEdit={() => setMealEditDate(heroKey)} />
+            <MealsStrip
+              meal={mealsByDate.get(heroKey)}
+              onEdit={() => setMealEditDate(heroKey)}
+              onDish={(type) => setMealTap({ date: heroKey, type })}
+            />
           </div>
 
           {/* Coming days */}
@@ -520,6 +529,7 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
                 onOpen={openOccurrence}
                 onCellClick={(columnId) => newAt(data.day, columnId)}
                 onEditMeal={() => setMealEditDate(key)}
+                onDish={(type) => setMealTap({ date: key, type })}
               />
             );
           })}
@@ -532,7 +542,24 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
         <MealEditDialog
           date={mealEditDate}
           meal={mealsByDate.get(mealEditDate) ?? null}
-          onClose={() => setMealEditDate(null)}
+          initialType={mealEditType}
+          onClose={() => {
+            setMealEditDate(null);
+            setMealEditType(undefined);
+          }}
+        />
+      )}
+      {mealTap && (
+        <MealDishDialog
+          date={mealTap.date}
+          type={mealTap.type}
+          meal={mealsByDate.get(mealTap.date)}
+          onEdit={() => {
+            setMealEditType(mealTap.type);
+            setMealEditDate(mealTap.date);
+            setMealTap(null);
+          }}
+          onClose={() => setMealTap(null)}
         />
       )}
       </AppointmentMenuProvider>
