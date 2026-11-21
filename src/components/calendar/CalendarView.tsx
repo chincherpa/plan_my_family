@@ -39,6 +39,8 @@ import {
 const CONFLICT_WINDOW_DAYS = 14;
 const UPCOMING_BATCH = 21;
 const UPCOMING_MAX = 365;
+/** So viele kommende Tage sind beim Start (bzw. nach Tageswechsel) aufgeklappt */
+const DEFAULT_EXPANDED_DAYS = 5;
 /** Space reserved for header, banner and meals when fitting the day on screen */
 const CHROME_HEIGHT = 250;
 
@@ -114,8 +116,8 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
   /** Tapped dish: asks „Ändern“ or „Rezept anzeigen“ */
   const [mealTap, setMealTap] = useState<{ date: string; type: MealType } | null>(null);
   const [conflictsOpen, setConflictsOpen] = useState(false);
-  /** Upcoming day shown as full timeline in place ("YYYY-MM-DD") */
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  /** Upcoming days shown as full timeline in place ("YYYY-MM-DD"), tied to the hero day they were set for */
+  const [expandedState, setExpandedState] = useState<{ heroKey: string; keys: Set<string> } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const datePickerRef = useRef<HTMLInputElement>(null);
@@ -305,6 +307,18 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
   }
 
   const heroKey = localDateStr(heroDay);
+  // Neuer Hero-Tag (Start, Datumswahl, Mitternacht) → die nächsten Tage wieder aufklappen
+  const expandedKeys =
+    expandedState?.heroKey === heroKey
+      ? expandedState.keys
+      : new Set(
+          Array.from({ length: DEFAULT_EXPANDED_DAYS }, (_, i) => localDateStr(addDays(heroDay, i + 1)))
+        );
+  function toggleExpanded(key: string) {
+    const keys = new Set(expandedKeys);
+    if (!keys.delete(key)) keys.add(key);
+    setExpandedState({ heroKey, keys });
+  }
 
   return (
     <DndContext sensors={sensors} onDragEnd={handleDragEnd} onDragCancel={() => (lastDragEnd.current = Date.now())}>
@@ -496,7 +510,7 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
           </h2>
           {upcomingData.map((data) => {
             const key = localDateStr(data.day);
-            const expanded = expandedKey === key;
+            const expanded = expandedKeys.has(key);
             return (
               <UpcomingDay
                 key={key}
@@ -525,7 +539,7 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
                     </>
                   )
                 }
-                onToggle={() => setExpandedKey(expanded ? null : key)}
+                onToggle={() => toggleExpanded(key)}
                 onOpen={openOccurrence}
                 onCellClick={(columnId) => newAt(data.day, columnId)}
                 onEditMeal={() => setMealEditDate(key)}
