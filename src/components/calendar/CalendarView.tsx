@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { AlertTriangle, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import {
   DndContext,
@@ -31,10 +31,15 @@ import {
   ALL_COLUMN_ID,
   EVENTS_COLUMN_ID,
   MAX_SIDE_BARS,
+  DAY_FILTER_OPTIONS,
   buildDayData,
+  parseDayFilter,
   sideBarItems,
+  upcomingDays,
   type Column,
+  type DayFilter,
 } from "./model";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const CONFLICT_WINDOW_DAYS = 14;
 const UPCOMING_BATCH = 21;
@@ -43,6 +48,37 @@ const UPCOMING_MAX = 365;
 const DEFAULT_EXPANDED_DAYS = 5;
 /** Space reserved for header, banner and meals when fitting the day on screen */
 const CHROME_HEIGHT = 250;
+/** Gewählter Wochentag-Filter für „Kommende Tage“, pro Gerät gemerkt */
+const DAY_FILTER_KEY = "calendar.dayFilter";
+
+const dayFilterListeners = new Set<() => void>();
+
+function subscribeDayFilter(listener: () => void) {
+  dayFilterListeners.add(listener);
+  window.addEventListener("storage", listener);
+  return () => {
+    dayFilterListeners.delete(listener);
+    window.removeEventListener("storage", listener);
+  };
+}
+
+function readDayFilter(): DayFilter {
+  try {
+    return parseDayFilter(localStorage.getItem(DAY_FILTER_KEY));
+  } catch {
+    return "all";
+  }
+}
+
+function writeDayFilter(filter: DayFilter) {
+  try {
+    if (filter === "all") localStorage.removeItem(DAY_FILTER_KEY);
+    else localStorage.setItem(DAY_FILTER_KEY, String(filter));
+  } catch {
+    // localStorage gesperrt → Filter lässt sich nicht merken
+  }
+  dayFilterListeners.forEach((l) => l());
+}
 
 function addDays(date: Date, days: number): Date {
   const d = new Date(date);
@@ -111,13 +147,19 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
   const isHeroToday = heroDay.getTime() === today.getTime();
 
   const [upcomingCount, setUpcomingCount] = useState(UPCOMING_BATCH);
+  // Server-Snapshot "all", damit SSR und Hydration übereinstimmen
+  const dayFilter = useSyncExternalStore(subscribeDayFilter, readDayFilter, () => "all" as const);
+  function setDayFilter(filter: DayFilter) {
+    setUpcomingCount(UPCOMING_BATCH);
+    writeDayFilter(filter);
+  }
   const [mealEditDate, setMealEditDate] = useState<string | null>(null);
   const [mealEditType, setMealEditType] = useState<MealType | undefined>(undefined);
   /** Tapped dish: asks „Ändern“ or „Rezept anzeigen“ */
   const [mealTap, setMealTap] = useState<{ date: string; type: MealType } | null>(null);
   const [conflictsOpen, setConflictsOpen] = useState(false);
-  /** Upcoming days shown as full timeline in place ("YYYY-MM-DD"), tied to the hero day they were set for */
-  const [expandedState, setExpandedState] = useState<{ heroKey: string; keys: Set<string> } | null>(null);
+  /** Upcoming days shown as full timeline in place ("YYYY-MM-DD"), tied to the hero day + filter they were set for */
+  const [expandedState, setExpandedState] = useState<{ forKey: string; keys: Set<string> } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const datePickerRef = useRef<HTMLInputElement>(null);
@@ -131,13 +173,20 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
     [members]
   );
 
+  // Days of the "Kommende Tage" list, already filtered by weekday
+  const upcomingDayList = useMemo(
+    () => upcomingDays(heroDay, upcomingCount, dayFilter, UPCOMING_MAX),
+    [heroDay, upcomingCount, dayFilter]
+  );
+
   // One range covers the hero day, the upcoming list and the conflict window
   const rangeStart = useMemo(() => addDays(heroDay < today ? heroDay : today, -1), [heroDay, today]);
   const rangeEnd = useMemo(() => {
-    const listEnd = addDays(heroDay, upcomingCount + 1);
+    const last = upcomingDayList[upcomingDayList.length - 1] ?? heroDay;
+    const listEnd = addDays(last, 2);
     const conflictEnd = addDays(today, CONFLICT_WINDOW_DAYS + 1);
     return listEnd > conflictEnd ? listEnd : conflictEnd;
-  }, [heroDay, today, upcomingCount]);
+  }, [heroDay, today, upcomingDayList]);
 
   const occurrences = useMemo(
     () => expandAppointments(appointments, rangeStart, rangeEnd, schoolHolidays),
@@ -182,11 +231,8 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
   );
 
   const upcomingData = useMemo(
-    () =>
-      Array.from({ length: upcomingCount }, (_, i) =>
-        buildDayData(addDays(heroDay, i + 1), occurrences, guardianWarnings)
-      ),
-    [heroDay, upcomingCount, occurrences, guardianWarnings]
+    () => upcomingDayList.map((day) => buildDayData(day, occurrences, guardianWarnings)),
+    [upcomingDayList, occurrences, guardianWarnings]
   );
 
   // Bar gutter on the right is as wide as the busiest day in view needs, so
@@ -307,17 +353,16 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
   }
 
   const heroKey = localDateStr(heroDay);
-  // Neuer Hero-Tag (Start, Datumswahl, Mitternacht) → die nächsten Tage wieder aufklappen
+  // Neuer Hero-Tag (Start, Datumswahl, Mitternacht) oder Filter → die nächsten Tage wieder aufklappen
+  const expandKey = `${heroKey}|${dayFilter}`;
   const expandedKeys =
-    expandedState?.heroKey === heroKey
+    expandedState?.forKey === expandKey
       ? expandedState.keys
-      : new Set(
-          Array.from({ length: DEFAULT_EXPANDED_DAYS }, (_, i) => localDateStr(addDays(heroDay, i + 1)))
-        );
+      : new Set(upcomingDayList.slice(0, DEFAULT_EXPANDED_DAYS).map(localDateStr));
   function toggleExpanded(key: string) {
     const keys = new Set(expandedKeys);
     if (!keys.delete(key)) keys.add(key);
-    setExpandedState({ heroKey, keys });
+    setExpandedState({ forKey: expandKey, keys });
   }
 
   return (
@@ -505,9 +550,26 @@ export default function CalendarView({ initialDay }: { initialDay?: string } = {
           </div>
 
           {/* Coming days */}
-          <h2 className="mt-8 mb-1 px-1 text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
-            Kommende Tage
-          </h2>
+          <div className="mt-8 mb-1 flex items-center justify-between gap-2 px-1">
+            <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--muted-foreground)]">
+              Kommende Tage
+            </h2>
+            <Select value={String(dayFilter)} onValueChange={(v) => setDayFilter(parseDayFilter(v))}>
+              <SelectTrigger
+                aria-label="Kommende Tage filtern"
+                className={`h-8 w-auto gap-2 text-xs ${dayFilter !== "all" ? "border-[var(--primary)] text-[var(--primary)]" : ""}`}
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {DAY_FILTER_OPTIONS.map((o) => (
+                  <SelectItem key={String(o.value)} value={String(o.value)}>
+                    {o.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {upcomingData.map((data) => {
             const key = localDateStr(data.day);
             const expanded = expandedKeys.has(key);

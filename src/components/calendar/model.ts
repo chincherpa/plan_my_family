@@ -142,3 +142,49 @@ export function buildDayData(
     warnings: warnings.filter((w) => w.startTime < end && w.endTime > start),
   };
 }
+
+/**
+ * Filter for the "Kommende Tage" list: all days, weekends only, or a single
+ * weekday (JS `getDay()`: 0 = Sonntag … 6 = Samstag).
+ */
+export type DayFilter = "all" | "weekend" | 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+export const DAY_FILTER_OPTIONS: { value: DayFilter; label: string }[] = [
+  { value: "all", label: "Alle Tage" },
+  { value: "weekend", label: "Nur Wochenenden" },
+  { value: 1, label: "Nur Montage" },
+  { value: 2, label: "Nur Dienstage" },
+  { value: 3, label: "Nur Mittwoche" },
+  { value: 4, label: "Nur Donnerstage" },
+  { value: 5, label: "Nur Freitage" },
+  { value: 6, label: "Nur Samstage" },
+  { value: 0, label: "Nur Sonntage" },
+];
+
+export function matchesDayFilter(day: Date, filter: DayFilter): boolean {
+  if (filter === "all") return true;
+  const wd = day.getDay();
+  if (filter === "weekend") return wd === 0 || wd === 6;
+  return wd === filter;
+}
+
+/** Serialised form for <select>/localStorage; unknown input → "all". */
+export function parseDayFilter(value: string | null | undefined): DayFilter {
+  if (value === "all" || value === "weekend") return value;
+  const n = Number(value);
+  return value != null && value !== "" && Number.isInteger(n) && n >= 0 && n <= 6 ? (n as DayFilter) : "all";
+}
+
+/**
+ * The next `count` days after `from` that pass `filter`, never looking further
+ * than `maxDays` calendar days ahead.
+ */
+export function upcomingDays(from: Date, count: number, filter: DayFilter, maxDays: number): Date[] {
+  const days: Date[] = [];
+  for (let i = 1; i <= maxDays && days.length < count; i++) {
+    const d = new Date(from);
+    d.setDate(d.getDate() + i);
+    if (matchesDayFilter(d, filter)) days.push(d);
+  }
+  return days;
+}
