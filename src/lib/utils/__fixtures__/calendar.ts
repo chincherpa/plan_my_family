@@ -78,6 +78,7 @@ export function appointment(
     anniversary_kind: null,
     anniversary_year_known: true,
     skip_school_holidays: false,
+    is_tentative: false,
     created_at: d("2026-01-01").toISOString(),
     participants: [],
     ...rest,

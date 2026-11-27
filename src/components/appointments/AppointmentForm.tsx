@@ -314,6 +314,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   const [recurrence, setRecurrence] = useState<RecurrenceFreq>(initialRecurrence.freq);
   /** Selected weekdays for "Benutzerdefiniert" (rrule numbering), all off by default */
   const [customDays, setCustomDays] = useState<number[]>(initialRecurrence.days);
+  const [isTentative, setIsTentative] = useState(existingAppt?.is_tentative ?? false);
   const [skipSchoolHolidays, setSkipSchoolHolidays] = useState(
     existingAppt?.skip_school_holidays ?? false
   );
@@ -547,6 +548,8 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
       recurrence_rule: buildRRule(recurrence, startDate),
       // Only meaningful for series; a single appointment is never hidden
       skip_school_holidays: recurrence !== "none" && skipSchoolHolidays,
+      // Ereignisse (Geburtstag, Feiertag …) brauchen keine Zusage
+      is_tentative: !isEvent && isTentative,
     };
 
     try {
@@ -866,6 +869,15 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
               <div className="flex items-center gap-2">
                 <Label>Familienausflug / Alle</Label>
                 <Switch checked={isAllFamily} onCheckedChange={handleAllFamilyChange} />
+              </div>
+            )}
+
+            {!isEvent && (
+              <div className="flex items-center gap-2">
+                <Label title="Termin wird abgeschwächt angezeigt, bis er zugesagt ist">
+                  Noch nicht zugesagt
+                </Label>
+                <Switch checked={isTentative} onCheckedChange={setIsTentative} />
               </div>
             )}
           </div>

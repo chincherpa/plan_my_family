@@ -1,5 +1,5 @@
 "use client";
-import { AlertTriangle, ChevronRight, ListTodo, Plus, UtensilsCrossed } from "lucide-react";
+import { AlertTriangle, ChevronRight, CircleHelp, ListTodo, Plus, UtensilsCrossed } from "lucide-react";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useTodoStore } from "@/lib/store/todoStore";
 import { formatTime, hexToRgba, localDateStr, readableTextColor } from "@/lib/utils";
@@ -15,6 +15,8 @@ import {
   ALL_COLUMN_COLOR,
   EVENT_COLOR,
   HOLIDAY_COLOR,
+  TENTATIVE_HINT,
+  TENTATIVE_OPACITY,
   eventEmoji,
   placementsFor,
   type Column,
@@ -150,9 +152,16 @@ export function DayBanner({
             className={`flex items-center gap-1 rounded-full font-medium ${
               compact ? "px-2 py-0.5 text-[11px]" : "px-3 py-1 text-xs"
             }`}
-            style={{ backgroundColor: hexToRgba(color, 0.2), color, boxShadow: `inset 0 0 0 1px ${hexToRgba(color, 0.4)}` }}
+            style={{
+              backgroundColor: hexToRgba(color, 0.2),
+              color,
+              boxShadow: `inset 0 0 0 1px ${hexToRgba(color, 0.4)}`,
+              opacity: appt.is_tentative ? TENTATIVE_OPACITY : undefined,
+            }}
+            title={appt.is_tentative ? `${appt.title} · ${TENTATIVE_HINT}` : undefined}
           >
             {appt.is_event && <span>{badge?.emoji ?? eventEmoji(appt.title)}</span>}
+            {appt.is_tentative && <CircleHelp className="h-3 w-3 shrink-0" aria-label={TENTATIVE_HINT} />}
             {!appt.is_all_day && <span className="tabular opacity-80">{formatTime(occ.occurrenceStart)}</span>}
             <span className="truncate max-w-[14rem]">{appt.title}</span>
             {badge?.count != null && <span className="tabular opacity-80">({badge.count})</span>}
@@ -357,6 +366,7 @@ export function UpcomingDay({
                 {items.map(({ occ, isOwner }) => {
                   const color = colorOf(occ);
                   const conflict = conflictKeys.has(occ.key);
+                  const tentative = occ.appointment.is_tentative;
                   return (
                     <button
                       key={`${occ.key}-${col.id}`}
@@ -369,13 +379,16 @@ export function UpcomingDay({
                       className={`flex flex-col rounded-md px-1.5 py-0.5 text-left text-[11px] leading-tight ${
                         conflict ? "ring-2 ring-[var(--warning)]" : ""
                       }`}
-                      style={
-                        isOwner
+                      style={{
+                        ...(isOwner
                           ? { backgroundColor: color, color: readableTextColor(color) }
-                          : { backgroundColor: hexToRgba(color, 0.14), border: `1.5px dashed ${color}` }
-                      }
+                          : { backgroundColor: hexToRgba(color, 0.14), border: `1.5px dashed ${color}` }),
+                        opacity: tentative ? TENTATIVE_OPACITY : undefined,
+                      }}
+                      title={tentative ? `${occ.appointment.title} · ${TENTATIVE_HINT}` : undefined}
                     >
-                      <span className="truncate tabular opacity-80">
+                      <span className="flex items-center gap-1 truncate tabular opacity-80">
+                        {tentative && <CircleHelp className="h-3 w-3 shrink-0" aria-label={TENTATIVE_HINT} />}
                         {formatTime(occ.occurrenceStart)}–{formatTime(occ.occurrenceEnd)}
                       </span>
                       <span className="truncate font-semibold">{occ.appointment.title}</span>

@@ -12,6 +12,10 @@ export const EVENT_COLOR = "#8b5cf6";
 /** Schulferien-Hinweis im Tagesbanner */
 export const HOLIDAY_COLOR = "#0d9488";
 
+/** Opacity of appointments that are not confirmed yet ("Noch nicht zugesagt") */
+export const TENTATIVE_OPACITY = 0.45;
+export const TENTATIVE_HINT = "Noch nicht zugesagt";
+
 export interface Column {
   id: string;
   name: string;

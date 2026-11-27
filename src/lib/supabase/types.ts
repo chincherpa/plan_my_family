@@ -119,6 +119,8 @@ export interface Database {
           anniversary_year_known: boolean;
           /** Serienvorkommen in Schulferien entfallen und zählen nicht mit */
           skip_school_holidays: boolean;
+          /** Eingetragen, aber noch nicht zugesagt — wird abgeschwächt angezeigt */
+          is_tentative: boolean;
           created_at: string;
         };
         Insert: {
@@ -143,6 +145,7 @@ export interface Database {
           anniversary_kind?: AnniversaryKind | null;
           anniversary_year_known?: boolean;
           skip_school_holidays?: boolean;
+          is_tentative?: boolean;
           created_at?: string;
         };
         Update: {
@@ -167,6 +170,7 @@ export interface Database {
           anniversary_kind?: AnniversaryKind | null;
           anniversary_year_known?: boolean;
           skip_school_holidays?: boolean;
+          is_tentative?: boolean;
           created_at?: string;
         };
         Relationships: [];

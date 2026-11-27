@@ -3,12 +3,20 @@ import { useMemo, useSyncExternalStore } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { useAppointmentMenu } from "./AppointmentMenu";
 import { CSS } from "@dnd-kit/utilities";
-import { Car, Repeat } from "lucide-react";
+import { Car, CircleHelp, Repeat } from "lucide-react";
 import { useDataStore } from "@/lib/store/dataStore";
 import { assignLanes } from "@/lib/utils/lanes";
 import { formatTime, hexToRgba, localDateStr, readableTextColor } from "@/lib/utils";
 import type { AppointmentOccurrence } from "@/lib/utils/recurrence";
-import { placementsFor, sideBarItems, sideGutterWidth, type Column, type DayData } from "./model";
+import {
+  TENTATIVE_HINT,
+  TENTATIVE_OPACITY,
+  placementsFor,
+  sideBarItems,
+  sideGutterWidth,
+  type Column,
+  type DayData,
+} from "./model";
 
 const noopSubscribe = () => () => {};
 
@@ -399,13 +407,14 @@ function TimelineBlock({
         width: `${width}%`,
         zIndex: isDragging ? 50 : 10,
         transform: CSS.Translate.toString(transform),
-        opacity: isDragging ? 0.85 : 1,
+        opacity: isDragging ? 0.85 : appt.is_tentative ? TENTATIVE_OPACITY : 1,
         cursor: canDrag ? (isDragging ? "grabbing" : "grab") : "pointer",
         // Long-press drag on touch (TouchSensor delay) — plain swipes still scroll
         touchAction: "manipulation",
       }}
       title={[
         `${appt.title} · ${formatTime(occ.occurrenceStart)}–${formatTime(occ.occurrenceEnd)}`,
+        appt.is_tentative && TENTATIVE_HINT,
         appt.travel_before_min > 0 &&
           `Hinfahrt: Abfahrt ${formatTime(occ.travelStart)} → Ankunft ${formatTime(occ.occurrenceStart)}`,
         appt.travel_after_min > 0 &&
@@ -444,6 +453,7 @@ function TimelineBlock({
       >
         <div className="flex items-start gap-1">
           <span className="font-semibold break-words line-clamp-2 flex-1 min-w-0">{appt.title}</span>
+          {appt.is_tentative && <CircleHelp className="w-3 h-3 shrink-0" aria-label={TENTATIVE_HINT} />}
           {occ.isRecurringInstance && <Repeat className="w-3 h-3 shrink-0 opacity-70" />}
         </div>
         {blockHeight > 40 && (

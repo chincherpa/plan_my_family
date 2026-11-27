@@ -38,6 +38,7 @@ export function appointmentData(appt: AppointmentWithParticipants) {
     recurrence_parent_id: appt.recurrence_parent_id,
     exception_date: appt.exception_date,
     skip_school_holidays: appt.skip_school_holidays,
+    is_tentative: appt.is_tentative ?? false,
   };
 }
 
