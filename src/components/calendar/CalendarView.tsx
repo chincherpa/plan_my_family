@@ -16,6 +16,7 @@ import { checkGuardianWarnings } from "@/lib/utils/guardianCheck";
 import { findVehicleConflicts } from "@/lib/utils/conflicts";
 import { formatDate, formatTime, getISOWeek, localDateStr, readableTextColor, startOfDay } from "@/lib/utils";
 import { moveOccurrence } from "@/lib/appointments/actions";
+import { useNow } from "@/lib/useNow";
 import { Button } from "@/components/ui/button";
 import { useKeymap, useShortcut } from "@/lib/shortcuts/useShortcuts";
 import { withShortcutHint } from "@/lib/shortcuts/keymap";
@@ -97,31 +98,6 @@ function useHourHeight(hours: number): number {
     return () => window.removeEventListener("resize", update);
   }, [hours]);
   return height;
-}
-
-function currentMinute(): Date {
-  const d = new Date();
-  d.setSeconds(0, 0);
-  return d;
-}
-
-/**
- * Current time floored to the minute, refreshed on each full minute (moves the
- * now-line, rolls over at midnight). Flooring keeps the SSR and hydration
- * renders identical within the same minute.
- */
-function useNow(): Date {
-  const [now, setNow] = useState(currentMinute);
-  useEffect(() => {
-    let id: ReturnType<typeof setTimeout>;
-    const tick = () => {
-      setNow(currentMinute());
-      id = setTimeout(tick, 60_000 - (Date.now() % 60_000));
-    };
-    tick();
-    return () => clearTimeout(id);
-  }, []);
-  return now;
 }
 
 /** "YYYY-MM-DD" → lokale Mitternacht, null bei ungültiger Eingabe. */

@@ -103,9 +103,13 @@
   --font-mono: var(--font-geist-mono);
 }
 
-* {
-  box-sizing: border-box;
-  border-color: var(--border);
+/* Im base-Layer, damit Tailwind-Farbklassen (border-[var(--warning)] …) gewinnen —
+   ungelayerte Regeln schlagen sonst jeden Utility-Layer. */
+@layer base {
+  * {
+    box-sizing: border-box;
+    border-color: var(--border);
+  }
 }
 
 html,

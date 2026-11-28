@@ -315,6 +315,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
   /** Selected weekdays for "Benutzerdefiniert" (rrule numbering), all off by default */
   const [customDays, setCustomDays] = useState<number[]>(initialRecurrence.days);
   const [isTentative, setIsTentative] = useState(existingAppt?.is_tentative ?? false);
+  const [isImportant, setIsImportant] = useState(existingAppt?.is_important ?? false);
   const [skipSchoolHolidays, setSkipSchoolHolidays] = useState(
     existingAppt?.skip_school_holidays ?? false
   );
@@ -550,6 +551,7 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
       skip_school_holidays: recurrence !== "none" && skipSchoolHolidays,
       // Ereignisse (Geburtstag, Feiertag …) brauchen keine Zusage
       is_tentative: !isEvent && isTentative,
+      is_important: isImportant,
     };
 
     try {
@@ -880,6 +882,11 @@ export default function AppointmentForm({ onClose }: AppointmentFormProps) {
                 <Switch checked={isTentative} onCheckedChange={setIsTentative} />
               </div>
             )}
+
+            <div className="flex items-center gap-2">
+              <Label title="Wird auf der Startseite rot umrahmt">Wichtig</Label>
+              <Switch checked={isImportant} onCheckedChange={setIsImportant} />
+            </div>
           </div>
 
           {/* Owner selection */}

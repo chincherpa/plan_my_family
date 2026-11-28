@@ -6,6 +6,10 @@ Familienmitglied, plus die Spalten „Alle" (Familienausflüge) und „Ereigniss
 
 Über einen gewöhnlichen Kalender hinaus:
 
+- **Startseite „Heute“** — Dashboard mit den heutigen Terminen je Familienmitglied (in dessen
+  Farbe), Notizen der Termine direkt darunter. Vergangene Termine sind ausgegraut und
+  durchgestrichen, als **wichtig** markierte Termine rot umrahmt (Migration 026). Darunter das
+  heutige Mittag- und Abendessen.
 - **Aufsichtsprüfung** — Mitglieder mit „kann nicht alleine sein" werden markiert,
   sobald kein erziehungsberechtigtes Mitglied verfügbar ist.
 - **Fahrzeugkonflikte** — Doppelbuchungen eines Fahrzeugs werden inklusive

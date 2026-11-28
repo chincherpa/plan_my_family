@@ -121,6 +121,8 @@ export interface Database {
           skip_school_holidays: boolean;
           /** Eingetragen, aber noch nicht zugesagt — wird abgeschwächt angezeigt */
           is_tentative: boolean;
+          /** Als wichtig markiert — im Dashboard rot umrahmt */
+          is_important: boolean;
           created_at: string;
         };
         Insert: {
@@ -146,6 +148,7 @@ export interface Database {
           anniversary_year_known?: boolean;
           skip_school_holidays?: boolean;
           is_tentative?: boolean;
+          is_important?: boolean;
           created_at?: string;
         };
         Update: {
@@ -171,6 +174,7 @@ export interface Database {
           anniversary_year_known?: boolean;
           skip_school_holidays?: boolean;
           is_tentative?: boolean;
+          is_important?: boolean;
           created_at?: string;
         };
         Relationships: [];

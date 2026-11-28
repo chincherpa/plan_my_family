@@ -39,6 +39,7 @@ export function appointmentData(appt: AppointmentWithParticipants) {
     exception_date: appt.exception_date,
     skip_school_holidays: appt.skip_school_holidays,
     is_tentative: appt.is_tentative ?? false,
+    is_important: appt.is_important ?? false,
   };
 }
 

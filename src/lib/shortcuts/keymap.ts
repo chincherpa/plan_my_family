@@ -16,6 +16,7 @@ export const SHORTCUT_ACTIONS = [
   { id: "nextDay", label: "Nächster Tag", group: "Kalender", defaultKey: "ArrowRight" },
   { id: "pickDate", label: "Datum wählen", group: "Kalender", defaultKey: "D" },
   { id: "editMeal", label: "Essen des Tages bearbeiten", group: "Kalender", defaultKey: "M" },
+  { id: "goDashboard", label: "Startseite (Heute) öffnen", group: "Navigation", defaultKey: "0" },
   { id: "goCalendar", label: "Kalender öffnen", group: "Navigation", defaultKey: "1" },
   { id: "goMeals", label: "Essen öffnen", group: "Navigation", defaultKey: "2" },
   { id: "goAnniversaries", label: "Jahrestage öffnen", group: "Navigation", defaultKey: "3" },
