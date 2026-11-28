@@ -1,7 +1,7 @@
 "use client";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, CalendarDays, CircleHelp, Repeat, UtensilsCrossed } from "lucide-react";
+import { AlertCircle, ArrowDown, Car, CalendarDays, CircleHelp, Repeat, UtensilsCrossed } from "lucide-react";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useCalendarStore } from "@/lib/store/calendarStore";
 import { expandAppointments, type AppointmentOccurrence } from "@/lib/utils/recurrence";
@@ -9,7 +9,14 @@ import { holidaysOn } from "@/lib/utils/schoolHolidays";
 import { anniversaryBadge } from "@/lib/anniversaries";
 import { cn, formatTime, getISOWeek, hexToRgba, localDateStr, readableTextColor, startOfDay } from "@/lib/utils";
 import { useNow } from "@/lib/useNow";
-import { appointmentsByMember, familyParticipants, isOngoing, isPast, type DashboardEntry } from "@/lib/dashboard";
+import {
+  appointmentsByMember,
+  familyParticipants,
+  formatCountdown,
+  isOngoing,
+  isPast,
+  type DashboardEntry,
+} from "@/lib/dashboard";
 import type { MealType } from "@/lib/recipes/stats";
 import type { AppointmentWithParticipants, FamilyMember } from "@/lib/supabase/types";
 import AppointmentForm from "@/components/appointments/AppointmentForm";
@@ -151,31 +158,40 @@ export default function DashboardView() {
           <p className="text-sm text-[var(--muted-foreground)]">
             Noch keine Familienmitglieder angelegt.
           </p>
+        ) : byMember.family.length === 0 && byMember.members.every(({ entries }) => entries.length === 0) ? (
+          <p className="rounded-2xl border bg-[var(--card)] px-4 py-6 text-center text-sm text-[var(--muted-foreground)]">
+            Heute stehen keine Termine an.
+          </p>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {byMember.members.map(({ member, entries }) => (
+            {/* Familientermine zuerst und nur einmal, wie die Spalte „Alle“ im Kalender */}
+            {byMember.family.length > 0 && (
               <DayCard
-                key={member.id}
-                name={member.name}
-                color={member.color}
-                entries={entries}
+                name="Alle"
+                color={ALL_COLUMN_COLOR}
+                entries={byMember.family}
                 now={now}
                 colorOf={ownerColor}
                 vehicleOf={(id) => vehicles.find((v) => v.id === id)}
+                participantsOf={(appt) => familyParticipants(appt, members)}
                 onOpen={open}
               />
-            ))}
-            {/* Familientermine nur einmal, wie die Spalte „Alle“ im Kalender */}
-            <DayCard
-              name="Alle"
-              color={ALL_COLUMN_COLOR}
-              entries={byMember.family}
-              now={now}
-              colorOf={ownerColor}
-              vehicleOf={(id) => vehicles.find((v) => v.id === id)}
-              participantsOf={(appt) => familyParticipants(appt, members)}
-              onOpen={open}
-            />
+            )}
+            {/* Mitglieder ohne Termin heute werden ausgeblendet */}
+            {byMember.members
+              .filter(({ entries }) => entries.length > 0)
+              .map(({ member, entries }) => (
+                <DayCard
+                  key={member.id}
+                  name={member.name}
+                  color={member.color}
+                  entries={entries}
+                  now={now}
+                  colorOf={ownerColor}
+                  vehicleOf={(id) => vehicles.find((v) => v.id === id)}
+                  onOpen={open}
+                />
+              ))}
           </div>
         )}
 
@@ -253,109 +269,128 @@ function DayCard({
       >
         <h3 className="truncate font-semibold">{name}</h3>
         <span className="text-xs font-medium opacity-80 tabular">
-          {entries.length === 0 ? "frei" : open === 0 ? "alles erledigt" : `${open} offen`}
+          {open === 0 ? "alles erledigt" : `${open} offen`}
         </span>
       </header>
       <div className="flex flex-1 flex-col gap-1.5 p-2" style={{ backgroundColor: hexToRgba(cardColor, 0.05) }}>
-        {entries.length === 0 ? (
-          <p className="px-1 py-3 text-center text-sm text-[var(--muted-foreground)]">Keine Termine heute</p>
-        ) : (
-          entries.map(({ occ, isOwner }) => {
-            const appt = occ.appointment;
-            const past = isPast(occ, now);
-            const ongoing = isOngoing(occ, now);
-            const color = past ? PAST_COLOR : colorOf(occ);
-            const vehicle = appt.vehicle_id ? vehicleOf(appt.vehicle_id) : undefined;
-            const notes = appt.notes?.trim();
-            const participants = participantsOf?.(appt) ?? null;
-            return (
-              <button
-                key={occ.key}
-                type="button"
-                onClick={() => onOpen(occ)}
-                className={cn(
-                  "flex w-full gap-2.5 rounded-xl bg-[var(--card)] px-2.5 py-2 text-left transition-colors hover:bg-[var(--accent)]",
-                  appt.is_important ? "border-2 border-red-600" : "border",
-                  past && "text-[var(--muted-foreground)]"
-                )}
-                style={{ opacity: past ? 0.6 : appt.is_tentative ? TENTATIVE_OPACITY + 0.2 : undefined }}
-                title={[
-                  appt.title,
-                  appt.is_important && IMPORTANT_HINT,
-                  appt.is_tentative && TENTATIVE_HINT,
-                  !isOwner && "Teilnahme",
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}
+        {entries.map(({ occ, isOwner }) => {
+          const appt = occ.appointment;
+          const past = isPast(occ, now);
+          const ongoing = isOngoing(occ, now);
+          const color = past ? PAST_COLOR : colorOf(occ);
+          const vehicle = appt.vehicle_id ? vehicleOf(appt.vehicle_id) : undefined;
+          const notes = appt.notes?.trim();
+          const participants = participantsOf?.(appt) ?? null;
+          // Ganztägige Termine haben keine Startzeit, auf die man warten könnte
+          const countdown = appt.is_all_day ? null : formatCountdown(occ.occurrenceStart, now);
+          // Mit Anfahrt zusätzlich die Zeit bis zur Abfahrt — entfällt, sobald man losgefahren ist
+          const departure =
+            countdown && appt.travel_before_min > 0 ? formatCountdown(occ.travelStart, now) : null;
+          return (
+            <Fragment key={occ.key}>
+            {countdown && (
+              <div
+                className="-mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 px-1 pt-0.5 text-xs font-semibold tabular"
+                style={{ color }}
               >
-                {/* Farbleiste: Farbe des Termin-Inhabers, gestrichelt bei bloßer Teilnahme */}
-                <span
-                  aria-hidden
-                  className="w-1.5 shrink-0 self-stretch rounded-full"
-                  style={
-                    isOwner
-                      ? { backgroundColor: color }
-                      : { backgroundImage: `repeating-linear-gradient(to bottom, ${color} 0 4px, transparent 4px 7px)` }
-                  }
-                />
-                <span className="min-w-0 flex-1">
-                  <span className={cn("flex items-center gap-1.5 text-xs tabular", past && "line-through")}>
-                    <span className={past ? undefined : "text-[var(--muted-foreground)]"}>
-                      {appt.is_all_day
-                        ? "Ganztägig"
-                        : `${formatTime(occ.occurrenceStart)}–${formatTime(occ.occurrenceEnd)}`}
-                    </span>
-                    {ongoing && (
-                      <span
-                        className="rounded-full px-1.5 py-px text-[10px] font-semibold no-underline"
-                        style={{ backgroundColor: color, color: readableTextColor(colorOf(occ)) }}
-                      >
-                        jetzt
-                      </span>
-                    )}
-                    <span className="ml-auto flex items-center gap-1">
-                      {appt.is_important && (
-                        <AlertCircle className="h-3.5 w-3.5 text-red-600" aria-label={IMPORTANT_HINT} />
-                      )}
-                      {appt.is_tentative && <CircleHelp className="h-3.5 w-3.5" aria-label={TENTATIVE_HINT} />}
-                      {occ.isRecurringInstance && <Repeat className="h-3 w-3 opacity-60" aria-label="Serie" />}
-                    </span>
+                {departure && (
+                  <span className="flex items-center gap-1" title={`Abfahrt ${departure}`}>
+                    <Car className="h-3.5 w-3.5" aria-hidden />
+                    Abfahrt {departure}
                   </span>
-                  <span className={cn("block break-words font-semibold leading-snug", past && "line-through")}>
-                    {appt.title}
-                  </span>
-                  {participants && (
-                    <span className="mt-1 flex flex-wrap gap-1" aria-label="Teilnehmer">
-                      {participants.map((m) => (
-                        <span
-                          key={m.id}
-                          className="rounded-full px-1.5 py-px text-[10px] font-semibold"
-                          style={
-                            past
-                              ? { boxShadow: "inset 0 0 0 1px var(--border)" }
-                              : { backgroundColor: m.color, color: readableTextColor(m.color) }
-                          }
-                        >
-                          {m.name}
-                        </span>
-                      ))}
-                    </span>
-                  )}
-                  {vehicle && (
-                    <span className="block truncate text-xs text-[var(--muted-foreground)]">
-                      {vehicle.icon_emoji} {vehicle.name}
-                    </span>
-                  )}
-                  {notes && (
-                    <span className="mt-1 block whitespace-pre-wrap break-words border-l-2 border-[var(--border)] pl-2 text-xs text-[var(--muted-foreground)]">
-                      {notes}
-                    </span>
-                  )}
+                )}
+                <span className="flex items-center gap-1" title={`Termin beginnt ${countdown}`}>
+                  <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+                  {departure ? `Termin ${countdown}` : countdown}
                 </span>
-              </button>
-            );
-          })
-        )}
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => onOpen(occ)}
+              className={cn(
+                "flex w-full gap-2.5 rounded-xl bg-[var(--card)] px-2.5 py-2 text-left transition-colors hover:bg-[var(--accent)]",
+                appt.is_important ? "border-2 border-red-600" : "border",
+                past && "text-[var(--muted-foreground)]"
+              )}
+              style={{ opacity: past ? 0.6 : appt.is_tentative ? TENTATIVE_OPACITY + 0.2 : undefined }}
+              title={[
+                appt.title,
+                appt.is_important && IMPORTANT_HINT,
+                appt.is_tentative && TENTATIVE_HINT,
+                !isOwner && "Teilnahme",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            >
+              {/* Farbleiste: Farbe des Termin-Inhabers, gestrichelt bei bloßer Teilnahme */}
+              <span
+                aria-hidden
+                className="w-1.5 shrink-0 self-stretch rounded-full"
+                style={
+                  isOwner
+                    ? { backgroundColor: color }
+                    : { backgroundImage: `repeating-linear-gradient(to bottom, ${color} 0 4px, transparent 4px 7px)` }
+                }
+              />
+              <span className="min-w-0 flex-1">
+                <span className={cn("flex items-center gap-1.5 text-xs tabular", past && "line-through")}>
+                  <span className={past ? undefined : "text-[var(--muted-foreground)]"}>
+                    {appt.is_all_day
+                      ? "Ganztägig"
+                      : `${formatTime(occ.occurrenceStart)}–${formatTime(occ.occurrenceEnd)}`}
+                  </span>
+                  {ongoing && (
+                    <span
+                      className="rounded-full px-1.5 py-px text-[10px] font-semibold no-underline"
+                      style={{ backgroundColor: color, color: readableTextColor(colorOf(occ)) }}
+                    >
+                      jetzt
+                    </span>
+                  )}
+                  <span className="ml-auto flex items-center gap-1">
+                    {appt.is_important && (
+                      <AlertCircle className="h-3.5 w-3.5 text-red-600" aria-label={IMPORTANT_HINT} />
+                    )}
+                    {appt.is_tentative && <CircleHelp className="h-3.5 w-3.5" aria-label={TENTATIVE_HINT} />}
+                    {occ.isRecurringInstance && <Repeat className="h-3 w-3 opacity-60" aria-label="Serie" />}
+                  </span>
+                </span>
+                <span className={cn("block break-words font-semibold leading-snug", past && "line-through")}>
+                  {appt.title}
+                </span>
+                {participants && (
+                  <span className="mt-1 flex flex-wrap gap-1" aria-label="Teilnehmer">
+                    {participants.map((m) => (
+                      <span
+                        key={m.id}
+                        className="rounded-full px-1.5 py-px text-[10px] font-semibold"
+                        style={
+                          past
+                            ? { boxShadow: "inset 0 0 0 1px var(--border)" }
+                            : { backgroundColor: m.color, color: readableTextColor(m.color) }
+                        }
+                      >
+                        {m.name}
+                      </span>
+                    ))}
+                  </span>
+                )}
+                {vehicle && (
+                  <span className="block truncate text-xs text-[var(--muted-foreground)]">
+                    {vehicle.icon_emoji} {vehicle.name}
+                  </span>
+                )}
+                {notes && (
+                  <span className="mt-1 block whitespace-pre-wrap break-words border-l-2 border-[var(--border)] pl-2 text-xs text-[var(--muted-foreground)]">
+                    {notes}
+                  </span>
+                )}
+              </span>
+            </button>
+            </Fragment>
+          );
+        })}
       </div>
     </section>
   );

@@ -70,3 +70,18 @@ export function isPast(occ: AppointmentOccurrence, now: Date): boolean {
 export function isOngoing(occ: AppointmentOccurrence, now: Date): boolean {
   return !occ.appointment.is_all_day && occ.occurrenceStart <= now && occ.occurrenceEnd > now;
 }
+
+/**
+ * Time left until an appointment starts, e.g. "in 2h 23′" or "in 5′";
+ * null once it has started. Partial minutes round up, so the label never
+ * says "in 0′" while the appointment is still ahead.
+ */
+export function formatCountdown(start: Date, now: Date): string | null {
+  const ms = start.getTime() - now.getTime();
+  if (ms <= 0) return null;
+  const totalMin = Math.ceil(ms / 60_000);
+  const h = Math.floor(totalMin / 60);
+  const min = totalMin % 60;
+  if (h === 0) return `in ${min}′`;
+  return min === 0 ? `in ${h}h` : `in ${h}h ${min}′`;
+}
