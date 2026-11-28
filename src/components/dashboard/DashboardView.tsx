@@ -25,8 +25,6 @@ import {
 } from "@/components/calendar/model";
 
 const IMPORTANT_HINT = "Wichtig";
-/** Rahmen wichtiger Termine */
-const IMPORTANT_COLOR = "#dc2626";
 /** Neutral grey for appointments that are already over */
 const PAST_COLOR = "var(--muted-foreground)";
 
@@ -134,13 +132,9 @@ export default function DashboardView() {
                   onClick={() => open(occ)}
                   className={cn(
                     "flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium hover:opacity-90",
-                    appt.is_important && "ring-2 ring-offset-1"
+                    appt.is_important && "ring-2 ring-red-600 ring-offset-1"
                   )}
-                  style={{
-                    backgroundColor: EVENT_COLOR,
-                    color: readableTextColor(EVENT_COLOR),
-                    ...(appt.is_important && { ["--tw-ring-color" as string]: IMPORTANT_COLOR }),
-                  }}
+                  style={{ backgroundColor: EVENT_COLOR, color: readableTextColor(EVENT_COLOR) }}
                 >
                   {badge?.emoji ?? eventEmoji(appt.title)} {appt.title}
                   {badge?.count != null && ` (${badge.count})`}
@@ -262,14 +256,10 @@ function MemberCard({
                 onClick={() => onOpen(occ)}
                 className={cn(
                   "flex w-full gap-2.5 rounded-xl bg-[var(--card)] px-2.5 py-2 text-left transition-colors hover:bg-[var(--accent)]",
-                  appt.is_important ? "border-2" : "border",
+                  appt.is_important ? "border-2 border-red-600" : "border",
                   past && "text-[var(--muted-foreground)]"
                 )}
-                style={{
-                  // Inline: die globale *-Regel für border-color schlägt Tailwind-Farbklassen
-                  borderColor: appt.is_important ? IMPORTANT_COLOR : undefined,
-                  opacity: past ? 0.6 : appt.is_tentative ? TENTATIVE_OPACITY + 0.2 : undefined,
-                }}
+                style={{ opacity: past ? 0.6 : appt.is_tentative ? TENTATIVE_OPACITY + 0.2 : undefined }}
                 title={[
                   appt.title,
                   appt.is_important && IMPORTANT_HINT,
@@ -306,7 +296,7 @@ function MemberCard({
                     )}
                     <span className="ml-auto flex items-center gap-1">
                       {appt.is_important && (
-                        <AlertCircle className="h-3.5 w-3.5" style={{ color: IMPORTANT_COLOR }} aria-label={IMPORTANT_HINT} />
+                        <AlertCircle className="h-3.5 w-3.5 text-red-600" aria-label={IMPORTANT_HINT} />
                       )}
                       {appt.is_tentative && <CircleHelp className="h-3.5 w-3.5" aria-label={TENTATIVE_HINT} />}
                       {occ.isRecurringInstance && <Repeat className="h-3 w-3 opacity-60" aria-label="Serie" />}
