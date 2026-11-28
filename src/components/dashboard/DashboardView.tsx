@@ -9,9 +9,9 @@ import { holidaysOn } from "@/lib/utils/schoolHolidays";
 import { anniversaryBadge } from "@/lib/anniversaries";
 import { cn, formatTime, getISOWeek, hexToRgba, localDateStr, readableTextColor, startOfDay } from "@/lib/utils";
 import { useNow } from "@/lib/useNow";
-import { appointmentsByMember, isOngoing, isPast, type DashboardEntry } from "@/lib/dashboard";
+import { appointmentsByMember, familyParticipants, isOngoing, isPast, type DashboardEntry } from "@/lib/dashboard";
 import type { MealType } from "@/lib/recipes/stats";
-import type { FamilyMember } from "@/lib/supabase/types";
+import type { AppointmentWithParticipants, FamilyMember } from "@/lib/supabase/types";
 import AppointmentForm from "@/components/appointments/AppointmentForm";
 import MealEditDialog from "@/components/calendar/MealEditDialog";
 import {
@@ -54,7 +54,7 @@ export default function DashboardView() {
     return buildDayData(today, occurrences, []);
   }, [appointments, schoolHolidays, today]);
 
-  const perMember = useMemo(() => appointmentsByMember(dayData, members), [dayData, members]);
+  const byMember = useMemo(() => appointmentsByMember(dayData, members), [dayData, members]);
   const events = dayData.banner.filter((occ) => occ.appointment.is_event);
   const holidays = holidaysOn(todayKey, schoolHolidays);
   const meal = meals.find((m) => m.date === todayKey);
@@ -153,10 +153,11 @@ export default function DashboardView() {
           </p>
         ) : (
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {perMember.map(({ member, entries }) => (
-              <MemberCard
+            {byMember.members.map(({ member, entries }) => (
+              <DayCard
                 key={member.id}
-                member={member}
+                name={member.name}
+                color={member.color}
                 entries={entries}
                 now={now}
                 colorOf={ownerColor}
@@ -164,6 +165,17 @@ export default function DashboardView() {
                 onOpen={open}
               />
             ))}
+            {/* Familientermine nur einmal, wie die Spalte „Alle“ im Kalender */}
+            <DayCard
+              name="Alle"
+              color={ALL_COLUMN_COLOR}
+              entries={byMember.family}
+              now={now}
+              colorOf={ownerColor}
+              vehicleOf={(id) => vehicles.find((v) => v.id === id)}
+              participantsOf={(appt) => familyParticipants(appt, members)}
+              onOpen={open}
+            />
           </div>
         )}
 
@@ -208,37 +220,43 @@ export default function DashboardView() {
   );
 }
 
-function MemberCard({
-  member,
+/** One card of today's appointments: a family member, or "Alle" for all-family appointments. */
+function DayCard({
+  name,
+  color: cardColor,
   entries,
   now,
   colorOf,
   vehicleOf,
+  participantsOf,
   onOpen,
 }: {
-  member: FamilyMember;
+  name: string;
+  color: string;
   entries: DashboardEntry[];
   now: Date;
   colorOf: (occ: AppointmentOccurrence) => string;
   vehicleOf: (id: string) => { icon_emoji: string; name: string } | undefined;
+  /** Only for "Alle": the participants when not everyone takes part, else null */
+  participantsOf?: (appt: AppointmentWithParticipants) => FamilyMember[] | null;
   onOpen: (occ: AppointmentOccurrence) => void;
 }) {
   const open = entries.filter((e) => !isPast(e.occ, now)).length;
   return (
     <section
       className="flex flex-col overflow-hidden rounded-2xl border bg-[var(--card)]"
-      style={{ borderColor: hexToRgba(member.color, 0.5) }}
+      style={{ borderColor: hexToRgba(cardColor, 0.5) }}
     >
       <header
         className="flex items-center justify-between gap-2 px-3 py-2"
-        style={{ backgroundColor: member.color, color: readableTextColor(member.color) }}
+        style={{ backgroundColor: cardColor, color: readableTextColor(cardColor) }}
       >
-        <h3 className="truncate font-semibold">{member.name}</h3>
+        <h3 className="truncate font-semibold">{name}</h3>
         <span className="text-xs font-medium opacity-80 tabular">
           {entries.length === 0 ? "frei" : open === 0 ? "alles erledigt" : `${open} offen`}
         </span>
       </header>
-      <div className="flex flex-1 flex-col gap-1.5 p-2" style={{ backgroundColor: hexToRgba(member.color, 0.05) }}>
+      <div className="flex flex-1 flex-col gap-1.5 p-2" style={{ backgroundColor: hexToRgba(cardColor, 0.05) }}>
         {entries.length === 0 ? (
           <p className="px-1 py-3 text-center text-sm text-[var(--muted-foreground)]">Keine Termine heute</p>
         ) : (
@@ -249,6 +267,7 @@ function MemberCard({
             const color = past ? PAST_COLOR : colorOf(occ);
             const vehicle = appt.vehicle_id ? vehicleOf(appt.vehicle_id) : undefined;
             const notes = appt.notes?.trim();
+            const participants = participantsOf?.(appt) ?? null;
             return (
               <button
                 key={occ.key}
@@ -305,6 +324,23 @@ function MemberCard({
                   <span className={cn("block break-words font-semibold leading-snug", past && "line-through")}>
                     {appt.title}
                   </span>
+                  {participants && (
+                    <span className="mt-1 flex flex-wrap gap-1" aria-label="Teilnehmer">
+                      {participants.map((m) => (
+                        <span
+                          key={m.id}
+                          className="rounded-full px-1.5 py-px text-[10px] font-semibold"
+                          style={
+                            past
+                              ? { boxShadow: "inset 0 0 0 1px var(--border)" }
+                              : { backgroundColor: m.color, color: readableTextColor(m.color) }
+                          }
+                        >
+                          {m.name}
+                        </span>
+                      ))}
+                    </span>
+                  )}
                   {vehicle && (
                     <span className="block truncate text-xs text-[var(--muted-foreground)]">
                       {vehicle.icon_emoji} {vehicle.name}
