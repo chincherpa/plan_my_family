@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { appointment, d, member, occurrence, participant } from "@/lib/utils/__fixtures__/calendar";
 import { buildDayData } from "@/components/calendar/model";
-import { appointmentsByMember, isOngoing, isPast } from "./dashboard";
+import { appointmentsByMember, familyParticipants, isOngoing, isPast } from "./dashboard";
 
 const anna = member({ name: "Anna" });
 const ben = member({ name: "Ben" });
 const day = d("2026-06-01");
 
 function titles(result: ReturnType<typeof appointmentsByMember>, memberId: string) {
-  return result.find((r) => r.member.id === memberId)!.entries.map((e) => `${e.occ.appointment.title}${e.isOwner ? "" : "*"}`);
+  return result.members.find((r) => r.member.id === memberId)!.entries.map((e) => `${e.occ.appointment.title}${e.isOwner ? "" : "*"}`);
 }
 
 describe("appointmentsByMember", () => {
@@ -34,7 +34,7 @@ describe("appointmentsByMember", () => {
     expect(titles(result, ben.id)).toEqual(["Arzt*"]);
   });
 
-  it("shows all-family appointments for every member and skips Ereignisse", () => {
+  it("puts all-family appointments into the family list only and skips Ereignisse", () => {
     const family = appointment({ title: "Essen", is_all_family: true, owner_id: null });
     const birthday = appointment({
       title: "Geburtstag Oma",
@@ -44,14 +44,15 @@ describe("appointmentsByMember", () => {
     });
     const data = buildDayData(day, [family, birthday].map((a) => occurrence(a)), []);
     const result = appointmentsByMember(data, [anna, ben]);
-    expect(titles(result, anna.id)).toEqual(["Essen*"]);
-    expect(titles(result, ben.id)).toEqual(["Essen*"]);
+    expect(titles(result, anna.id)).toEqual([]);
+    expect(titles(result, ben.id)).toEqual([]);
+    expect(result.family.map((e) => e.occ.appointment.title)).toEqual(["Essen"]);
   });
 
   it("ignores appointments of other days", () => {
     const tomorrow = appointment({ owner_id: anna.id, start: "2026-06-02 09:00", end: "2026-06-02 10:00" });
     const data = buildDayData(day, [occurrence(tomorrow)], []);
-    expect(appointmentsByMember(data, [anna])[0].entries).toEqual([]);
+    expect(appointmentsByMember(data, [anna]).members[0].entries).toEqual([]);
   });
 });
 
@@ -75,5 +76,22 @@ describe("isPast / isOngoing", () => {
     );
     expect(isOngoing(allDay, d("2026-06-01 12:00"))).toBe(false);
     expect(isPast(allDay, d("2026-06-01 23:59"))).toBe(false);
+  });
+});
+
+describe("familyParticipants", () => {
+  it("is null when everyone takes part", () => {
+    expect(familyParticipants(appointment({ is_all_family: true }), [anna, ben])).toBeNull();
+    expect(
+      familyParticipants(
+        appointment({ is_all_family: true, participants: [participant(anna.id), participant(ben.id)] }),
+        [anna, ben]
+      )
+    ).toBeNull();
+  });
+
+  it("lists the participants when someone is left out", () => {
+    const appt = appointment({ is_all_family: true, participants: [participant(ben.id)] });
+    expect(familyParticipants(appt, [anna, ben])?.map((m) => m.name)).toEqual(["Ben"]);
   });
 });
