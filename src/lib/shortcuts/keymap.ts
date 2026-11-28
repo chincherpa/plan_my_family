@@ -20,6 +20,7 @@ export const SHORTCUT_ACTIONS = [
   { id: "goMeals", label: "Essen öffnen", group: "Navigation", defaultKey: "2" },
   { id: "goAnniversaries", label: "Jahrestage öffnen", group: "Navigation", defaultKey: "3" },
   { id: "goSettings", label: "Einstellungen öffnen", group: "Navigation", defaultKey: "4" },
+  { id: "goNotes", label: "Notizen öffnen", group: "Navigation", defaultKey: "5" },
   { id: "toggleTodos", label: "Todo-Liste ein/aus", group: "Allgemein", defaultKey: "L" },
   { id: "toggleTheme", label: "Hell/Dunkel umschalten", group: "Allgemein", defaultKey: "Shift+D" },
   { id: "showHelp", label: "Shortcut-Übersicht", group: "Allgemein", defaultKey: "?" },

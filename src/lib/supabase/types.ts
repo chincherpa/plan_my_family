@@ -397,6 +397,26 @@ export interface Database {
         Args: { member_ids: string[] };
         Returns: undefined;
       };
+      notes_list: {
+        Args: { pin: string };
+        Returns: Json;
+      };
+      notes_save: {
+        Args: { pin: string; note_data: Json; note_id?: string | null };
+        Returns: Json;
+      };
+      notes_set_important: {
+        Args: { pin: string; note_id: string; important: boolean };
+        Returns: Json;
+      };
+      notes_delete: {
+        Args: { pin: string; note_id: string };
+        Returns: Json;
+      };
+      notes_change_pin: {
+        Args: { current_pin: string; new_pin: string };
+        Returns: Json;
+      };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
@@ -413,6 +433,20 @@ export type Meal = Database["public"]["Tables"]["meals"]["Row"];
 export type SchoolHoliday = Database["public"]["Tables"]["school_holidays"]["Row"];
 export type Todo = Database["public"]["Tables"]["todos"]["Row"];
 export type TodoItem = Database["public"]["Tables"]["todo_items"]["Row"];
+
+/**
+ * Notiz aus dem PIN-geschützten Bereich. Keine Tabelle in `Tables`, weil
+ * `notes` nur über die RPCs notes_* erreichbar ist (Migration 025).
+ */
+export interface Note {
+  id: string;
+  family_id: string;
+  title: string;
+  body: string;
+  is_important: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 /** Appointment enriched with participants */
 export interface AppointmentWithParticipants extends Appointment {

@@ -24,6 +24,11 @@ Familienmitglied, plus die Spalten „Alle" (Familienausflüge) und „Ereigniss
 - **Essensplanung** — Mittag- und Abendessen pro Tag als freier Text oder aus der Rezepte-App.
   Pro Wochentag lässt sich in den Einstellungen eine Kategorie festlegen (z. B. Montag = Pasta);
   beim Planen werden dann zuerst nur Gerichte dieser Kategorie angeboten, ein Schalter zeigt alle.
+- **Notizen** — PIN-geschützter Bereich (Standard-PIN `0000`) mit beliebig vielen Text-Notizen:
+  anlegen, bearbeiten, als wichtig markieren, löschen, durchsuchen. Die PIN ändern nur Erwachsene
+  (erziehungsberechtigte Mitglieder) in den Einstellungen. Die Datenbank prüft die PIN bei jedem
+  Zugriff (Migration 025), nach 5 Fehlversuchen ist sie 5 Minuten gesperrt; die Seite sperrt sich
+  beim Verlassen und nach 5 Minuten ohne Eingabe.
 - **Termin-Import** — Termine (auch Serien, mit Besitzer und weiteren Teilnehmern) aus einer
   CSV-Datei (Vorlage zum Download in den Einstellungen) übernehmen, siehe [docs/termin-import.md](docs/termin-import.md).
 
