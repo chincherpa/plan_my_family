@@ -1,12 +1,13 @@
 "use client";
 import { useMemo, useState } from "react";
-import { ShoppingCart, X } from "lucide-react";
+import { ShoppingCart, Sparkles, X } from "lucide-react";
 import { useDataStore } from "@/lib/store/dataStore";
 import { getISOWeek, localDateStr, startOfDay } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 import MealEditDialog from "@/components/calendar/MealEditDialog";
 import MealDishDialog from "@/components/calendar/MealDishDialog";
 import ShoppingListDialog from "./ShoppingListDialog";
+import MealSuggestDialog from "./MealSuggestDialog";
 import { weekStartOf, type PlannedDish } from "@/lib/recipes/shoppingList";
 import type { Meal } from "@/lib/supabase/types";
 
@@ -27,6 +28,8 @@ export default function MealOverview() {
   /** Getipptes Gericht: fragt „Ändern“ oder „Rezept anzeigen“ */
   const [tap, setTap] = useState<{ date: string; type: MealType } | null>(null);
   const [shopping, setShopping] = useState<{ kw: number; weekStart: string; planned: PlannedDish[] } | null>(null);
+  /** Woche, für die der Assistent Gerichte vorschlägt */
+  const [suggest, setSuggest] = useState<{ kw: number; dates: string[] } | null>(null);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
@@ -225,11 +228,36 @@ export default function MealOverview() {
                 return slots;
               });
             return (
-              <div className="flex items-center gap-3 mb-2">
+              <div className="flex items-center gap-2 sm:gap-3 mb-2">
                 <span className="text-xs font-semibold text-[var(--muted-foreground)] uppercase tracking-wider">
                   KW {kw}
                 </span>
                 <div className="flex-1 h-px bg-[var(--border)]" />
+                {(() => {
+                  const open = groupDays.filter((d) => !d.isPast);
+                  const free = open.some((d) => {
+                    const m = mealsByDate.get(d.dateStr);
+                    return !m?.lunch?.trim() || !m?.dinner?.trim();
+                  });
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setSuggest({ kw, dates: open.map((d) => d.dateStr) })}
+                      disabled={!free || !family || recipes.length === 0}
+                      title={
+                        recipes.length === 0
+                          ? "Erst Gerichte anlegen"
+                          : free
+                          ? "Der Assistent schlägt Gerichte für die freien Plätze vor"
+                          : "Diese Woche ist schon voll geplant"
+                      }
+                      className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--primary)]/40 bg-[var(--primary)]/10 px-2.5 py-1 text-xs font-medium text-[var(--primary)] hover:bg-[var(--primary)]/20 disabled:opacity-40"
+                    >
+                      <Sparkles className="h-3.5 w-3.5" />
+                      Essen planen
+                    </button>
+                  );
+                })()}
                 <button
                   type="button"
                   onClick={() => setShopping({ kw, weekStart: weekStartOf(groupDays[0].date), planned })}
@@ -238,7 +266,7 @@ export default function MealOverview() {
                   className="flex shrink-0 items-center gap-1.5 rounded-lg border border-[var(--border)] px-2.5 py-1 text-xs font-medium text-[var(--foreground)] hover:bg-[var(--accent)] disabled:opacity-40"
                 >
                   <ShoppingCart className="h-3.5 w-3.5" />
-                  Einkaufszettel erstellen
+                  Einkaufszettel<span className="hidden sm:inline"> erstellen</span>
                 </button>
               </div>
             );
@@ -295,6 +323,14 @@ export default function MealOverview() {
           planned={shopping.planned}
           recipes={recipes}
           onClose={() => setShopping(null)}
+        />
+      )}
+
+      {suggest && (
+        <MealSuggestDialog
+          title={`Essen planen · KW ${suggest.kw}`}
+          dates={suggest.dates}
+          onClose={() => setSuggest(null)}
         />
       )}
 

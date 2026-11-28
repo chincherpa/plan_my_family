@@ -57,15 +57,13 @@ export async function interpretText(
   const members = memberNames.length > 0 ? memberNames.join(", ") : "(keine)";
 
   const response = await client.beta.messages.parse({
-    model: "claude-sonnet-5-5",
-    // Obergrenze gegen ausufernde Kosten. Sonnet 5.5 denkt auch ohne `thinking`
+    model: "claude-haiku-5-5",
+    // Obergrenze gegen ausufernde Kosten. Haiku 5.5 denkt auch ohne `thinking`
     // adaptiv, und die Denk-Tokens zählen zu max_tokens — daher nicht knapper.
     max_tokens: 4000,
     // Einfache Extraktion: niedriger Aufwand reicht und hält die Antwort schnell.
     output_config: { effort: "low", format: betaZodOutputFormat(InterpretationSchema) },
-    // Lehnt das Modell ab, beantwortet das Fallback-Modell dieselbe Anfrage.
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
+    // Haiku 5.5 hat keinen serverseitigen Fallback: Ablehnungen kommen als stop_reason "refusal".
     system: SYSTEM_PROMPT,
     messages: [
       {
