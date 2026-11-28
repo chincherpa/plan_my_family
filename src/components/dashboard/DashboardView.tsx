@@ -1,7 +1,7 @@
 "use client";
 import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, ArrowDown, Car, CalendarDays, CircleHelp, Repeat, UtensilsCrossed } from "lucide-react";
+import { AlertCircle, ArrowDown, Car, CalendarDays, Hourglass, CircleHelp, Repeat, UtensilsCrossed } from "lucide-react";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useCalendarStore } from "@/lib/store/calendarStore";
 import { expandAppointments, type AppointmentOccurrence } from "@/lib/utils/recurrence";
@@ -13,6 +13,7 @@ import {
   appointmentsByMember,
   familyParticipants,
   formatCountdown,
+  formatRemaining,
   isOngoing,
   isPast,
   type DashboardEntry,
@@ -286,12 +287,13 @@ function DayCard({
           // Mit Anfahrt zusätzlich die Zeit bis zur Abfahrt — entfällt, sobald man losgefahren ist
           const departure =
             countdown && appt.travel_before_min > 0 ? formatCountdown(occ.travelStart, now) : null;
+          // Läuft der Termin gerade: wie lange er noch dauert
+          const remaining = ongoing ? formatRemaining(occ.occurrenceEnd, now) : null;
           return (
             <Fragment key={occ.key}>
-            {countdown && (
+            {(countdown || remaining) && (
               <div
-                className="-mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 px-1 pt-0.5 text-xs font-semibold tabular"
-                style={{ color }}
+                className="-mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 px-1 pt-0.5 text-xs font-semibold tabular text-[var(--foreground)]"
               >
                 {departure && (
                   <span className="flex items-center gap-1" title={`Abfahrt ${departure}`}>
@@ -299,10 +301,18 @@ function DayCard({
                     Abfahrt {departure}
                   </span>
                 )}
-                <span className="flex items-center gap-1" title={`Termin beginnt ${countdown}`}>
-                  <ArrowDown className="h-3.5 w-3.5" aria-hidden />
-                  {departure ? `Termin ${countdown}` : countdown}
-                </span>
+                {countdown && (
+                  <span className="flex items-center gap-1" title={`Termin beginnt ${countdown}`}>
+                    <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+                    {departure ? `Termin ${countdown}` : countdown}
+                  </span>
+                )}
+                {remaining && (
+                  <span className="flex items-center gap-1" title={`Termin läuft ${remaining}`}>
+                    <Hourglass className="h-3.5 w-3.5" aria-hidden />
+                    {remaining}
+                  </span>
+                )}
               </div>
             )}
             <button

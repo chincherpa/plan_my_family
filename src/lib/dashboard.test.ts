@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { appointment, d, member, occurrence, participant } from "@/lib/utils/__fixtures__/calendar";
 import { buildDayData } from "@/components/calendar/model";
-import { appointmentsByMember, familyParticipants, formatCountdown, isOngoing, isPast } from "./dashboard";
+import { appointmentsByMember, familyParticipants, formatCountdown, formatRemaining, isOngoing, isPast } from "./dashboard";
 
 const anna = member({ name: "Anna" });
 const ben = member({ name: "Ben" });
@@ -112,5 +112,18 @@ describe("formatCountdown", () => {
   it("is null once the appointment has started", () => {
     expect(formatCountdown(start, start)).toBeNull();
     expect(formatCountdown(start, d("2026-06-01 15:10"))).toBeNull();
+  });
+});
+
+describe("formatRemaining", () => {
+  const end = d("2026-06-01 15:00");
+
+  it("formats the time left of a running appointment", () => {
+    expect(formatRemaining(end, d("2026-06-01 14:25"))).toBe("noch 35′");
+    expect(formatRemaining(end, d("2026-06-01 12:30"))).toBe("noch 2h 30′");
+  });
+
+  it("is null once the appointment is over", () => {
+    expect(formatRemaining(end, end)).toBeNull();
   });
 });
