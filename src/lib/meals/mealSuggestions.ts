@@ -113,8 +113,8 @@ export function buildPlannerPrompt(input: {
     });
 
   const slotLines = slots.map((s, i) => {
-    const cat = categoryForDate(weekdayCategories, s.date);
-    return `${i} | ${s.date} (${weekdayOf(s.date)}) | ${SLOT_LABEL[s.type]}${cat ? ` | Wochentag-Kategorie: ${cat}` : ""}`;
+    const cat = wantedCategory(recipes, weekdayCategories, s.date);
+    return `${i} | ${s.date} (${weekdayOf(s.date)}) | ${SLOT_LABEL[s.type]} | ${cat ? `Kategorie: ${cat}` : "Kategorie: frei"}`;
   });
 
   return [
@@ -130,17 +130,21 @@ export function buildPlannerPrompt(input: {
     "</bereits_geplant>",
     "",
     "<plaetze>",
-    "Nummer | Datum | Mahlzeit | Vorgabe",
+    "Nummer | Datum | Mahlzeit | Kategorie (aus den Einstellungen)",
     ...slotLines,
     "</plaetze>",
   ].join("\n");
 }
 
 /** Gewünschte Kategorie für einen Platz – nur, wenn es in der Rezeptliste Gerichte dazu gibt. */
-function wantedCategory(recipes: Recipe[], map: WeekdayCategories, date: string): string | null {
+export function wantedCategory(recipes: Recipe[], map: WeekdayCategories, date: string): string | null {
   const name = categoryForDate(map, date);
   if (!name) return null;
-  return recipes.some((r) => dishKey(r.category) === dishKey(name)) ? name : null;
+  return recipes.find((r) => dishKey(r.category) === dishKey(name))?.category ?? null;
+}
+
+function inCategory(category: string, name: string): boolean {
+  return dishKey(category) === dishKey(name);
 }
 
 /**
@@ -153,18 +157,20 @@ export function pickLocalOption(input: {
   todayStr: string;
   category: string | null;
   exclude: Set<string>;
+  /** true: nur Gerichte aus `category`, sonst null */
+  strict?: boolean;
   random?: () => number;
 }): SuggestionOption | null {
-  const { recipes, stats, todayStr, category, exclude, random = Math.random } = input;
+  const { recipes, stats, todayStr, category, exclude, strict = false, random = Math.random } = input;
   const free = recipes.filter((r) => !exclude.has(dishKey(r.name)));
-  const inCategory = category ? free.filter((r) => dishKey(r.category) === dishKey(category)) : [];
-  const pool = inCategory.length > 0 ? inCategory : free;
+  const matching = category ? free.filter((r) => inCategory(r.category, category)) : [];
+  const pool = matching.length > 0 || strict ? matching : free;
   const recipe = pickSuggestion(pool, stats, todayStr, random);
   if (!recipe) return null;
   const last = statsFor(stats, recipe.name).lastDate;
   const reason =
-    inCategory.length > 0
-      ? `passt zum Wochentag (${recipe.category})`
+    matching.length > 0
+      ? `${recipe.category}-Tag`
       : last
       ? `zuletzt vor ${daysBetween(last, todayStr)} Tagen`
       : "mal wieder etwas Neues";
@@ -197,49 +203,51 @@ export function resolveSuggestions(input: {
 
   const usedFirst = new Set<string>();
   return slots.map((slot, i) => {
-    const options: SuggestionOption[] = [];
+    const category = wantedCategory(recipes, weekdayCategories, slot.date);
     const seen = new Set<string>();
+    const fromAi: SuggestionOption[] = [];
     for (const o of aiBySlot.get(i) ?? []) {
       const recipe = byId.get(o.recipe_id);
       if (!recipe) continue;
       const key = dishKey(recipe.name);
       if (seen.has(key)) continue;
       seen.add(key);
-      options.push({ name: recipe.name, category: recipe.category, reason: o.reason.trim() || "Vorschlag" });
+      fromAi.push({ name: recipe.name, category: recipe.category, reason: o.reason.trim() || "Vorschlag" });
     }
+
+    const pick = (strict: boolean, avoidUsed: boolean) => {
+      const exclude = new Set(seen);
+      if (avoidUsed) for (const k of usedFirst) exclude.add(k);
+      const local = pickLocalOption({ recipes, stats, todayStr, category, exclude, strict, random });
+      if (local) seen.add(dishKey(local.name));
+      return local;
+    };
+
+    // Wochentag-Kategorie aus den Einstellungen ist Pflicht: zuerst Gerichte daraus
+    // (Claudes, dann lokal ergänzt), andere nur, wenn die Kategorie nicht genug hergibt.
+    const options = category ? fromAi.filter((o) => inCategory(o.category, category)) : fromAi;
+    const others = category ? fromAi.filter((o) => !inCategory(o.category, category)) : [];
 
     // Empfehlung schon in einem anderen Platz? Eine noch freie Alternative nach vorne holen.
     const firstFree = options.findIndex((o) => !usedFirst.has(dishKey(o.name)));
     if (firstFree > 0) options.unshift(...options.splice(firstFree, 1));
-    else if (firstFree === -1 && options.length > 0) {
-      const local = pickLocalOption({
-        recipes,
-        stats,
-        todayStr,
-        category: wantedCategory(recipes, weekdayCategories, slot.date),
-        exclude: new Set([...seen, ...usedFirst]),
-        random,
-      });
-      if (local) {
-        options.unshift(local);
-        seen.add(dishKey(local.name));
-      }
+    else if (firstFree === -1) {
+      const local = pick(category !== null, true);
+      if (local) options.unshift(local);
     }
 
+    if (category) {
+      while (options.length < OPTIONS_PER_SLOT) {
+        const local = pick(true, false);
+        if (!local) break;
+        options.push(local);
+      }
+    }
+    options.push(...others);
     while (options.length < OPTIONS_PER_SLOT) {
-      const exclude = new Set(seen);
-      if (options.length === 0) for (const k of usedFirst) exclude.add(k);
-      const local = pickLocalOption({
-        recipes,
-        stats,
-        todayStr,
-        category: wantedCategory(recipes, weekdayCategories, slot.date),
-        exclude,
-        random,
-      });
+      const local = pick(false, options.length === 0);
       if (!local) break;
       options.push(local);
-      seen.add(dishKey(local.name));
     }
 
     if (options[0]) usedFirst.add(dishKey(options[0].name));

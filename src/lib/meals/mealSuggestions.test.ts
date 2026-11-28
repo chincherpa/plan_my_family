@@ -31,7 +31,8 @@ describe("buildPlannerPrompt", () => {
   });
   it("nennt Geplantes im Umfeld und die Wochentag-Kategorie", () => {
     expect(prompt).toContain("2026-12-02 (Mittwoch): Mittag: Linsensuppe");
-    expect(prompt).toContain("1 | 2026-12-04 (Freitag) | Abend | Wochentag-Kategorie: Fisch");
+    expect(prompt).toContain("1 | 2026-12-04 (Freitag) | Abend | Kategorie: Fisch");
+    expect(prompt).toContain("0 | 2026-12-01 (Dienstag) | Mittag | Kategorie: frei");
   });
 });
 
@@ -69,6 +70,20 @@ describe("resolveSuggestions", () => {
     expect(result[0].options[0].name).toBe("Spaghetti Bolognese");
     expect(result[1].options[0].name).toBe("Lasagne");
     expect(result[1].options[1].name).toBe("Spaghetti Bolognese");
+  });
+
+  it("Wochentag-Kategorie ist Pflicht: Fremdes nach hinten, lokal aus der Kategorie ergänzt", () => {
+    const result = resolveSuggestions({
+      ...base,
+      weekdayCategories: { "5": "FISCH" },
+      ai: { suggestions: [{ slot: 1, options: [{ recipe_id: 1, reason: "a" }, { recipe_id: 4, reason: "Fisch" }] }] },
+    });
+    expect(result[1].options.map((o) => o.name)).toEqual(["Lachs mit Reis", "Fischstäbchen", "Spaghetti Bolognese"]);
+  });
+
+  it("Kategorie aus den Einstellungen ohne Gerichte wird ignoriert", () => {
+    const prompt = buildPlannerPrompt({ recipes, meals, slots, weekdayCategories: { "5": "Pizza" }, todayStr: TODAY });
+    expect(prompt).toContain("1 | 2026-12-04 (Freitag) | Abend | Kategorie: frei");
   });
 
   it("ohne Claude lokal, bevorzugt die Wochentag-Kategorie", () => {

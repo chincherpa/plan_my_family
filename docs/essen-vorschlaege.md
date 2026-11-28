@@ -10,13 +10,25 @@ mit Vorschlägen für die noch freien Mittag-/Abend-Plätze der Woche (vergangen
 - Gespeichert wird erst mit **„N übernehmen“**. Plätze, die inzwischen anderweitig belegt wurden,
   werden nicht überschrieben.
 
+## Wochentag-Kategorien
+
+In **Einstellungen → Essen** kann jedem Wochentag eine Kategorie zugewiesen werden (z. B.
+Freitag = Fisch). Für Plätze an solchen Tagen sind die Vorschläge auf diese Kategorie festgelegt:
+
+- Claude bekommt die Kategorie pro Platz als Pflichtvorgabe.
+- `resolveSuggestions` setzt sie zusätzlich im Code durch: Gerichte aus der Kategorie stehen vorn,
+  fehlende werden lokal aus der Kategorie ergänzt. Andere Kategorien erscheinen nur, wenn die
+  Kategorie nicht genug Gerichte hat.
+- Gibt es in der Rezeptliste kein Gericht der eingestellten Kategorie, ist der Tag frei.
+- Das Modal zeigt die Kategorie unter dem Tag an.
+
 ## Ablauf
 
 `POST /api/meals/suggest` mit `{ "slots": [{ "date": "2026-12-01", "type": "lunch" }] }`.
 
 1. Server prüft die Sitzung, lädt Familie (Wochentag-Kategorien), Essensplan der letzten 365 Tage
    und die Gerichte aus der Rezept-DB.
-2. Claude bekommt die Gerichte mit Statistik (wie oft, wann zuletzt, Bemerkung), das bereits
+2. Claude (`claude-haiku-5-5`, Aufwand `low`) bekommt die Gerichte mit Statistik (wie oft, wann zuletzt, Bemerkung), das bereits
    Geplante rund um die Woche und die freien Plätze. Es antwortet per Structured Output mit bis zu
    drei **Rezept-IDs** pro Platz und einer kurzen Begründung – es kann also keine Gerichte erfinden.
 3. `resolveSuggestions` (`src/lib/meals/mealSuggestions.ts`) prüft die IDs, entfernt Doppelungen,

@@ -9,7 +9,7 @@ Schlage für jeden Platz bis zu ${OPTIONS_PER_SLOT} verschiedene Gerichte vor, d
 
 Regeln:
 - Verwende ausschließlich IDs aus <gerichte>. Erfinde keine Gerichte.
-- Hat ein Platz eine Wochentag-Kategorie, wähle Gerichte aus dieser Kategorie, solange es dort passende gibt.
+- Die Spalte "Kategorie" in <plaetze> kommt aus den Einstellungen der Familie (jeder Wochentag kann eine feste Kategorie haben, z. B. Freitag = Fisch). Steht dort eine Kategorie, ist sie Pflicht: Alle Vorschläge für diesen Platz müssen in <gerichte> genau diese Kategorie haben. Andere Kategorien nur, wenn es darin weniger als ${OPTIONS_PER_SLOT} Gerichte gibt. Bei "frei" ist jede Kategorie erlaubt.
 - Abwechslung: Dasselbe Gericht nicht zweimal als ersten Vorschlag innerhalb der Plätze, und keins, das in <bereits_geplant> in den 7 Tagen davor oder danach steht. Dieselbe Kategorie möglichst nicht an zwei Mahlzeiten direkt hintereinander.
 - Mische Beliebtes (oft gegessen) mit Gerichten, die lange nicht oder noch nie gegessen wurden. Kürzlich (vor weniger als 10 Tagen) Gegessenes nur, wenn sonst nichts passt.
 - Beachte Bemerkungen der Gerichte (z. B. aufwendig, schnell, nur am Wochenende); unter der Woche eher schnelle Gerichte.
@@ -21,14 +21,12 @@ export class SuggestionFailedError extends Error {}
 /** Fragt Claude nach Vorschlägen. API-Fehler des SDK werden durchgereicht. */
 export async function suggestMealsWithClaude(client: Anthropic, prompt: string): Promise<AiSuggestion> {
   const response = await client.beta.messages.parse({
-    model: "claude-opus-5-5",
+    model: "claude-haiku-5-5",
     // Obergrenze gegen ausufernde Kosten; Denk-Tokens zählen mit.
     max_tokens: 8000,
     // Auswahl aus einer festen Liste: niedriger Aufwand hält die Antwort schnell.
     output_config: { effort: "low", format: betaZodOutputFormat(AiSuggestionSchema) },
-    // Lehnt das Modell ab, beantwortet das Fallback-Modell dieselbe Anfrage.
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
+    // Haiku 5.5 hat keinen serverseitigen Fallback: Ablehnungen kommen als stop_reason "refusal".
     system: SYSTEM_PROMPT,
     messages: [{ role: "user", content: prompt }],
   });

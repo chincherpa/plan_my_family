@@ -76,6 +76,10 @@ export default function MealSuggestDialog({
   const requestId = useRef(0);
 
   const todayStr = localDateStr(new Date());
+  const weekdayCats = useMemo(
+    () => parseWeekdayCategories(family?.meal_weekday_categories),
+    [family?.meal_weekday_categories]
+  );
   const mealsByDate = useMemo(() => new Map(meals.map((m) => [m.date, m])), [meals]);
 
   /** Freie Plätze nach aktueller Auswahl Mittag/Abend */
@@ -148,7 +152,7 @@ export default function MealSuggestDialog({
       recipes,
       stats: computeDishStats(meals, todayStr),
       todayStr,
-      category: categoryForDate(parseWeekdayCategories(family?.meal_weekday_categories), row.date),
+      category: categoryForDate(weekdayCats, row.date),
       exclude,
     });
     if (extra) update(i, { options: [...row.options, extra], index: row.options.length, decision: "open" });
@@ -279,6 +283,11 @@ export default function MealSuggestDialog({
                     <p className="text-xs text-[var(--muted-foreground)]">
                       {SLOT_INFO[row.type].emoji} {SLOT_INFO[row.type].label}
                     </p>
+                    {weekdayCats && categoryForDate(weekdayCats, row.date) && (
+                      <p className="truncate text-[11px] font-medium text-[var(--primary)]">
+                        {categoryForDate(weekdayCats, row.date)}
+                      </p>
+                    )}
                   </div>
 
                   <div className="min-w-0 flex-1">
@@ -286,7 +295,7 @@ export default function MealSuggestDialog({
                       {option.name}
                     </p>
                     <p className="truncate text-xs text-[var(--muted-foreground)]">
-                      {row.decision === "rejected" ? "abgelehnt – bleibt frei" : option.reason}
+                      {row.decision === "rejected" ? "abgelehnt – bleibt frei" : `${option.category} · ${option.reason}`}
                       {row.options.length > 1 && row.decision !== "rejected" && (
                         <span className="tabular"> · {row.index + 1}/{row.options.length}</span>
                       )}
