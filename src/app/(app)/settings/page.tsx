@@ -3,6 +3,7 @@ import { Users, Car, UtensilsCrossed, FileUp, ArrowRight, TreePalm, Keyboard } f
 import CalendarDisplaySettings from "@/components/settings/CalendarDisplaySettings";
 import ThemeSettings from "@/components/settings/ThemeSettings";
 import MealWeekdaySettings from "@/components/settings/MealWeekdaySettings";
+import NotesPinSettings from "@/components/settings/NotesPinSettings";
 
 export default function SettingsPage() {
   return (
@@ -95,6 +96,8 @@ export default function SettingsPage() {
       </Link>
 
       <MealWeekdaySettings />
+
+      <NotesPinSettings />
 
       <Link
         href="/settings/import"
