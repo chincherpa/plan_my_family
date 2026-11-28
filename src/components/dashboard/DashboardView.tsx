@@ -1,7 +1,7 @@
 "use client";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import Link from "next/link";
-import { AlertCircle, CalendarDays, CircleHelp, Repeat, UtensilsCrossed } from "lucide-react";
+import { AlertCircle, ArrowDown, Car, CalendarDays, CircleHelp, Repeat, UtensilsCrossed } from "lucide-react";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useCalendarStore } from "@/lib/store/calendarStore";
 import { expandAppointments, type AppointmentOccurrence } from "@/lib/utils/recurrence";
@@ -9,7 +9,14 @@ import { holidaysOn } from "@/lib/utils/schoolHolidays";
 import { anniversaryBadge } from "@/lib/anniversaries";
 import { cn, formatTime, getISOWeek, hexToRgba, localDateStr, readableTextColor, startOfDay } from "@/lib/utils";
 import { useNow } from "@/lib/useNow";
-import { appointmentsByMember, familyParticipants, isOngoing, isPast, type DashboardEntry } from "@/lib/dashboard";
+import {
+  appointmentsByMember,
+  familyParticipants,
+  formatCountdown,
+  isOngoing,
+  isPast,
+  type DashboardEntry,
+} from "@/lib/dashboard";
 import type { MealType } from "@/lib/recipes/stats";
 import type { AppointmentWithParticipants, FamilyMember } from "@/lib/supabase/types";
 import AppointmentForm from "@/components/appointments/AppointmentForm";
@@ -274,9 +281,31 @@ function DayCard({
           const vehicle = appt.vehicle_id ? vehicleOf(appt.vehicle_id) : undefined;
           const notes = appt.notes?.trim();
           const participants = participantsOf?.(appt) ?? null;
+          // Ganztägige Termine haben keine Startzeit, auf die man warten könnte
+          const countdown = appt.is_all_day ? null : formatCountdown(occ.occurrenceStart, now);
+          // Mit Anfahrt zusätzlich die Zeit bis zur Abfahrt — entfällt, sobald man losgefahren ist
+          const departure =
+            countdown && appt.travel_before_min > 0 ? formatCountdown(occ.travelStart, now) : null;
           return (
+            <Fragment key={occ.key}>
+            {countdown && (
+              <div
+                className="-mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 px-1 pt-0.5 text-xs font-semibold tabular"
+                style={{ color }}
+              >
+                {departure && (
+                  <span className="flex items-center gap-1" title={`Abfahrt ${departure}`}>
+                    <Car className="h-3.5 w-3.5" aria-hidden />
+                    Abfahrt {departure}
+                  </span>
+                )}
+                <span className="flex items-center gap-1" title={`Termin beginnt ${countdown}`}>
+                  <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+                  {departure ? `Termin ${countdown}` : countdown}
+                </span>
+              </div>
+            )}
             <button
-              key={occ.key}
               type="button"
               onClick={() => onOpen(occ)}
               className={cn(
@@ -359,6 +388,7 @@ function DayCard({
                 )}
               </span>
             </button>
+            </Fragment>
           );
         })}
       </div>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { appointment, d, member, occurrence, participant } from "@/lib/utils/__fixtures__/calendar";
 import { buildDayData } from "@/components/calendar/model";
-import { appointmentsByMember, familyParticipants, isOngoing, isPast } from "./dashboard";
+import { appointmentsByMember, familyParticipants, formatCountdown, isOngoing, isPast } from "./dashboard";
 
 const anna = member({ name: "Anna" });
 const ben = member({ name: "Ben" });
@@ -93,5 +93,24 @@ describe("familyParticipants", () => {
   it("lists the participants when someone is left out", () => {
     const appt = appointment({ is_all_family: true, participants: [participant(ben.id)] });
     expect(familyParticipants(appt, [anna, ben])?.map((m) => m.name)).toEqual(["Ben"]);
+  });
+});
+
+describe("formatCountdown", () => {
+  const start = d("2026-06-01 15:00");
+
+  it("formats hours and minutes", () => {
+    expect(formatCountdown(start, d("2026-06-01 12:37"))).toBe("in 2h 23′");
+    expect(formatCountdown(start, d("2026-06-01 13:00"))).toBe("in 2h");
+    expect(formatCountdown(start, d("2026-06-01 14:55"))).toBe("in 5′");
+  });
+
+  it("rounds partial minutes up", () => {
+    expect(formatCountdown(start, new Date(d("2026-06-01 14:59").getTime() + 30_000))).toBe("in 1′");
+  });
+
+  it("is null once the appointment has started", () => {
+    expect(formatCountdown(start, start)).toBeNull();
+    expect(formatCountdown(start, d("2026-06-01 15:10"))).toBeNull();
   });
 });
