@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
-import { Calendar, Settings, LogOut, UtensilsCrossed, ListTodo, Cake, StickyNote } from "lucide-react";
+import { Calendar, Settings, LogOut, UtensilsCrossed, ListTodo, Cake, StickyNote, LayoutDashboard } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useDataStore } from "@/lib/store/dataStore";
 import { useCalendarStore } from "@/lib/store/calendarStore";
@@ -226,6 +226,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useShortcutListener();
   const keymap = useKeymap();
   const setHelpOpen = useShortcutStore((s) => s.setHelpOpen);
+  useShortcut("goDashboard", () => router.push("/"));
   useShortcut("goCalendar", () => router.push("/calendar"));
   useShortcut("goMeals", () => router.push("/meals"));
   useShortcut("goAnniversaries", () => router.push("/anniversaries"));
@@ -241,12 +242,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   });
 
   const links: { href: string; label: string; icon: typeof Calendar; shortcut: ShortcutActionId }[] = [
+    { href: "/", label: "Heute", icon: LayoutDashboard, shortcut: "goDashboard" },
     { href: "/calendar", label: "Kalender", icon: Calendar, shortcut: "goCalendar" },
     { href: "/meals", label: "Essen", icon: UtensilsCrossed, shortcut: "goMeals" },
     { href: "/anniversaries", label: "Jahrestage", icon: Cake, shortcut: "goAnniversaries" },
     { href: "/notes", label: "Notizen", icon: StickyNote, shortcut: "goNotes" },
     { href: "/settings", label: "Einstellungen", icon: Settings, shortcut: "goSettings" },
   ];
+
+  // "/" würde per startsWith auf jede Seite passen
+  const isActive = (href: string) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
   const navItem = (active: boolean) =>
     cn(
@@ -287,7 +292,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             key={href}
             href={href}
             title={withShortcutHint(label, keymap[shortcut])}
-            className={cn(navItem(pathname.startsWith(href)), "h-16 w-16")}
+            className={cn(navItem(isActive(href)), "h-16 w-16")}
           >
             <Icon className="w-5 h-5" />
             {label === "Einstellungen" ? "Setup" : label}
@@ -315,9 +320,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Bottom bar — phone */}
         <nav className="md:hidden pb-safe shrink-0 border-t border-[var(--border)] bg-[var(--card)]">
-          <div className="grid grid-cols-7 gap-1 px-2 py-1.5">
+          <div className="grid grid-cols-8 gap-0.5 px-1 py-1.5">
             {links.map(({ href, label, icon: Icon }) => (
-              <Link key={href} href={href} className={cn(navItem(pathname.startsWith(href)), "h-14")}>
+              <Link key={href} href={href} className={cn(navItem(isActive(href)), "h-14")}>
                 <Icon className="w-5 h-5" />
                 {label === "Einstellungen" ? "Setup" : label}
               </Link>
