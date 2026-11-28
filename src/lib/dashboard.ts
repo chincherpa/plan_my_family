@@ -71,17 +71,32 @@ export function isOngoing(occ: AppointmentOccurrence, now: Date): boolean {
   return !occ.appointment.is_all_day && occ.occurrenceStart <= now && occ.occurrenceEnd > now;
 }
 
+/** Whole minutes as "2h 23′", "2h" or "5′". */
+function formatMinutes(totalMin: number): string {
+  const h = Math.floor(totalMin / 60);
+  const min = totalMin % 60;
+  if (h === 0) return `${min}′`;
+  return min === 0 ? `${h}h` : `${h}h ${min}′`;
+}
+
+/** Minutes from `now` until `until`, partial minutes rounded up; null if not ahead. */
+function minutesUntil(until: Date, now: Date): number | null {
+  const ms = until.getTime() - now.getTime();
+  return ms > 0 ? Math.ceil(ms / 60_000) : null;
+}
+
 /**
  * Time left until an appointment starts, e.g. "in 2h 23′" or "in 5′";
  * null once it has started. Partial minutes round up, so the label never
  * says "in 0′" while the appointment is still ahead.
  */
 export function formatCountdown(start: Date, now: Date): string | null {
-  const ms = start.getTime() - now.getTime();
-  if (ms <= 0) return null;
-  const totalMin = Math.ceil(ms / 60_000);
-  const h = Math.floor(totalMin / 60);
-  const min = totalMin % 60;
-  if (h === 0) return `in ${min}′`;
-  return min === 0 ? `in ${h}h` : `in ${h}h ${min}′`;
+  const min = minutesUntil(start, now);
+  return min === null ? null : `in ${formatMinutes(min)}`;
+}
+
+/** How long a running appointment still lasts, e.g. "noch 35′"; null once it is over. */
+export function formatRemaining(end: Date, now: Date): string | null {
+  const min = minutesUntil(end, now);
+  return min === null ? null : `noch ${formatMinutes(min)}`;
 }

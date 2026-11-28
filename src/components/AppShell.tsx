@@ -16,6 +16,7 @@ import { useKeymap, useShortcut, useShortcutListener } from "@/lib/shortcuts/use
 import { withShortcutHint, type ShortcutActionId } from "@/lib/shortcuts/keymap";
 import { useShortcutStore } from "@/lib/store/shortcutStore";
 import { listRecipes } from "@/lib/recipes/actions";
+import { currentNavigationType, shouldOpenDashboard } from "@/lib/startPage";
 import type {
   AppointmentWithParticipants,
   FamilyMember,
@@ -31,6 +32,12 @@ const REFETCH_DEBOUNCE_MS = 250;
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+
+  // Beim Öffnen der App immer mit „Heute“ starten (Neuladen bleibt auf der Seite).
+  // Nur einmal pro Seitenladung — Navigation innerhalb der App bleibt unberührt.
+  useEffect(() => {
+    if (shouldOpenDashboard(currentNavigationType(), window.location.pathname)) router.replace("/");
+  }, [router]);
   const {
     setFamily,
     setMembers,
