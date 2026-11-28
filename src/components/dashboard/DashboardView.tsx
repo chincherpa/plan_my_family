@@ -290,8 +290,7 @@ function DayCard({
             <Fragment key={occ.key}>
             {countdown && (
               <div
-                className="-mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 px-1 pt-0.5 text-xs font-semibold tabular"
-                style={{ color }}
+                className="-mb-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 px-1 pt-0.5 text-xs font-semibold tabular text-[var(--foreground)]"
               >
                 {departure && (
                   <span className="flex items-center gap-1" title={`Abfahrt ${departure}`}>
